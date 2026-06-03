@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
 import { Undo2, Redo2, Download, Save, FolderOpen, FilePlus, Settings as SettingsIcon, Loader2, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import SettingsDialog from '../settings/SettingsDialog.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
@@ -64,6 +65,7 @@ async function onSave() {
   } catch (e) {
     uiStore.addToast('Failed to save: ' + (e?.message || e), 'error')
   }
+
 }
 
 function openExport() {
@@ -71,7 +73,7 @@ function openExport() {
 }
 
 function openSettings() {
-  uiStore.addToast('Settings coming in v1.0', 'info')
+  uiStore.isSettingsDialogOpen = true
 }
 </script>
 
@@ -171,5 +173,6 @@ function openSettings() {
     >
       <SettingsIcon :size="14" />
     </button>
+    <SettingsDialog />
   </div>
 </template>

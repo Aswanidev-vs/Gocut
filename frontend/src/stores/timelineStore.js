@@ -22,10 +22,23 @@ function getProjectStore() {
   }
 }
 
+function getHistoryStore() {
+  try {
+    const pinia = getActivePinia()
+    if (!pinia) return null
+    return pinia._s && pinia._s.get('history') ? pinia._s.get('history') : null
+  } catch (_) {
+    return null
+  }
+}
+
 function safeMarkDirty() {
   try {
     const ps = getProjectStore()
     if (ps && typeof ps.markDirty === 'function') ps.markDirty()
+    
+    const hs = getHistoryStore()
+    if (hs && typeof hs.pushSnapshot === 'function') hs.pushSnapshot()
   } catch (_) { /* ignore */ }
 }
 
@@ -61,6 +74,7 @@ export const useTimelineStore = defineStore('timeline', () => {
   const tracks = ref([])
   const clips = ref([])
   const selectedClipIds = ref([])
+  const clipboard = ref([])
 
   const zoom = ref(50)        // px per second
   const scrollX = ref(0)
@@ -300,6 +314,59 @@ export const useTimelineStore = defineStore('timeline', () => {
     scrollX.value = 0
   }
 
+
+
+  // ---- history ----
+  function createSnapshot() {
+    return {
+      tracks: JSON.parse(JSON.stringify(tracks.value)),
+      clips: JSON.parse(JSON.stringify(clips.value))
+    }
+  }
+
+  function restoreSnapshot(snapshot) {
+    if (!snapshot) return
+    tracks.value = JSON.parse(JSON.stringify(snapshot.tracks || []))
+    clips.value = JSON.parse(JSON.stringify(snapshot.clips || []))
+    
+    // Clear selection if selected clips no longer exist
+    const clipIds = new Set(clips.value.map(c => c.id))
+    selectedClipIds.value = selectedClipIds.value.filter(id => clipIds.has(id))
+  }
+
+  // ---- clipboard ----
+  function copySelected() {
+    if (selectedClips.value.length === 0) return
+    clipboard.value = JSON.parse(JSON.stringify(selectedClips.value))
+  }
+
+  function cutSelected() {
+    if (selectedClips.value.length === 0) return
+    copySelected()
+    removeSelected()
+  }
+
+  function pasteSelected() {
+    if (clipboard.value.length === 0) return
+    
+    // Find earliest start time in clipboard to maintain relative positioning
+    const minTime = Math.min(...clipboard.value.map(c => c.startTime))
+    const offset = currentTime.value - minTime
+
+    const newClips = clipboard.value.map(c => {
+      const newClip = {
+        ...c,
+        id: generateId(),
+        startTime: Math.max(0, c.startTime + offset)
+      }
+      return newClip
+    })
+
+    clips.value.push(...newClips)
+    selectedClipIds.value = newClips.map(c => c.id)
+    safeMarkDirty()
+  }
+
   function clearAll() {
     tracks.value = []
     clips.value = []
@@ -353,6 +420,11 @@ export const useTimelineStore = defineStore('timeline', () => {
     zoomBy,
     setCurrentTime,
     loadFromProject,
+    createSnapshot,
+    restoreSnapshot,
+    copySelected,
+    cutSelected,
+    pasteSelected,
     clearAll,
     TRACK_TYPES,
   }

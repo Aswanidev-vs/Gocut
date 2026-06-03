@@ -5,6 +5,7 @@ import { useUiStore } from './stores/uiStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { OpenFilePicker } from './lib/wails'
 import { Film, FolderOpen, FilePlus, Sparkles, Github } from 'lucide-vue-next'
+import { useHotkeys } from './composables/useHotkeys'
 
 import TopBar from './components/layout/TopBar.vue'
 import LeftPanel from './components/layout/LeftPanel.vue'
@@ -18,6 +19,8 @@ import ToastContainer from './components/common/ToastContainer.vue'
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
 const timelineStore = useTimelineStore()
+
+useHotkeys()
 
 const isLoaded = ref(false)
 

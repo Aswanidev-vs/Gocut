@@ -8,6 +8,7 @@ export const useUiStore = defineStore('ui', () => {
   const toasts = ref([])
   const isExportDialogOpen = ref(false)
   const isNewProjectDialogOpen = ref(false)
+  const isSettingsDialogOpen = ref(false)
   const snapIndicatorTime = ref(null)
 
   const panelTabs = [
@@ -88,6 +89,7 @@ export const useUiStore = defineStore('ui', () => {
     toasts,
     isExportDialogOpen,
     isNewProjectDialogOpen,
+    isSettingsDialogOpen,
     snapIndicatorTime,
     panelTabs,
     inspectorTabs,
