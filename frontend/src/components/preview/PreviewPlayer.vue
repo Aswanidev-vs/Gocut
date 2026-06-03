@@ -80,12 +80,12 @@ const videoSrc = computed(() => {
   return playerStore.getMediaUrl(currentVideoAsset.value.path)
 })
 
-// ---- Audio clips (separate audio-track clips) ----
 const currentAudioClips = computed(() => {
   const t = timelineStore.currentTime
   return timelineStore.clips.filter(c => {
     const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
-    return track?.type === 'audio' && t >= c.startTime && t < c.startTime + c.duration
+    if (track?.type !== 'audio') return false
+    return t >= c.startTime && t < c.startTime + c.duration
   })
 })
 
@@ -100,15 +100,24 @@ function syncAudioElements() {
     activeClipIds.add(clip.id)
     const asset = projectStore.getAsset(clip.assetId)
     if (!asset) continue
-    const url = playerStore.getMediaUrl(asset.path)
-    if (!url) continue
+
+    const proxyUrl = playerStore.getMediaUrl(asset.path, true) // /audio proxy -> mp3
+    if (!proxyUrl) continue
 
     let entry = audioElements.get(clip.id)
     if (!entry || entry.assetPath !== asset.path) {
       // Create or recreate audio element
       if (entry) { entry.audio.pause(); entry.audio.src = '' }
-      const audio = new Audio(url)
+      const audio = new Audio(proxyUrl)
       audio.preload = 'auto'
+      // Fallback: if proxy fails (no audio track, ffmpeg error), try raw media
+      audio.addEventListener('error', () => {
+        const rawUrl = playerStore.getMediaUrl(asset.path, false)
+        if (rawUrl && audio.src !== rawUrl) {
+          audio.src = rawUrl
+          audio.load()
+        }
+      }, { once: true })
       entry = { audio, assetPath: asset.path }
       audioElements.set(clip.id, entry)
     }
@@ -307,7 +316,7 @@ const visibleClips = computed(() => {
         class="preview-frame relative bg-black rounded-md overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-border max-h-full"
         :style="{ ...aspectStyle, maxWidth: '100%', maxHeight: '100%', width: '100%' }"
       >
-        <!-- Live <video> element for playback (provides both video + audio) -->
+        <!-- Live <video> element for playback (video only, audio proxy handles sound) -->
         <video
           v-show="useVideoElement && videoSrc"
           ref="videoRef"
@@ -315,6 +324,7 @@ const visibleClips = computed(() => {
           class="absolute inset-0 w-full h-full object-contain bg-black"
           preload="auto"
           playsinline
+          muted
           @error="() => { /* fallback to ffmpeg frame on error */ useVideoElement = false }"
         />
 

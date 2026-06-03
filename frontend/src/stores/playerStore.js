@@ -166,9 +166,10 @@ export const usePlayerStore = defineStore('player', () => {
     } catch (_) { /* ignore */ }
   }
 
-  function getMediaUrl(assetPath) {
-    if (!mediaServerPort.value || !assetPath) return null
-    return `http://127.0.0.1:${mediaServerPort.value}/media?path=${encodeURIComponent(assetPath)}`
+  function getMediaUrl(path, asAudioProxy = false) {
+    if (!mediaServerPort.value || !path) return ''
+    const endpoint = asAudioProxy ? 'audio' : 'media'
+    return `http://127.0.0.1:${mediaServerPort.value}/${endpoint}?path=${encodeURIComponent(path)}`
   }
 
   return {

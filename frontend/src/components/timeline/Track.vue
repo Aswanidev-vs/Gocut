@@ -92,6 +92,14 @@ function onDrop(e) {
     startTime: time,
     duration: asset.duration || 3
   })
+  if (asset.type === 'video' && props.track.type === 'video') {
+    timelineStore.addClip({
+      assetId: asset.id,
+      trackType: 'audio',
+      startTime: time,
+      duration: asset.duration || 3
+    })
+  }
 }
 </script>
 

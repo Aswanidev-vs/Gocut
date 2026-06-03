@@ -69,6 +69,15 @@ async function importPaths(paths) {
         startTime: timelineStore.currentTime,
         duration: asset.duration || 3,
       })
+      // If it's a video, automatically add an associated audio clip on the audio track
+      if (asset.type === 'video') {
+        timelineStore.addClip({
+          assetId: asset.id,
+          trackType: 'audio',
+          startTime: timelineStore.currentTime,
+          duration: asset.duration || 3,
+        })
+      }
     }
     uiStore.addToast(`Imported ${imported.length} file${imported.length > 1 ? 's' : ''}`, 'success', 2000)
   } catch (err) {
@@ -130,6 +139,15 @@ function addToTimeline(asset) {
     startTime: timelineStore.currentTime,
     duration: asset.duration || 3,
   })
+  // If it's a video, automatically add an associated audio clip on the audio track
+  if (asset.type === 'video') {
+    timelineStore.addClip({
+      assetId: asset.id,
+      trackType: 'audio',
+      startTime: timelineStore.currentTime,
+      duration: asset.duration || 3,
+    })
+  }
   uiStore.addToast('Added to timeline', 'success', 1200)
 }
 

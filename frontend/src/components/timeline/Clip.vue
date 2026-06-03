@@ -43,20 +43,21 @@ function onMouseDown(e, mode) {
     const dt = dx / props.zoom
     if (mode === 'move') {
       const newStart = timelineStore.snapToClips(Math.max(0, startStart + dt), props.clip.id)
-      props.clip.startTime = newStart
+      timelineStore.updateClip(props.clip.id, { startTime: newStart })
     } else if (mode === 'left') {
-      // dragging left edge changes start time and trim start, keeping end fixed
       const newStart = timelineStore.snapToClips(Math.max(0, startStart + dt), props.clip.id)
       const delta = newStart - startStart
       const newTrimStart = Math.max(0, startTrimStart + delta)
       const newDuration = Math.max(0.1, startDuration - delta)
-      props.clip.startTime = newStart
-      props.clip.trimStart = newTrimStart
-      props.clip.duration = newDuration
+      timelineStore.updateClip(props.clip.id, {
+        startTime: newStart,
+        trimStart: newTrimStart,
+        duration: newDuration
+      })
     } else if (mode === 'right') {
       const newEnd = Math.max(props.clip.startTime + 0.1, startStart + startDuration + dt)
       const newDuration = newEnd - props.clip.startTime
-      props.clip.duration = newDuration
+      timelineStore.updateClip(props.clip.id, { duration: newDuration })
     }
   }
   const onUp = () => {
@@ -90,9 +91,9 @@ function onMouseDown(e, mode) {
       {{ fileName }}
     </div>
 
-    <!-- Waveform (audio) -->
+    <!-- Waveform (audio/video) -->
     <div
-      v-if="trackType === 'audio' && asset?.waveform?.length"
+      v-if="asset?.waveform?.length"
       class="absolute left-0 right-0 bottom-0 top-4 flex items-center gap-px px-0.5 overflow-hidden pointer-events-none opacity-70"
     >
       <div

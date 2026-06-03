@@ -62,6 +62,50 @@ function onWheel(e) {
   }
 }
 
+// Drop onto empty track rows (auto-create track + add clip)
+const emptyRowDragOver = ref(null) // which track type is hovered
+
+function onEmptyRowDragOver(e, type) {
+  if (e.dataTransfer.types.includes('application/x-gocut-asset')) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    emptyRowDragOver.value = type
+  }
+}
+
+function onEmptyRowDragLeave(type) {
+  if (emptyRowDragOver.value === type) emptyRowDragOver.value = null
+}
+
+function onEmptyRowDrop(e, type) {
+  emptyRowDragOver.value = null
+  const assetId = e.dataTransfer.getData('application/x-gocut-asset')
+  if (!assetId) return
+  const asset = projectStore.getAsset(assetId)
+  if (!asset) return
+  // Compute drop time from X offset relative to this element
+  const time = Math.max(0, e.offsetX / timelineStore.zoom)
+  // Auto-create the track if it doesn't exist
+  let track = timelineStore.getTrackByType(type)
+  if (!track) track = timelineStore.addTrack(type)
+  timelineStore.addClip({
+    assetId: asset.id,
+    trackId: track.id,
+    startTime: time,
+    duration: asset.duration || 3,
+  })
+  if (asset.type === 'video' && type === 'video') {
+    timelineStore.addClip({
+      assetId: asset.id,
+      trackType: 'audio',
+      startTime: time,
+      duration: asset.duration || 3,
+    })
+  }
+  projectStore.markDirty()
+  uiStore.addToast(`Added to ${type} track`, 'success', 1200)
+}
+
 function splitSelectedAtPlayhead() {
   if (timelineStore.selectedClips.length === 0) {
     uiStore.addToast('Select a clip to split', 'warn')
@@ -214,9 +258,13 @@ const typeIcons = { video: Video, audio: Music, text: Type, sticker: Smile, fx: 
               </template>
               <div
                 v-else
-                class="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary/40 italic pointer-events-none"
+                class="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary/40 italic transition-colors"
+                :class="emptyRowDragOver === type ? 'bg-accent/10 text-accent' : ''"
+                @dragover="(e) => onEmptyRowDragOver(e, type)"
+                @dragleave="onEmptyRowDragLeave(type)"
+                @drop="(e) => onEmptyRowDrop(e, type)"
               >
-                {{ type }} track (click + on the toolbar to add)
+                {{ emptyRowDragOver === type ? `Drop here to add to ${type} track` : `${type} track — drag a clip here or use + above` }}
               </div>
             </div>
             <Playhead :duration="visibleDuration" />

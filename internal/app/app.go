@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -22,6 +23,9 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// audioExtracting tracks in-progress audio extractions to avoid duplicate ffmpeg runs.
+var audioExtracting sync.Map
 
 // App is the root application object bound to Wails frontend.
 type App struct {
@@ -412,9 +416,9 @@ func errToString(err error) string {
 func openFolder(path string) error {
 	var cmd *exec.Cmd
 	switch {
-	case fileExists("xdg-open"):
+	case fileExistsOnPath("xdg-open"):
 		cmd = exec.Command("xdg-open", path)
-	case fileExists("explorer.exe"):
+	case fileExistsOnPath("explorer.exe"):
 		cmd = exec.Command("explorer.exe", path)
 	default:
 		return fmt.Errorf("no file opener found")
@@ -422,8 +426,15 @@ func openFolder(path string) error {
 	return cmd.Start()
 }
 
-func fileExists(name string) bool {
+// fileExistsOnPath checks if an *executable* exists in $PATH (for ffmpeg, etc.)
+func fileExistsOnPath(name string) bool {
 	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// fileExists checks if a *file path* exists on disk.
+func fileExists(name string) bool {
+	_, err := os.Stat(name)
 	return err == nil
 }
 
@@ -486,6 +497,75 @@ func (a *App) startMediaServer() {
 			return
 		}
 		http.ServeContent(w, r, filepath.Base(assetPath), stat.ModTime(), f)
+	})
+
+	mux.HandleFunc("/audio", func(w http.ResponseWriter, r *http.Request) {
+		assetPath := r.URL.Query().Get("path")
+		if assetPath == "" {
+			http.Error(w, "missing path", http.StatusBadRequest)
+			return
+		}
+		if !a.isKnownAssetPath(assetPath) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		cacheDir, _ := ensureAppDataSubdir("audio_cache")
+		pathBytes := []byte(assetPath)
+		hash := fmt.Sprintf("%x", md5.Sum(pathBytes))
+		cachedPath := filepath.Join(cacheDir, hash+".mp3")
+
+		// Check if cached file already exists on disk (use os.Stat, NOT exec.LookPath).
+		if _, statErr := os.Stat(cachedPath); os.IsNotExist(statErr) {
+			// Deduplicate: if another goroutine is already extracting this file, wait.
+			doneCh := make(chan struct{})
+			actual, loaded := audioExtracting.LoadOrStore(cachedPath, doneCh)
+			if loaded {
+				// Another goroutine is extracting; wait for it.
+				select {
+				case <-actual.(chan struct{}):
+				case <-r.Context().Done():
+					http.Error(w, "cancelled", http.StatusRequestTimeout)
+					return
+				}
+			} else {
+				// We are the extractor.
+				defer func() {
+					audioExtracting.Delete(cachedPath)
+					close(doneCh)
+				}()
+				if a.ffmpegPath == "" {
+					http.Error(w, "ffmpeg not found", http.StatusInternalServerError)
+					return
+				}
+				// Extract audio: use aac for speed (universally supported), fallback copy
+				cmd := exec.CommandContext(r.Context(), a.ffmpegPath,
+					"-y", "-i", assetPath,
+					"-vn",
+					"-c:a", "libmp3lame", "-q:a", "4",
+					"-ar", "44100",
+					cachedPath,
+				)
+				if err := cmd.Run(); err != nil {
+					// Remove partial file if any
+					_ = os.Remove(cachedPath)
+					http.Error(w, "audio extraction failed: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Range")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges")
+		f, err := os.Open(cachedPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		stat, _ := f.Stat()
+		http.ServeContent(w, r, filepath.Base(cachedPath), stat.ModTime(), f)
 	})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
