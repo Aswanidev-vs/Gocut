@@ -1,0 +1,185 @@
+<script setup>
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useProjectStore } from './stores/projectStore'
+import { useUiStore } from './stores/uiStore'
+import { useTimelineStore } from './stores/timelineStore'
+import { OpenFilePicker } from './lib/wails'
+import { Film, FolderOpen, FilePlus, Sparkles, Github } from 'lucide-vue-next'
+
+import TopBar from './components/layout/TopBar.vue'
+import LeftPanel from './components/layout/LeftPanel.vue'
+import RightPanel from './components/layout/RightPanel.vue'
+import TimelinePanel from './components/timeline/TimelinePanel.vue'
+import PreviewPlayer from './components/preview/PreviewPlayer.vue'
+import NewProjectDialog from './components/common/NewProjectDialog.vue'
+import ExportDialog from './components/export/ExportDialog.vue'
+import ToastContainer from './components/common/ToastContainer.vue'
+
+const projectStore = useProjectStore()
+const uiStore = useUiStore()
+const timelineStore = useTimelineStore()
+
+const isLoaded = ref(false)
+
+onMounted(() => {
+  projectStore.fetchRecentProjects().catch(() => {})
+  setTimeout(() => { isLoaded.value = true }, 80)
+
+  // Global keyboard shortcuts.
+  window.addEventListener('keydown', onKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
+
+function onKeyDown(e) {
+  if (!projectStore.hasProject) return
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+  // Space — toggle playback
+  if (e.code === 'Space') {
+    e.preventDefault()
+    import('./stores/playerStore').then(({ usePlayerStore }) => {
+      usePlayerStore().togglePlay()
+    })
+  }
+  // Delete / Backspace — delete selected
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    e.preventDefault()
+    timelineStore.removeSelected()
+  }
+  // S — toggle snap
+  if (e.key === 's' || e.key === 'S') {
+    timelineStore.snapEnabled = !timelineStore.snapEnabled
+    uiStore.addToast(`Snap ${timelineStore.snapEnabled ? 'on' : 'off'}`, 'info', 1200)
+  }
+  // Ctrl+S — save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    projectStore.saveProject().then(() => {
+      uiStore.addToast('Saved', 'success', 1200)
+    }).catch(err => uiStore.addToast('Save failed: ' + err, 'error'))
+  }
+  // Ctrl+E — export dialog
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault()
+    uiStore.isExportDialogOpen = true
+  }
+}
+
+function openNewProjectDialog() {
+  uiStore.isNewProjectDialogOpen = true
+}
+
+async function openProject(selectedPath) {
+  try {
+    let projectPath = selectedPath
+    if (!projectPath) {
+      const paths = await OpenFilePicker([{ name: 'Gocut Project', extensions: ['gocut', 'json'] }])
+      if (!Array.isArray(paths) || paths.length === 0) return
+      projectPath = paths[0]
+    }
+    await projectStore.loadProject(projectPath)
+    uiStore.addToast('Project loaded', 'success', 1500)
+  } catch (error) {
+    uiStore.addToast('Failed to open: ' + (error?.message || error), 'error')
+  }
+}
+
+const stats = computed(() => ({
+  assets: projectStore.project?.assets?.length || 0,
+  clips: timelineStore.clips.length,
+  tracks: timelineStore.tracks.length,
+}))
+</script>
+
+<template>
+  <div class="flex flex-col h-screen w-screen bg-bg text-text-primary font-dm-sans overflow-hidden select-none">
+    <!-- Loading -->
+    <div v-if="!isLoaded" class="flex-1 flex items-center justify-center">
+      <div class="flex items-center gap-2 text-text-secondary text-sm">
+        <div class="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        Loading…
+      </div>
+    </div>
+
+    <!-- Home screen (no project) -->
+    <div v-else-if="!projectStore.hasProject" class="flex-1 flex flex-col">
+      <div class="h-12 px-4 flex items-center border-b border-border bg-panel">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded bg-accent text-bg font-bold text-sm flex items-center justify-center">G</div>
+          <span class="text-sm font-semibold">Gocut</span>
+          <span class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border font-mono">v0.1.0</span>
+        </div>
+        <div class="flex-1" />
+        <a href="https://github.com/" target="_blank" rel="noopener" class="text-text-secondary hover:text-text-primary transition-colors p-1.5 rounded hover:bg-border">
+          <Github :size="14" />
+        </a>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
+        <div class="relative mb-6">
+          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent to-accent-hover flex items-center justify-center text-bg font-bold text-4xl shadow-2xl shadow-accent/20">G</div>
+          <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 ring-2 ring-bg" />
+        </div>
+        <h1 class="text-3xl font-bold text-text-primary mb-1 tracking-tight">Gocut</h1>
+        <p class="text-sm text-text-secondary mb-1">Open-source, offline video editor.</p>
+        <p class="text-xs text-text-secondary mb-8 max-w-md">A privacy-respecting, fully local CapCut alternative for Windows, macOS, and Linux. Powered by FFmpeg.</p>
+
+        <div class="flex items-center gap-2">
+          <button
+            class="flex items-center gap-2 px-4 py-2 rounded bg-accent text-bg text-sm font-medium hover:bg-accent-hover transition-colors shadow-lg shadow-accent/20"
+            @click="openNewProjectDialog"
+          >
+            <FilePlus :size="16" /> New Project
+          </button>
+          <button
+            class="flex items-center gap-2 px-4 py-2 rounded border border-border text-sm text-text-primary hover:bg-border transition-colors"
+            @click="openProject()"
+          >
+            <FolderOpen :size="16" /> Open Project
+          </button>
+        </div>
+
+        <div v-if="projectStore.recentProjects.length" class="mt-10 w-full max-w-2xl">
+          <div class="flex items-center gap-2 mb-3 text-[11px] text-text-secondary uppercase tracking-wider">
+            <Film :size="12" />
+            Recent
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button
+              v-for="rp in projectStore.recentProjects.slice(0, 6)"
+              :key="rp.path"
+              class="flex items-center gap-3 px-3 py-3 rounded bg-panel border border-border hover:border-accent/50 hover:bg-panel/80 transition-colors text-left"
+              @click="openProject(rp.path)"
+            >
+              <div class="w-10 h-10 rounded bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center">
+                <Film :size="16" class="text-accent" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-text-primary truncate">{{ rp.name }}</div>
+                <div class="text-[10px] text-text-secondary truncate">{{ rp.path }}</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor view -->
+    <div v-else class="flex-1 flex flex-col overflow-hidden">
+      <TopBar />
+      <div class="flex-1 flex overflow-hidden">
+        <LeftPanel />
+        <div class="flex-1 flex flex-col overflow-hidden bg-bg">
+          <PreviewPlayer />
+          <TimelinePanel />
+        </div>
+        <RightPanel />
+      </div>
+    </div>
+
+    <NewProjectDialog />
+    <ExportDialog :is-open="uiStore.isExportDialogOpen" @close="uiStore.isExportDialogOpen = false" />
+    <ToastContainer />
+  </div>
+</template>
