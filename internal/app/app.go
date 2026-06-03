@@ -370,6 +370,27 @@ func (a *App) OpenFilePicker(filters []project.FileFilter) ([]string, error) {
 	return paths, nil
 }
 
+// SaveFilePicker uses the Wails save file dialog for choosing an export output location.
+func (a *App) SaveFilePicker(defaultName string, filters []project.FileFilter) (string, error) {
+	options := runtime.SaveDialogOptions{
+		Title:           "Save Export File",
+		DefaultFilename: defaultName,
+		Filters:         []runtime.FileFilter{},
+	}
+	for _, f := range filters {
+		patterns := joinPatterns(f.Extensions)
+		options.Filters = append(options.Filters, runtime.FileFilter{
+			DisplayName: f.Name,
+			Pattern:     patterns,
+		})
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 func (a *App) GetAppVersion() string {
 	return "0.1.0"
 }

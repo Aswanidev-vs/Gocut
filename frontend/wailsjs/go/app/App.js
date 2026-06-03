@@ -94,6 +94,10 @@ export function PreloadFrames(arg1, arg2, arg3) {
   return window['go']['app']['App']['PreloadFrames'](arg1, arg2, arg3);
 }
 
+export function SaveFilePicker(arg1, arg2) {
+  return window['go']['app']['App']['SaveFilePicker'](arg1, arg2);
+}
+
 export function SaveProject(arg1) {
   return window['go']['app']['App']['SaveProject'](arg1);
 }

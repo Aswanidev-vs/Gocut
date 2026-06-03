@@ -3,7 +3,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
-import { StartRender, GetRenderProgress, CancelRender, OpenFilePicker } from '../../lib/wails'
+import { StartRender, GetRenderProgress, CancelRender, SaveFilePicker } from '../../lib/wails'
 import { onWailsEvent, offWailsEvent } from '../../lib/wailsEvents'
 import { X, FileDown, Loader2, CheckCircle2, AlertCircle, FolderOpen, XCircle } from 'lucide-vue-next'
 
@@ -59,11 +59,8 @@ function getResolution() {
 async function pickOutput() {
   try {
     const name = (projectStore.projectName || 'export') + '.' + format.value
-    const paths = await OpenFilePicker([{ name: 'Output', extensions: [format.value] }])
-    if (Array.isArray(paths) && paths.length > 0) {
-      outputPath.value = paths[0]
-    } else {
-      // OpenFilePicker returns a single path; some versions return an array.
+    const paths = await SaveFilePicker(name, [{ name: 'Output', extensions: [format.value] }])
+    if (paths) {
       outputPath.value = paths
     }
   } catch (e) {

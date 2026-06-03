@@ -361,7 +361,12 @@ const visibleClips = computed(() => {
             :style="{
               left: '50%',
               top: '50%',
-              transform: 'translate(-50%, -50%)',
+              opacity: it.clip.opacity ?? 1,
+              transform: `translate(calc(-50% + ${it.clip.transform?.x || 0}px), calc(-50% + ${it.clip.transform?.y || 0}px)) ` +
+                         `scale(${it.clip.transform?.scaleX || 1}, ${it.clip.transform?.scaleY || 1}) ` +
+                         `rotate(${it.clip.transform?.rotation || 0}deg) ` +
+                         `scaleX(${it.clip.transform?.flipH ? -1 : 1}) ` +
+                         `scaleY(${it.clip.transform?.flipV ? -1 : 1})`,
             }"
           >
             <div

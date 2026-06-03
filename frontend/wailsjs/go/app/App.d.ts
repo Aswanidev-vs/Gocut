@@ -48,6 +48,8 @@ export function OpenOutputFolder(arg1:string):Promise<void>;
 
 export function PreloadFrames(arg1:project.Project,arg2:number,arg3:number):Promise<void>;
 
+export function SaveFilePicker(arg1:string,arg2:Array<project.FileFilter>):Promise<string>;
+
 export function SaveProject(arg1:project.Project):Promise<void>;
 
 export function StartRender(arg1:project.Project,arg2:project.RenderSettings):Promise<string>;

@@ -19,6 +19,7 @@ export {
   ClearPreviewCache,
   CheckFFmpegInstalled,
   OpenFilePicker,
+  SaveFilePicker,
   GetAppVersion,
   GetMediaServerPort,
 } from '../../wailsjs/go/app/App.js'
