@@ -180,9 +180,12 @@ watch(() => props.isOpen, (open) => {
         <Loader2 :size="32" class="text-accent animate-spin" />
         <div class="text-sm text-text-primary">{{ status === 'queued' ? 'Queued…' : 'Rendering…' }}</div>
         <div class="w-full h-1.5 bg-border rounded-full overflow-hidden">
-          <div class="h-full bg-accent transition-all" :style="{ width: progress + '%' }" />
+          <div class="h-full bg-accent transition-all duration-1000 ease-out" :style="{ width: (progress > 0 ? progress : 2) + '%' }" />
         </div>
-        <div class="text-[10px] text-text-secondary font-mono">{{ Math.round(progress) }}%</div>
+        <div class="text-[10px] text-text-secondary font-mono">
+          <span v-if="progress === 0 && status === 'rendering'">Initializing Engine...</span>
+          <span v-else>{{ Math.round(progress) }}%</span>
+        </div>
         <button class="px-3 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-border border border-border" @click="cancelExport">
           Cancel
         </button>

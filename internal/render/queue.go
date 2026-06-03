@@ -2,6 +2,7 @@ package render
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -221,6 +222,22 @@ func (q *Queue) failJob(job *Job, err error) {
 func (q *Queue) parseProgress(job *Job, r io.ReadCloser) {
 	defer r.Close()
 	scanner := bufio.NewScanner(r)
+	
+	// FFmpeg uses \r (carriage return) for progress updates, not \n. 
+	// Default scanner splits on \n, meaning it blocks until end of job.
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+			return i + 1, data[0:i], nil
+		}
+		if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
+	})
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		// ffmpeg writes lines like:
