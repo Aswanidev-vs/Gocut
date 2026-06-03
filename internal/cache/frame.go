@@ -1,74 +1,70 @@
 package cache
 
 import (
-	"io"
 	"sync"
+	"time"
 )
 
-type RingBuffer struct {
-	data  [][]byte
-	size  int
-	head  int
-	tail  int
-	count int
-	mu    sync.Mutex
+type frameEntry struct {
+	data    []byte
+	expires time.Time
 }
 
-func NewRingBuffer(size int) *RingBuffer {
-	return &RingBuffer{
-		data: make([][]byte, size),
-		size: size,
+type FrameCache struct {
+	mu      sync.Mutex
+	entries map[string]frameEntry
+	maxSize int
+	ttl     time.Duration
+}
+
+func NewFrameCache(maxSize int, ttl time.Duration) *FrameCache {
+	return &FrameCache{
+		entries: make(map[string]frameEntry),
+		maxSize: maxSize,
+		ttl:     ttl,
 	}
 }
 
-func (r *RingBuffer) Put(frame []byte) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (c *FrameCache) Get(key string) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if r.size == 0 {
-		return
-	}
-
-	r.data[r.head] = frame
-	r.head = (r.head + 1) % r.size
-	if r.count == r.size {
-		r.tail = (r.tail + 1) % r.size
-	} else {
-		r.count++
-	}
-}
-
-func (r *RingBuffer) Get(index int) ([]byte, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if index < 0 || index >= r.count {
+	e, ok := c.entries[key]
+	if !ok {
 		return nil, false
 	}
-	idx := (r.tail + index) % r.size
-	return r.data[idx], true
+	if time.Now().After(e.expires) {
+		delete(c.entries, key)
+		return nil, false
+	}
+	return e.data, true
 }
 
-func (r *RingBuffer) Len() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.count
+func (c *FrameCache) Put(key string, data []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.maxSize > 0 && len(c.entries) >= c.maxSize {
+		for k := range c.entries {
+			delete(c.entries, k)
+			break
+		}
+	}
+
+	c.entries[key] = frameEntry{
+		data:    data,
+		expires: time.Now().Add(c.ttl),
+	}
 }
 
-func (r *RingBuffer) Clear() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.head = 0
-	r.tail = 0
-	r.count = 0
-	r.data = make([][]byte, r.size)
+func (c *FrameCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]frameEntry)
 }
 
-func (r *RingBuffer) Reader() io.Reader {
-	return &emptyReader{}
-}
-
-type emptyReader struct{}
-
-func (emptyReader) Read(p []byte) (int, error) {
-	return 0, io.EOF
+func (c *FrameCache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.entries)
 }

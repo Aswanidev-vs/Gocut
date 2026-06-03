@@ -1,6 +1,6 @@
 import { defineStore, getActivePinia } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { GetPreviewFrame, PreloadFrames } from '../lib/wails'
+import { GetPreviewFrame, PreloadFrames, GetMediaServerPort } from '../lib/wails'
 
 // playerStore touches both projectStore and timelineStore. To avoid the
 // "Cannot access '<store>' before initialization" crash when the first
@@ -32,6 +32,11 @@ export const usePlayerStore = defineStore('player', () => {
   const previewImage = ref(null)
   const isPreviewLoading = ref(false)
   const previewError = ref(null)
+  let previewRequestId = 0
+  let lastCompletedPreviewTime = -1
+  let queuedPreview = false
+  let queuedPreviewTime = 0
+  const mediaServerPort = ref(0)
 
   const formattedTime = computed(() => formatTimecode(currentTime.value))
 
@@ -62,27 +67,52 @@ export const usePlayerStore = defineStore('player', () => {
   async function seek(time) {
     const ts = getTimelineStore()
     if (ts) ts.setCurrentTime(time)
-    await refreshPreview()
+    await refreshPreview(true)
   }
 
-  async function refreshPreview() {
+  async function refreshPreview(force = false, overrideTime = null) {
     const ps = getProjectStore()
     if (!ps || !ps.project) {
       previewImage.value = null
       return
     }
+
+    const targetTime = overrideTime ?? currentTime.value
+
+    if (!force && isPreviewLoading.value) {
+      queuedPreview = true
+      queuedPreviewTime = targetTime
+      return
+    }
+
+    if (!force && Math.abs(targetTime - lastCompletedPreviewTime) < 0.03) {
+      return
+    }
+
+    const requestId = ++previewRequestId
     isPreviewLoading.value = true
     previewError.value = null
     try {
       const w = ps.project.resolution?.width || 1920
       const h = ps.project.resolution?.height || 1080
-      const data = await GetPreviewFrame(JSON.parse(JSON.stringify(ps.project)), currentTime.value, w, h)
+      const data = await GetPreviewFrame(JSON.parse(JSON.stringify(ps.project)), targetTime, w, h)
+      if (requestId !== previewRequestId) return
       previewImage.value = data
+      lastCompletedPreviewTime = targetTime
     } catch (e) {
+      if (requestId !== previewRequestId) return
       previewError.value = e?.message || String(e)
       previewImage.value = null
     } finally {
-      isPreviewLoading.value = false
+      if (requestId === previewRequestId) {
+        isPreviewLoading.value = false
+      }
+      if (queuedPreview) {
+        const nextTime = queuedPreviewTime
+        queuedPreview = false
+        queuedPreviewTime = 0
+        Promise.resolve().then(() => refreshPreview(true, nextTime))
+      }
     }
   }
 
@@ -129,6 +159,18 @@ export const usePlayerStore = defineStore('player', () => {
     return pad(h) + ':' + pad(m) + ':' + pad(s) + '.' + pad(ms, 3)
   }
 
+  async function fetchMediaServerPort() {
+    try {
+      const port = await GetMediaServerPort()
+      mediaServerPort.value = port || 0
+    } catch (_) { /* ignore */ }
+  }
+
+  function getMediaUrl(assetPath) {
+    if (!mediaServerPort.value || !assetPath) return null
+    return `http://127.0.0.1:${mediaServerPort.value}/media?path=${encodeURIComponent(assetPath)}`
+  }
+
   return {
     isPlaying,
     currentTime,
@@ -152,5 +194,8 @@ export const usePlayerStore = defineStore('player', () => {
     refreshPreview,
     preload,
     formatTimecode,
+    mediaServerPort,
+    fetchMediaServerPort,
+    getMediaUrl,
   }
 })

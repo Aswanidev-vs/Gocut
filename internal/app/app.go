@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"Gocut/internal/cache"
 	"Gocut/internal/ffmpeg"
@@ -29,12 +33,16 @@ type App struct {
 	renderQueue    *render.Queue
 	compositor     *render.Compositor
 	thumbCache     *cache.ThumbnailCache
-	frameCache     *cache.RingBuffer
+	frameCache     *cache.FrameCache
 	fontScanner    *fonts.Scanner
 	autosave       *project.AutoSaver
 	currentProject *project.Project
 	ffmpegPath     string
 	ffprobePath    string
+	prefetchMu      sync.Mutex
+	prefetchAsset   string
+	prefetchTime    float64
+	mediaServerPort int
 }
 
 func NewApp() *App {
@@ -63,11 +71,12 @@ func (a *App) Startup(ctx context.Context) {
 	thumbCache, _ := cache.NewThumbnailCache(thumbDir, 500*1024*1024)
 	a.thumbCache = thumbCache
 
-	a.frameCache = cache.NewRingBuffer(30)
+	a.frameCache = cache.NewFrameCache(120, 30*time.Second)
 	a.fontScanner = fonts.NewScanner()
 	a.autosave = project.NewAutoSaver(a.projectMgr, 60)
 	a.autosave.SetProjectSupplier(func() *project.Project { return a.currentProject })
 	a.autosave.Start(ctx)
+	a.startMediaServer()
 }
 
 func (a *App) emit(event string, data interface{}) {
@@ -131,7 +140,10 @@ func (a *App) ExtractThumbnail(assetID string, timeMs int) (string, error) {
 		return "", fmt.Errorf("asset not found: %s", assetID)
 	}
 
-	thumbDir := appDataDir("thumbnails")
+	thumbDir, err := ensureAppDataSubdir("thumbnails")
+	if err != nil {
+		return "", err
+	}
 	outPath := filepath.Join(thumbDir, assetID+".png")
 	if err := a.executor.ExtractThumbnail(a.ctx, asset.Path, float64(timeMs)/1000.0, outPath); err != nil {
 		return "", err
@@ -243,35 +255,43 @@ func (a *App) GetPreviewFrame(p project.Project, timeSeconds float64, width int,
 		return "", fmt.Errorf("no asset at time %.2fs", timeSeconds)
 	}
 
-	previewDir := appDataDir("preview")
-	outPath := filepath.Join(previewDir, asset.ID+".jpg")
-	if err := a.executor.ExtractThumbnail(a.ctx, asset.Path, sourceTime, outPath); err != nil {
-		return "", err
+	cacheKey := fmt.Sprintf("preview/%s/%.3f.jpg", asset.ID, sourceTime)
+
+	if cached, ok := a.thumbCache.Get(cacheKey); ok {
+		return base64.StdEncoding.EncodeToString(cached), nil
 	}
 
-	data, err := os.ReadFile(outPath)
+	data, err := a.executor.ExtractThumbnailPipe(a.ctx, asset.Path, sourceTime)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("thumbnail extraction failed: %w", err)
 	}
+
+	_ = a.thumbCache.Put(cacheKey, data)
+
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
 func (a *App) PreloadFrames(p project.Project, startTime float64, count int) error {
-	previewDir := appDataDir("preview")
 	for i := 0; i < count; i++ {
 		t := startTime + float64(i)*(1.0/30.0)
 		asset, sourceTime := a.assetAtTime(p, t)
 		if asset == nil {
 			continue
 		}
-		outPath := filepath.Join(previewDir, asset.ID+".jpg")
-		_ = a.executor.ExtractThumbnail(a.ctx, asset.Path, sourceTime, outPath)
+		cacheKey := fmt.Sprintf("preview/%s/%.3f.jpg", asset.ID, sourceTime)
+		if _, ok := a.thumbCache.Get(cacheKey); ok {
+			continue
+		}
+		go func(inputPath string, st float64, key string) {
+			_ = a.executor.ExtractThumbnail(a.ctx, inputPath, st, filepath.Join(appDataDir("preview"), key))
+		}(asset.Path, sourceTime, cacheKey)
 	}
 	return nil
 }
 
 func (a *App) ClearPreviewCache() error {
 	a.frameCache.Clear()
+	_ = a.thumbCache.Clear(nil)
 	return nil
 }
 
@@ -426,6 +446,70 @@ func appDataDir(name string) string {
 	dir := filepath.Join(home, ".gocut")
 	_ = os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, name)
+}
+
+func ensureAppDataSubdir(name string) (string, error) {
+	path := appDataDir(name)
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// --- Media file server ---
+
+func (a *App) startMediaServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/media", func(w http.ResponseWriter, r *http.Request) {
+		assetPath := r.URL.Query().Get("path")
+		if assetPath == "" {
+			http.Error(w, "missing path", http.StatusBadRequest)
+			return
+		}
+		// Security: only serve files that exist as assets in the current project.
+		if !a.isKnownAssetPath(assetPath) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Range")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges")
+		f, err := os.Open(assetPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		stat, err := f.Stat()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.ServeContent(w, r, filepath.Base(assetPath), stat.ModTime(), f)
+	})
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return
+	}
+	a.mediaServerPort = listener.Addr().(*net.TCPAddr).Port
+	go http.Serve(listener, mux)
+}
+
+func (a *App) isKnownAssetPath(path string) bool {
+	if a.currentProject == nil {
+		return false
+	}
+	for _, asset := range a.currentProject.Assets {
+		if asset.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) GetMediaServerPort() int {
+	return a.mediaServerPort
 }
 
 func findFFmpeg() string {

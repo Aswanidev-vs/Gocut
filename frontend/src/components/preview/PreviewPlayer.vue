@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, watchEffect } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTimelineStore } from '../../stores/timelineStore'
@@ -11,8 +11,22 @@ const timelineStore = useTimelineStore()
 
 const isFullscreen = ref(false)
 const playInterval = ref(null)
+const videoRef = ref(null)
+const useVideoElement = ref(false)  // true when <video> is active (during play)
 
-// Playback ticker: when playing, advance currentTime every animation frame.
+// ---- Fetch media server port on mount ----
+onMounted(() => {
+  playerStore.fetchMediaServerPort()
+  startTicker()
+  setTimeout(() => playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {}), 100)
+})
+
+onUnmounted(() => {
+  stopTicker()
+  destroyAudioElements()
+})
+
+// ---- Playback ticker: advance currentTime every animation frame ----
 function startTicker() {
   stopTicker()
   let last = performance.now()
@@ -44,28 +58,186 @@ function stopTicker() {
   }
 }
 
-onMounted(() => {
-  startTicker()
-  // Kick a first preview frame.
-  setTimeout(() => playerStore.refreshPreview().catch(() => {}), 100)
+// ---- Determine current video clip + asset at playhead ----
+const currentVideoClip = computed(() => {
+  const t = timelineStore.currentTime
+  for (const c of timelineStore.clips) {
+    const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
+    if (track?.type === 'video' && t >= c.startTime && t < c.startTime + c.duration) {
+      return c
+    }
+  }
+  return null
 })
 
-onUnmounted(() => {
-  stopTicker()
+const currentVideoAsset = computed(() => {
+  if (!currentVideoClip.value) return null
+  return projectStore.getAsset(currentVideoClip.value.assetId)
 })
 
-// Refresh the preview frame whenever the current time changes (but throttled
-// to avoid hammering ffmpeg).
-let refreshTimeout = null
-watch(() => timelineStore.currentTime, () => {
-  if (refreshTimeout) clearTimeout(refreshTimeout)
-  refreshTimeout = setTimeout(() => {
-    playerStore.refreshPreview().catch(() => {})
-  }, 80)
+const videoSrc = computed(() => {
+  if (!currentVideoAsset.value) return null
+  return playerStore.getMediaUrl(currentVideoAsset.value.path)
+})
+
+// ---- Audio clips (separate audio-track clips) ----
+const currentAudioClips = computed(() => {
+  const t = timelineStore.currentTime
+  return timelineStore.clips.filter(c => {
+    const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
+    return track?.type === 'audio' && t >= c.startTime && t < c.startTime + c.duration
+  })
+})
+
+// Manage audio elements for audio-track clips
+let audioElements = new Map() // clipId -> { audio, assetPath }
+
+function syncAudioElements() {
+  const t = timelineStore.currentTime
+  const activeClipIds = new Set()
+
+  for (const clip of currentAudioClips.value) {
+    activeClipIds.add(clip.id)
+    const asset = projectStore.getAsset(clip.assetId)
+    if (!asset) continue
+    const url = playerStore.getMediaUrl(asset.path)
+    if (!url) continue
+
+    let entry = audioElements.get(clip.id)
+    if (!entry || entry.assetPath !== asset.path) {
+      // Create or recreate audio element
+      if (entry) { entry.audio.pause(); entry.audio.src = '' }
+      const audio = new Audio(url)
+      audio.preload = 'auto'
+      entry = { audio, assetPath: asset.path }
+      audioElements.set(clip.id, entry)
+    }
+
+    const clipTime = (clip.trimStart || 0) + (t - clip.startTime)
+    const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
+    const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
+    entry.audio.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+
+    if (playerStore.isPlaying) {
+      if (Math.abs(entry.audio.currentTime - clipTime) > 0.3) {
+        entry.audio.currentTime = clipTime
+      }
+      if (entry.audio.paused) entry.audio.play().catch(() => {})
+    } else {
+      entry.audio.pause()
+      entry.audio.currentTime = clipTime
+    }
+  }
+
+  // Remove audio elements for clips no longer active
+  for (const [clipId, entry] of audioElements) {
+    if (!activeClipIds.has(clipId)) {
+      entry.audio.pause()
+      entry.audio.src = ''
+      audioElements.delete(clipId)
+    }
+  }
+}
+
+function destroyAudioElements() {
+  for (const [, entry] of audioElements) {
+    entry.audio.pause()
+    entry.audio.src = ''
+  }
+  audioElements.clear()
+}
+
+// ---- Video element sync ----
+
+// When play/pause changes, control the video element
+watch(() => playerStore.isPlaying, (playing) => {
+  if (playing) {
+    useVideoElement.value = true
+    const v = videoRef.value
+    if (v && videoSrc.value) {
+      const clip = currentVideoClip.value
+      if (clip) {
+        const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
+        v.currentTime = clipTime
+        const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
+        const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
+        v.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+      }
+      v.play().catch(() => {})
+    }
+    syncAudioElements()
+  } else {
+    const v = videoRef.value
+    if (v) v.pause()
+    // Switch back to ffmpeg frame after short delay so we show precise frame
+    playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
+    setTimeout(() => { useVideoElement.value = false }, 50)
+    syncAudioElements()
+  }
+})
+
+// Sync volume changes
+watch(() => playerStore.volume, () => {
+  const vid = videoRef.value
+  if (vid && currentVideoClip.value) {
+    const clip = currentVideoClip.value
+    const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
+    const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
+    vid.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+  }
+  syncAudioElements()
+})
+
+// When current video clip changes during playback (e.g. clip boundary), reload video
+watch(videoSrc, (newSrc, oldSrc) => {
+  if (playerStore.isPlaying && newSrc && newSrc !== oldSrc) {
+    nextTick(() => {
+      const v = videoRef.value
+      if (v) {
+        const clip = currentVideoClip.value
+        if (clip) {
+          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
+          v.currentTime = clipTime
+        }
+        v.play().catch(() => {})
+      }
+    })
+  }
+})
+
+// ---- Throttled preview refresh (replaces broken debounce) ----
+// Uses throttle: fire immediately, then ignore for N ms. This ensures
+// frames actually update during playback instead of the debounce that
+// kept getting cleared by rAF every 16ms and never fired.
+let lastRefreshTime = 0
+let pendingRefreshRAF = null
+
+watch(() => timelineStore.currentTime, (t) => {
+  // Sync audio elements on every time change
+  if (playerStore.isPlaying) syncAudioElements()
+
+  // During playback with active video element, skip ffmpeg frame refresh
+  if (playerStore.isPlaying && useVideoElement.value && videoSrc.value) return
+
+  const now = performance.now()
+  const interval = playerStore.isPlaying ? 100 : 50  // ms between refreshes
+
+  if (now - lastRefreshTime >= interval) {
+    lastRefreshTime = now
+    playerStore.refreshPreview(false, t).catch(() => {})
+  } else if (!pendingRefreshRAF) {
+    // Schedule one more refresh after the throttle window
+    const remaining = interval - (now - lastRefreshTime)
+    pendingRefreshRAF = setTimeout(() => {
+      pendingRefreshRAF = null
+      lastRefreshTime = performance.now()
+      playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {})
+    }, remaining)
+  }
 })
 
 watch(() => projectStore.project?.id, () => {
-  setTimeout(() => playerStore.refreshPreview().catch(() => {}), 100)
+  setTimeout(() => playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {}), 100)
 })
 
 const aspectStyle = computed(() => {
@@ -135,15 +307,26 @@ const visibleClips = computed(() => {
         class="preview-frame relative bg-black rounded-md overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-border max-h-full"
         :style="{ ...aspectStyle, maxWidth: '100%', maxHeight: '100%', width: '100%' }"
       >
-        <!-- Frame from ffmpeg -->
+        <!-- Live <video> element for playback (provides both video + audio) -->
+        <video
+          v-show="useVideoElement && videoSrc"
+          ref="videoRef"
+          :src="videoSrc"
+          class="absolute inset-0 w-full h-full object-contain bg-black"
+          preload="auto"
+          playsinline
+          @error="() => { /* fallback to ffmpeg frame on error */ useVideoElement = false }"
+        />
+
+        <!-- Static frame from ffmpeg (shown when paused or no video element) -->
         <img
-          v-if="previewSrc"
+          v-show="!useVideoElement && previewSrc"
           :src="previewSrc"
           class="absolute inset-0 w-full h-full object-contain bg-black"
           alt="preview"
         />
         <div
-          v-else
+          v-show="!useVideoElement && !previewSrc"
           class="absolute inset-0 flex flex-col items-center justify-center text-text-secondary text-sm gap-2"
         >
           <ImageOff :size="32" class="opacity-40" />

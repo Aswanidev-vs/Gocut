@@ -20,4 +20,6 @@ export {
   CheckFFmpegInstalled,
   OpenFilePicker,
   GetAppVersion,
+  GetMediaServerPort,
 } from '../../wailsjs/go/app/App.js'
+

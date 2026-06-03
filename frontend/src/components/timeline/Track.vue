@@ -53,13 +53,57 @@ function addAnotherTrackOfSameType() {
   timelineStore.addTrack(props.track.type)
   projectStore.markDirty()
 }
+
+const isDragOver = ref(false)
+
+function onDragOver(e) {
+  // Only accept if dragging an asset
+  if (e.dataTransfer.types.includes('application/x-gocut-asset')) {
+    e.dataTransfer.dropEffect = 'copy'
+    isDragOver.value = true
+  }
+}
+
+function onDragLeave() {
+  isDragOver.value = false
+}
+
+function onDrop(e) {
+  isDragOver.value = false
+  const assetId = e.dataTransfer.getData('application/x-gocut-asset')
+  if (!assetId) return
+  
+  const asset = projectStore.getAsset(assetId)
+  if (!asset) return
+
+  // Calculate drop time based on X coordinate
+  const rect = e.currentTarget.getBoundingClientRect()
+  const offsetX = Math.max(0, e.clientX - rect.left)
+  
+  // Account for timeline scrolling (scrollX is managed by TimelinePanel/parent, 
+  // but timelineStore.zoom is px per second. 
+  // Wait, if the Track is inside a scrollable container, e.clientX is relative to the viewport.
+  // We need to use offsetX on the target element itself (which stretches to totalWidth)
+  const time = (e.offsetX || offsetX) / timelineStore.zoom
+  
+  timelineStore.addClip({
+    assetId: asset.id,
+    trackId: props.track.id,
+    startTime: time,
+    duration: asset.duration || 3
+  })
+}
 </script>
 
 <template>
   <div
     v-if="track"
     class="h-14 relative"
+    :class="{ 'bg-accent/10 border-accent/50 border-t border-b': isDragOver }"
     @click.self="timelineStore.clearSelection()"
+    @dragover.prevent="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
   >
     <!-- Track header (the label/controls sit in a sibling element in the parent
          layout, not here, so the timeline area itself is fully scrollable). -->

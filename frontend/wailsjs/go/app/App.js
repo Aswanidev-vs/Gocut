@@ -42,6 +42,10 @@ export function GetMediaInfo(arg1) {
   return window['go']['app']['App']['GetMediaInfo'](arg1);
 }
 
+export function GetMediaServerPort() {
+  return window['go']['app']['App']['GetMediaServerPort']();
+}
+
 export function GetPreviewFrame(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetPreviewFrame'](arg1, arg2, arg3, arg4);
 }

@@ -22,6 +22,8 @@ export function GetAppVersion():Promise<string>;
 
 export function GetMediaInfo(arg1:string):Promise<project.MediaInfo>;
 
+export function GetMediaServerPort():Promise<number>;
+
 export function GetPreviewFrame(arg1:project.Project,arg2:number,arg3:number,arg4:number):Promise<string>;
 
 export function GetRecentProjects():Promise<Array<project.RecentProject>>;
