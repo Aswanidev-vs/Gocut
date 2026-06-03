@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -249,13 +250,24 @@ func (q *Queue) parseProgress(job *Job, r io.ReadCloser) {
 }
 
 func (q *Queue) jobTotalDuration(job *Job) float64 {
-	if job.Settings.EndTime > 0 {
-		return job.Settings.EndTime
+	duration := job.Settings.EndTime
+	if duration <= 0 {
+		duration = job.Project.Duration
 	}
-	if job.Project.Duration > 0 {
-		return job.Project.Duration
+	if duration <= 0 {
+		for _, track := range job.Project.Timeline.Tracks {
+			for _, clip := range track.Clips {
+				end := clip.StartTime + clip.Duration
+				if end > duration {
+					duration = end
+				}
+			}
+		}
 	}
-	return 0
+	if duration <= 0 {
+		duration = 10 // Fallback to avoid division by zero
+	}
+	return duration
 }
 
 func (q *Queue) emitProgress(ev ProgressEvent) {
@@ -303,10 +315,29 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	videoLabels := []string{"[basev]"}
 	audioLabels := []string{"[basea]"}
 
+	// Collect text clips separately — they don't need -i inputs
+	type textOverlay struct {
+		clip project.Clip
+		tp   project.TextProps
+	}
+	var textClips []textOverlay
+
 	for _, track := range p.Timeline.Tracks {
 		for _, clip := range track.Clips {
+			if clip.Duration <= 0 {
+				continue
+			}
+
+			// Text clips have no asset file — handle via drawtext filter later
+			if track.Type == project.TrackText {
+				if clip.TextProps != nil {
+					textClips = append(textClips, textOverlay{clip: clip, tp: *clip.TextProps})
+				}
+				continue
+			}
+
 			assetPath, err := lookupAssetPath(p, clip.AssetID)
-			if err != nil || assetPath == "" || clip.Duration <= 0 {
+			if err != nil || assetPath == "" {
 				continue
 			}
 
@@ -338,7 +369,65 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=eof_action=pass%s", lastV, videoLabels[i], nextV))
 		lastV = nextV
 	}
-	
+
+	// Apply text overlays via drawtext filter chain
+	for ti, tc := range textClips {
+		text := escapeDrawtext(tc.tp.Text)
+		fontSize := tc.tp.FontSize
+		if fontSize <= 0 {
+			fontSize = 48
+		}
+		fontColor := hexToFFmpeg(tc.tp.Color, "white")
+		startT := tc.clip.StartTime
+		endT := tc.clip.StartTime + tc.clip.Duration
+
+		// Position: center by default, use transform if available
+		xExpr := "(w-text_w)/2"
+		yExpr := "(h-text_h)/2"
+		if tc.clip.Transform.X != 0 || tc.clip.Transform.Y != 0 {
+			// Transform x,y are percentages of canvas (-50 to 50 range from center)
+			xExpr = fmt.Sprintf("(w-text_w)/2+%.0f", tc.clip.Transform.X)
+			yExpr = fmt.Sprintf("(h-text_h)/2+%.0f", tc.clip.Transform.Y)
+		}
+
+		// Find system font file
+		fontFile := ""
+		if runtime.GOOS == "windows" {
+			if tc.tp.Bold {
+				fontFile = "C\\:/Windows/Fonts/arialbd.ttf"
+			} else {
+				fontFile = "C\\:/Windows/Fonts/arial.ttf"
+			}
+		} else if runtime.GOOS == "darwin" {
+			if tc.tp.Bold {
+				fontFile = "/System/Library/Fonts/HelveticaNeue-Bold.ttc"
+			} else {
+				fontFile = "/System/Library/Fonts/Helvetica.ttc"
+			}
+		} else {
+			fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+		}
+
+		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
+			text, fontFile, fontSize, fontColor, xExpr, yExpr, startT, endT)
+
+		// Add border/stroke if specified
+		if tc.tp.StrokeWidth > 0 {
+			borderColor := hexToFFmpeg(tc.tp.StrokeColor, "black")
+			drawtext += fmt.Sprintf(":borderw=%d:bordercolor=%s", tc.tp.StrokeWidth, borderColor)
+		}
+
+		// Add shadow if specified
+		if tc.tp.ShadowBlur > 0 || tc.tp.ShadowOffsetX != 0 || tc.tp.ShadowOffsetY != 0 {
+			shadowColor := hexToFFmpeg(tc.tp.ShadowColor, "black@0.5")
+			drawtext += fmt.Sprintf(":shadowcolor=%s:shadowx=%d:shadowy=%d", shadowColor, tc.tp.ShadowOffsetX, tc.tp.ShadowOffsetY)
+		}
+
+		nextLabel := fmt.Sprintf("[txt%d]", ti)
+		filterParts = append(filterParts, fmt.Sprintf("%s%s%s", lastV, drawtext, nextLabel))
+		lastV = nextLabel
+	}
+
 	// Mix all audio clips together
 	lastA := "[outa]"
 	if len(audioLabels) > 1 {
@@ -370,6 +459,32 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	
 	args = append(args, outputPath)
 	return args
+}
+
+// escapeDrawtext escapes special characters for FFmpeg drawtext filter.
+func escapeDrawtext(s string) string {
+	// FFmpeg drawtext needs single quotes escaped and colons/backslashes escaped
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "'\\''")
+	s = strings.ReplaceAll(s, ":", "\\:")
+	s = strings.ReplaceAll(s, "%", "%%")
+	return s
+}
+
+// hexToFFmpeg converts a CSS hex color like "#ff0000" or "rgba(255,0,0,1)" to FFmpeg color format.
+func hexToFFmpeg(color, fallback string) string {
+	if color == "" {
+		return fallback
+	}
+	// Strip # prefix — FFmpeg accepts hex without #, or named colors
+	if strings.HasPrefix(color, "#") {
+		return "0x" + strings.TrimPrefix(color, "#")
+	}
+	// For rgba() or other CSS formats, just return fallback
+	if strings.HasPrefix(color, "rgb") {
+		return fallback
+	}
+	return color
 }
 
 func lookupAssetPath(p project.Project, assetID string) (string, error) {
