@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { useTimelineStore } from '../../stores/timelineStore'
+import { ArrowRightLeft, Palette } from 'lucide-vue-next'
 
 const props = defineProps({
   clip: { type: Object, required: true },
@@ -23,6 +24,22 @@ const fileName = computed(() => {
   if (!asset.value?.path) return 'Clip'
   const sep = asset.value.path.includes('\\') ? '\\' : '/'
   return asset.value.path.split(sep).pop() || 'Clip'
+})
+
+const hasTransition = computed(() => {
+  return props.clip.transition && props.clip.transition.type !== 'none' && props.clip.transition.duration > 0
+})
+
+const hasEffects = computed(() => {
+  const c = props.clip.color || {}
+  const t = props.clip.transform || {}
+  const op = props.clip.opacity
+  return !!(
+    c.brightness || c.contrast || c.saturation || c.hue || c.blur || c.sharpness || c.vignette || c.grain ||
+    (t.scaleX !== undefined && t.scaleX !== 1) || (t.scaleY !== undefined && t.scaleY !== 1) ||
+    t.rotation || t.flipH || t.flipV ||
+    (op !== undefined && op < 1)
+  )
 })
 
 // ---- drag to move ----
@@ -85,10 +102,14 @@ function onMouseDown(e, mode) {
     @dblclick.stop="timelineStore.selectClip(clip.id)"
   >
     <div
-      class="px-1.5 py-0.5 truncate text-[10px] font-medium pointer-events-none"
+      class="px-1.5 py-0.5 truncate text-[10px] font-medium pointer-events-none flex items-center gap-1"
       :style="{ color: trackColor }"
     >
       {{ fileName }}
+      <div v-if="hasTransition || hasEffects" class="flex items-center gap-0.5 ml-1 opacity-80">
+        <ArrowRightLeft v-if="hasTransition" :size="9" title="Transition applied" />
+        <Palette v-if="hasEffects" :size="9" title="Effects applied" />
+      </div>
     </div>
 
     <!-- Waveform (audio/video) -->
