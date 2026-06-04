@@ -339,10 +339,63 @@ const livePreviewStyle = computed(() => {
   if (t.flipH) transforms.push('scaleX(-1)')
   if (t.flipV) transforms.push('scaleY(-1)')
 
+  const currentTime = timelineStore.currentTime
+  const clipTime = currentTime - clip.startTime
+  const trans = clip.transition
+  let transOpacity = 1
+  let transFilter = ''
+  let transTransform = ''
+  let transClipPath = ''
+
+  if (trans && trans.type !== 'none' && trans.duration > 0 && clipTime < trans.duration && clipTime >= 0) {
+    const p = clipTime / trans.duration // 0.0 to 1.0
+
+    switch (trans.type) {
+      case 'fade':
+      case 'dissolve':
+        transOpacity = p
+        break
+      case 'wipeleft':
+        transClipPath = `inset(0 0 0 ${100 - p * 100}%)`
+        break
+      case 'wiperight':
+        transClipPath = `inset(0 ${100 - p * 100}% 0 0)`
+        break
+      case 'slideleft':
+        transTransform = `translateX(${100 - p * 100}%)`
+        break
+      case 'slideright':
+        transTransform = `translateX(-${100 - p * 100}%)`
+        break
+      case 'zoomin':
+        transTransform = `scale(${0.5 + p * 0.5})`
+        transOpacity = p
+        break
+      case 'hflip':
+        transTransform = `rotateY(${90 - p * 90}deg)`
+        break
+      case 'circleopen':
+        transClipPath = `circle(${p * 100}% at center)`
+        break
+      case 'pixelize':
+      case 'blur':
+        transFilter = `blur(${(1 - p) * 20}px)`
+        transOpacity = p
+        break
+    }
+  }
+
   const style = {}
-  if (filters.length) style.filter = filters.join(' ')
-  if (transforms.length) style.transform = transforms.join(' ')
-  if (opacity < 1) style.opacity = opacity
+  if (filters.length || transFilter) {
+    style.filter = (filters.join(' ') + ' ' + transFilter).trim()
+  }
+  if (transforms.length || transTransform) {
+    style.transform = (transforms.join(' ') + ' ' + transTransform).trim()
+  }
+  const finalOpacity = opacity * transOpacity
+  if (finalOpacity < 1) style.opacity = finalOpacity
+  if (transClipPath) style.clipPath = transClipPath
+
   return style
 })
 
@@ -364,7 +417,7 @@ function exitFullscreen() {
           v-show="useVideoElement && videoSrc"
           ref="videoRef"
           :src="videoSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black transition-[filter,transform,opacity] duration-150"
+          class="absolute inset-0 w-full h-full object-contain bg-black"
           :style="livePreviewStyle"
           preload="auto"
           playsinline
@@ -376,7 +429,7 @@ function exitFullscreen() {
         <img
           v-show="!useVideoElement && previewSrc"
           :src="previewSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black transition-[filter,transform,opacity] duration-150"
+          class="absolute inset-0 w-full h-full object-contain bg-black"
           :style="livePreviewStyle"
           alt="preview"
         />
