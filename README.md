@@ -30,7 +30,8 @@ else's server.
 -  **Color grading** — brightness, contrast, saturation, hue, sharpness, vignette, grain, and blur
 -  **Text overlays** — full styling (font, size, weight, color, stroke, shadow, background)
 -  **Stickers & overlays** — image-based overlays with transform, rotation, and opacity
--  **Transitions** — 11 built-in `xfade` transitions (fade, dissolve, wipe, slide, zoom, …)
+-  **Transitions** — 11 built-in `xfade` transitions (fade, dissolve, wipe, slide, zoom, …) with **live CSS preview** during playback
+-  **Visual clip indicators** — timeline clips show icons when transitions (↔) or color effects (🎨) are applied
 -  **Audio engine** — per-clip volume, muting, and (in-progress) waveform visualization
 -  **Background export** — render MP4 (H.264 + AAC) in a Go goroutine, with progress and cancel
 -  **Portable `.Gocut` projects** — single JSON file you can move, version, or share
@@ -357,6 +358,8 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [x] Stickers & image overlays with transform
 - [x] Color grading (brightness, contrast, saturation, hue, sharpness, vignette, grain, blur)
 - [x] 11 transitions via FFmpeg `xfade`
+- [x] **Live CSS transition preview** — fade, dissolve, wipe, slide, zoom, flip, circle, pixelize, and blur transitions animate in real-time during playback (no FFmpeg round-trip needed)
+- [x] **Visual clip indicators** — timeline clips display transition (↔) and effect (🎨) icons so users can see at a glance which clips have modifications applied
 - [x] Export to MP4 (H.264 + AAC) with background render, progress events, and cancel
 - [x] Auto-save every 60 s
 - [x] Cross-platform: Windows, macOS, Linux
@@ -365,8 +368,8 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 
 ### 🚧 Known gaps (being worked on)
 
-- Preview frame streaming during playback is being tuned to coalesce
-  per-frame FFmpeg requests to the latest `currentTime` (see `TODO.md`).
+- Live transition preview uses CSS approximations (clip-path, opacity, transform). The final exported video uses FFmpeg's native `xfade` filter for pixel-accurate transitions.
+- True cross-fade transitions (overlapping two clips) require complex filter graph chaining — currently transitions apply as intro animations on the incoming clip.
 - Render queue is single-worker by design (avoids CPU contention with FFmpeg).
 - Some PRD features (chroma key, LUTs, audio keyframes, noise reduction,
   multi-cam, plugin marketplace, AI effects) are intentionally **out of scope**
@@ -422,10 +425,11 @@ wails build
 
 A few candidates right now:
 
-- Replace the preview `setTimeout`-based throttle with `requestAnimationFrame` debouncing
 - Add WebM / GIF / audio-only export paths to `internal/render`
 - Wire the system font scanner into the text inspector
 - Add unit tests for `internal/ffmpeg/builder.go` filter chain output
+- Implement true cross-fade overlap logic between adjacent clips
+- Add transition duration slider to the Transitions panel
 
 ### Project structure pointers
 
