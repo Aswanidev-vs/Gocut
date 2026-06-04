@@ -5,6 +5,8 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -603,7 +605,12 @@ func (a *App) startMediaServer() {
 		return
 	}
 	a.mediaServerPort = listener.Addr().(*net.TCPAddr).Port
-	go http.Serve(listener, mux)
+	
+	server := &http.Server{
+		Handler:  mux,
+		ErrorLog: log.New(io.Discard, "", 0),
+	}
+	go server.Serve(listener)
 }
 
 func (a *App) isKnownAssetPath(path string) bool {
