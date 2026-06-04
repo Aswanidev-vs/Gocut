@@ -78,13 +78,19 @@ function onEmptyRowDragLeave(type) {
 }
 
 function onEmptyRowDrop(e, type) {
+  e.preventDefault()
   emptyRowDragOver.value = null
   const assetId = e.dataTransfer.getData('application/x-gocut-asset')
   if (!assetId) return
   const asset = projectStore.getAsset(assetId)
   if (!asset) return
-  // Compute drop time from X offset relative to this element
-  const time = Math.max(0, e.offsetX / timelineStore.zoom)
+  // Compute drop time from clientX relative to the scrollable timeline container.
+  // e.offsetX can be undefined in Wails WebView2 DragEvent, causing NaN → 0.
+  const scrollContainer = document.querySelector('.timeline-content')
+  const rect = scrollContainer ? scrollContainer.getBoundingClientRect() : e.currentTarget.getBoundingClientRect()
+  const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0
+  const px = Math.max(0, e.clientX - rect.left + scrollLeft)
+  const time = px / timelineStore.zoom
   // Auto-create the track if it doesn't exist
   let track = timelineStore.getTrackByType(type)
   if (!track) track = timelineStore.addTrack(type)

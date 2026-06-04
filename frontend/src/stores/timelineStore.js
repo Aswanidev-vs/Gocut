@@ -300,8 +300,8 @@ export const useTimelineStore = defineStore('timeline', () => {
   }
 
   function setCurrentTime(time) {
-    const max = Math.max(0, duration.value)
-    currentTime.value = Math.max(0, Math.min(max || 1e6, time))
+    if (typeof time !== 'number' || isNaN(time)) return
+    currentTime.value = Math.max(0, time)
   }
 
   function loadFromProject(p) {

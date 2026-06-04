@@ -69,6 +69,7 @@ function onDragLeave() {
 }
 
 function onDrop(e) {
+  e.preventDefault()
   isDragOver.value = false
   const assetId = e.dataTransfer.getData('application/x-gocut-asset')
   if (!assetId) return
@@ -76,15 +77,14 @@ function onDrop(e) {
   const asset = projectStore.getAsset(assetId)
   if (!asset) return
 
-  // Calculate drop time based on X coordinate
-  const rect = e.currentTarget.getBoundingClientRect()
-  const offsetX = Math.max(0, e.clientX - rect.left)
-  
-  // Account for timeline scrolling (scrollX is managed by TimelinePanel/parent, 
-  // but timelineStore.zoom is px per second. 
-  // Wait, if the Track is inside a scrollable container, e.clientX is relative to the viewport.
-  // We need to use offsetX on the target element itself (which stretches to totalWidth)
-  const time = (e.offsetX || offsetX) / timelineStore.zoom
+  // Calculate drop time from clientX relative to the scrollable timeline container.
+  // e.offsetX can be undefined in some WebViews (Wails/WebView2 DragEvent) or
+  // relative to a child element, so we always compute from clientX + scrollLeft.
+  const scrollContainer = document.querySelector('.timeline-content')
+  const rect = scrollContainer ? scrollContainer.getBoundingClientRect() : e.currentTarget.getBoundingClientRect()
+  const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0
+  const px = Math.max(0, e.clientX - rect.left + scrollLeft)
+  const time = px / timelineStore.zoom
   
   timelineStore.addClip({
     assetId: asset.id,
