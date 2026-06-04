@@ -133,7 +133,7 @@ const typeIcons = { video: Video, audio: Music, text: Type, sticker: Smile, fx: 
 </script>
 
 <template>
-  <div class="h-64 bg-panel border-t border-border flex flex-col flex-shrink-0 select-none">
+  <div class="bg-panel border-t border-border flex flex-col flex-shrink-0 select-none">
     <!-- Toolbar -->
     <div class="h-10 bg-panel border-b border-border flex items-center px-2 gap-1 flex-shrink-0">
       <div class="flex items-center gap-0.5">

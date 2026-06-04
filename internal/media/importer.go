@@ -21,13 +21,13 @@ func NewImporter(exe *ffmpeg.Executor) *Importer {
 }
 
 var supportedVideoExts = map[string]bool{
-	".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true,
+	".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true, ".ts": true, ".m4v": true,
 }
 var supportedAudioExts = map[string]bool{
-	".mp3": true, ".wav": true, ".aac": true, ".flac": true,
+	".mp3": true, ".wav": true, ".aac": true, ".flac": true, ".ogg": true, ".m4a": true, ".wma": true,
 }
 var supportedImageExts = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true,
 }
 
 // ImportResult reports what was successfully imported and which files failed.
@@ -112,9 +112,9 @@ func isSupported(ext string) bool {
 
 func detectAssetType(ext string, info *project.MediaInfo) project.AssetType {
 	switch ext {
-	case ".mp3", ".wav", ".aac", ".flac":
+	case ".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a", ".wma":
 		return project.AssetAudio
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
 		return project.AssetImage
 	}
 	return project.AssetVideo

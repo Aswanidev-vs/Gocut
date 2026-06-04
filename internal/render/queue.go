@@ -341,11 +341,6 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 
 	for _, track := range p.Timeline.Tracks {
 		for _, clip := range track.Clips {
-			if clip.Duration <= 0 {
-				continue
-			}
-
-			// Text clips have no asset file — handle via drawtext filter later
 			if track.Type == project.TrackText {
 				if clip.TextProps != nil {
 					textClips = append(textClips, textOverlay{clip: clip, tp: *clip.TextProps})
@@ -358,36 +353,93 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				continue
 			}
 
-			// Add input options BEFORE -i for accurate seeking and duration trimming
+			ext := strings.ToLower(filepath.Ext(assetPath))
+			isStaticImage := ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp"
+
+			if isStaticImage {
+				args = append(args, "-loop", "1")
+			} else if ext == ".gif" {
+				args = append(args, "-ignore_loop", "0")
+			}
+
 			if clip.TrimStart > 0 {
 				args = append(args, "-ss", strconv.FormatFloat(clip.TrimStart, 'f', 3, 64))
 			}
-			args = append(args, "-t", strconv.FormatFloat(clip.Duration, 'f', 3, 64))
+			dur := clip.Duration
+			if clip.Speed > 0 && clip.Speed != 1.0 {
+				dur = dur * clip.Speed
+			}
+			args = append(args, "-t", strconv.FormatFloat(dur, 'f', 3, 64))
 			args = append(args, "-i", assetPath)
 
 			if track.Type == project.TrackVideo {
 				label := fmt.Sprintf("[v%d]", inputIdx)
-				filterParts = append(filterParts, fmt.Sprintf("[%d:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS+%.3f/TB%s", inputIdx, clip.StartTime, label))
-				videoLabels = append(videoLabels, label)
+				var clipFilters []string
+
+				clipFilters = append(clipFilters, "format=yuva420p")
+				clipFilters = append(clipFilters, "scale=1280:720:force_original_aspect_ratio=decrease")
+				clipFilters = append(clipFilters, "pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+				clipFilters = append(clipFilters, "setsar=1")
+
+				if cf := ffmpeg.BuildColorFilters(clip.Color); cf != "" {
+					clipFilters = append(clipFilters, cf)
+				}
+				if tf := ffmpeg.BuildTransformFilters(clip.Transform); tf != "" {
+					clipFilters = append(clipFilters, tf)
+				}
+				if clip.Opacity > 0 && clip.Opacity < 1.0 {
+					clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
+				}
+				if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
+					clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", clip.Transition.Duration))
+				}
+
+				ptsExpr := "PTS-STARTPTS"
+				if clip.Speed > 0 && clip.Speed != 1.0 {
+					ptsExpr = fmt.Sprintf("(PTS-STARTPTS)/%g", clip.Speed)
+				}
+				clipFilters = append(clipFilters, fmt.Sprintf("setpts=%s+%.3f/TB", ptsExpr, clip.StartTime))
+
+				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
+				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
 			} else if track.Type == project.TrackAudio {
 				label := fmt.Sprintf("[a%d]", inputIdx)
+				var clipFilters []string
+
+				atempo := ""
+				if clip.Speed > 0 && clip.Speed != 1.0 {
+					atempo = fmt.Sprintf("atempo=%g,", clip.Speed)
+				}
+
+				fadeIn := clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0
+				fadeDur := 0.0
+				if fadeIn {
+					fadeDur = clip.Transition.Duration
+				}
+				if af := ffmpeg.BuildAudioFilters(clip.Volume, fadeIn, false, fadeDur, clip.Duration); af != "" {
+					clipFilters = append(clipFilters, af)
+				}
+
 				delayMs := int(clip.StartTime * 1000)
-				filterParts = append(filterParts, fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,adelay=%d|%d%s", inputIdx, delayMs, delayMs, label))
+				clipFilters = append(clipFilters, fmt.Sprintf("asetpts=PTS-STARTPTS,adelay=%d|%d", delayMs, delayMs))
+
+				filterChain := atempo + strings.Join(clipFilters, ",")
+				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, filterChain, label))
 				audioLabels = append(audioLabels, label)
 			}
 			inputIdx++
 		}
 	}
 
-	// Overlay all video clips onto the base video sequentially
-	lastV := videoLabels[0]
-	for i := 1; i < len(videoLabels); i++ {
+	lastV := "[basev]"
+	for i, vo := range videoOverlays {
 		nextV := fmt.Sprintf("[ov%d]", i)
-		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=eof_action=pass%s", lastV, videoLabels[i], nextV))
+		xExpr := fmt.Sprintf("(W-w)/2+%.0f", vo.clip.Transform.X)
+		yExpr := fmt.Sprintf("(H-h)/2+%.0f", vo.clip.Transform.Y)
+		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=x='%s':y='%s':eof_action=pass%s", lastV, vo.label, xExpr, yExpr, nextV))
 		lastV = nextV
 	}
 
-	// Apply text overlays via drawtext filter chain
 	for ti, tc := range textClips {
 		text := escapeDrawtext(tc.tp.Text)
 		fontSize := tc.tp.FontSize
@@ -398,16 +450,13 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		startT := tc.clip.StartTime
 		endT := tc.clip.StartTime + tc.clip.Duration
 
-		// Position: center by default, use transform if available
 		xExpr := "(w-text_w)/2"
 		yExpr := "(h-text_h)/2"
 		if tc.clip.Transform.X != 0 || tc.clip.Transform.Y != 0 {
-			// Transform x,y are percentages of canvas (-50 to 50 range from center)
 			xExpr = fmt.Sprintf("(w-text_w)/2+%.0f", tc.clip.Transform.X)
 			yExpr = fmt.Sprintf("(h-text_h)/2+%.0f", tc.clip.Transform.Y)
 		}
 
-		// Find system font file
 		fontFile := ""
 		if runtime.GOOS == "windows" {
 			if tc.tp.Bold {
@@ -428,13 +477,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
 			text, fontFile, fontSize, fontColor, xExpr, yExpr, startT, endT)
 
-		// Add border/stroke if specified
 		if tc.tp.StrokeWidth > 0 {
 			borderColor := hexToFFmpeg(tc.tp.StrokeColor, "black")
 			drawtext += fmt.Sprintf(":borderw=%d:bordercolor=%s", tc.tp.StrokeWidth, borderColor)
 		}
 
-		// Add shadow if specified
 		if tc.tp.ShadowBlur > 0 || tc.tp.ShadowOffsetX != 0 || tc.tp.ShadowOffsetY != 0 {
 			shadowColor := hexToFFmpeg(tc.tp.ShadowColor, "black@0.5")
 			drawtext += fmt.Sprintf(":shadowcolor=%s:shadowx=%d:shadowy=%d", shadowColor, tc.tp.ShadowOffsetX, tc.tp.ShadowOffsetY)

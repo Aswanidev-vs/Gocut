@@ -94,6 +94,39 @@ const stats = computed(() => ({
   clips: timelineStore.clips.length,
   tracks: timelineStore.tracks.length,
 }))
+
+const leftWidth = ref(260)
+const rightWidth = ref(300)
+const bottomHeight = ref(256)
+
+let activeDrag = null
+function startDrag(e, panel) {
+  activeDrag = panel
+  document.addEventListener('mousemove', onDrag)
+  document.addEventListener('mouseup', stopDrag)
+  // Prevent text selection during drag
+  e.preventDefault()
+}
+
+function onDrag(e) {
+  if (!activeDrag) return
+  if (activeDrag === 'left') {
+    leftWidth.value = Math.max(150, Math.min(e.clientX, window.innerWidth - rightWidth.value - 200))
+  } else if (activeDrag === 'right') {
+    rightWidth.value = Math.max(150, Math.min(window.innerWidth - e.clientX, window.innerWidth - leftWidth.value - 200))
+  } else if (activeDrag === 'bottom') {
+    // topBar is usually 48px, but we can just use bounding rects if needed.
+    // e.clientY is absolute. The timeline is at the bottom.
+    // bottom height = window.innerHeight - e.clientY
+    bottomHeight.value = Math.max(100, Math.min(window.innerHeight - e.clientY, window.innerHeight - 150))
+  }
+}
+
+function stopDrag() {
+  activeDrag = null
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+}
 </script>
 
 <template>
@@ -171,12 +204,21 @@ const stats = computed(() => ({
     <div v-else class="flex-1 flex flex-col overflow-hidden">
       <TopBar />
       <div class="flex-1 flex overflow-hidden">
-        <LeftPanel />
+        <LeftPanel :style="{ width: leftWidth + 'px' }" />
+        
+        <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'left')" />
+
         <div class="flex-1 flex flex-col overflow-hidden bg-bg">
-          <PreviewPlayer />
-          <TimelinePanel />
+          <PreviewPlayer class="flex-1" />
+          
+          <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
+
+          <TimelinePanel :style="{ height: bottomHeight + 'px' }" />
         </div>
-        <RightPanel />
+        
+        <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'right')" />
+
+        <RightPanel :style="{ width: rightWidth + 'px' }" />
       </div>
     </div>
 

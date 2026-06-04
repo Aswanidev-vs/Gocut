@@ -14,9 +14,9 @@ const isImporting = ref(false)
 const filter = ref('all')
 
 const extensions = {
-  video: { name: 'Video', extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm'] },
-  audio: { name: 'Audio', extensions: ['mp3', 'wav', 'aac', 'flac'] },
-  image: { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] },
+  video: { name: 'Video', extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'ts', 'm4v'] },
+  audio: { name: 'Audio', extensions: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma'] },
+  image: { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] },
 }
 
 const assets = computed(() => projectStore.project?.assets || [])

@@ -28,11 +28,13 @@ func (g *FilterGraph) Build() string {
 func BuildTransformFilters(t project.Transform) string {
 	var parts []string
 	if t.Rotation != 0 {
-		parts = append(parts, fmt.Sprintf("rotate=%g*PI/180", t.Rotation))
+		parts = append(parts, fmt.Sprintf("rotate=%g*PI/180:c=black@0", t.Rotation))
 	}
-	parts = append(parts, fmt.Sprintf("scale=%g:%g", t.ScaleX, t.ScaleY))
+	if t.ScaleX != 1 || t.ScaleY != 1 {
+		parts = append(parts, fmt.Sprintf("scale=iw*%g:ih*%g", t.ScaleX, t.ScaleY))
+	}
 	if t.CropW > 0 && t.CropH > 0 {
-		parts = append(parts, fmt.Sprintf("crop=%g:%g:%g:%g", t.CropW, t.CropH, t.CropX, t.CropY))
+		parts = append(parts, fmt.Sprintf("crop=iw*%g:ih*%g:iw*%g:ih*%g", t.CropW, t.CropH, t.CropX, t.CropY))
 	}
 	if t.FlipH {
 		parts = append(parts, "hflip")

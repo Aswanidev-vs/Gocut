@@ -33,7 +33,7 @@ const activeComponent = computed(() => {
 </script>
 
 <template>
-  <div class="w-[260px] bg-panel border-r border-border flex flex-col overflow-hidden flex-shrink-0">
+  <div class="bg-panel border-r border-border flex flex-col overflow-hidden flex-shrink-0">
     <!-- Tab bar -->
     <div class="flex items-center gap-0.5 p-1.5 border-b border-border overflow-x-auto">
       <button

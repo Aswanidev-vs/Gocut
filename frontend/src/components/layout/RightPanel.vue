@@ -82,7 +82,7 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 </script>
 
 <template>
-  <div class="w-[300px] bg-panel border-l border-border flex flex-col overflow-hidden flex-shrink-0">
+  <div class="bg-panel border-l border-border flex flex-col overflow-hidden flex-shrink-0">
     <div v-if="!hasSelection" class="flex-1 flex flex-col items-center justify-center text-text-secondary text-xs gap-2 px-4 text-center">
       <ChevronRight :size="20" class="opacity-40" />
       <div>Select a clip on the timeline to inspect it.</div>
