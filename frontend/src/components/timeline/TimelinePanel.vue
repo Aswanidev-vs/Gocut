@@ -103,6 +103,7 @@ function onEmptyRowDrop(e, type) {
     })
   }
   projectStore.markDirty()
+  timelineStore.setCurrentTime(time)
   uiStore.addToast(`Added to ${type} track`, 'success', 1200)
 }
 

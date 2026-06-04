@@ -160,10 +160,12 @@ func (a *App) ExtractThumbnail(assetID string, timeMs int) (string, error) {
 
 	_ = a.thumbCache.Put(assetID+".png", data)
 
-	a.emit("asset:thumbnailReady", project.AssetThumbnailEvent{
-		AssetID: assetID,
-		Data:    base64.StdEncoding.EncodeToString(data),
-	})
+	go func() {
+		a.emit("asset:thumbnailReady", project.AssetThumbnailEvent{
+			AssetID: assetID,
+			Data:    base64.StdEncoding.EncodeToString(data),
+		})
+	}()
 
 	return base64.StdEncoding.EncodeToString(data), nil
 }
@@ -179,10 +181,12 @@ func (a *App) ExtractWaveform(assetID string) ([]float32, error) {
 		return nil, err
 	}
 
-	a.emit("asset:waveformReady", project.AssetWaveformEvent{
-		AssetID: assetID,
-		Data:    wf,
-	})
+	go func() {
+		a.emit("asset:waveformReady", project.AssetWaveformEvent{
+			AssetID: assetID,
+			Data:    wf,
+		})
+	}()
 
 	return wf, nil
 }
@@ -319,6 +323,9 @@ func (a *App) assetAtTime(p project.Project, t float64) (*project.Asset, float64
 	}
 	for i := range p.Assets {
 		if p.Assets[i].Type == project.AssetVideo {
+			if p.Assets[i].Duration > 0 && t >= p.Assets[i].Duration {
+				t = p.Assets[i].Duration - 0.001
+			}
 			return &p.Assets[i], t
 		}
 	}
@@ -329,7 +336,9 @@ func (a *App) assetAtTime(p project.Project, t float64) (*project.Asset, float64
 
 func (a *App) CheckFFmpegInstalled() (string, error) {
 	if a.ffmpegPath == "" {
-		a.emit("ffmpeg:notFound", nil)
+		go func() {
+			a.emit("ffmpeg:notFound", nil)
+		}()
 		return "", fmt.Errorf("ffmpeg not found")
 	}
 	if a.ffprobePath == "" {

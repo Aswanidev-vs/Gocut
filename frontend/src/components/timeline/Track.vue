@@ -100,6 +100,8 @@ function onDrop(e) {
       duration: asset.duration || 3
     })
   }
+  timelineStore.setCurrentTime(time)
+  projectStore.markDirty()
 }
 </script>
 

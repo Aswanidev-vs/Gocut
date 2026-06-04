@@ -122,7 +122,6 @@ const stats = computed(() => ({
       <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <div class="relative mb-6">
           <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent to-accent-hover flex items-center justify-center text-bg font-bold text-4xl shadow-2xl shadow-accent/20">G</div>
-          <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 ring-2 ring-bg" />
         </div>
         <h1 class="text-3xl font-bold text-text-primary mb-1 tracking-tight">Gocut</h1>
         <p class="text-sm text-text-secondary mb-1">Open-source, offline video editor.</p>
