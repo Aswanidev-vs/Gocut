@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"Gocut/internal/ffmpeg"
 	"Gocut/internal/project"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -329,15 +331,19 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo:d=%.3f[basea]", duration))
 
 	inputIdx := 0
-	videoLabels := []string{"[basev]"}
 	audioLabels := []string{"[basea]"}
 
-	// Collect text clips separately — they don't need -i inputs
 	type textOverlay struct {
 		clip project.Clip
 		tp   project.TextProps
 	}
 	var textClips []textOverlay
+
+	type videoOverlay struct {
+		label string
+		clip  project.Clip
+	}
+	var videoOverlays []videoOverlay
 
 	for _, track := range p.Timeline.Tracks {
 		for _, clip := range track.Clips {

@@ -3,7 +3,8 @@ import { ref } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
   const activePanelTab = ref('media')
-  const activeInspectorTab = ref('transform')
+  const activeInspectorTab = ref('edit')
+  const activeWorkspace = ref('edit')
   const renderJobs = ref([])
   const toasts = ref([])
   const isExportDialogOpen = ref(false)
@@ -55,6 +56,14 @@ export const useUiStore = defineStore('ui', () => {
     activeInspectorTab.value = tab
   }
 
+  function setActiveWorkspace(ws) {
+    activeWorkspace.value = ws
+    // When switching workspace, also switch inspector to the matching tab
+    if (ws === 'color') activeInspectorTab.value = 'color'
+    else if (ws === 'audio') activeInspectorTab.value = 'audio'
+    else activeInspectorTab.value = 'edit'
+  }
+
   function addRenderJob(job) {
     renderJobs.value.push({
       ...job,
@@ -85,6 +94,7 @@ export const useUiStore = defineStore('ui', () => {
   return {
     activePanelTab,
     activeInspectorTab,
+    activeWorkspace,
     renderJobs,
     toasts,
     isExportDialogOpen,
@@ -97,6 +107,7 @@ export const useUiStore = defineStore('ui', () => {
     removeToast,
     setActivePanelTab,
     setActiveInspectorTab,
+    setActiveWorkspace,
     addRenderJob,
     updateRenderJob,
     removeRenderJob,

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } f
 import { useProjectStore } from '../../stores/projectStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTimelineStore } from '../../stores/timelineStore'
-import { Play, Pause, SkipBack, SkipForward, Maximize2, Volume2, VolumeX, Repeat, Loader2, ImageOff } from 'lucide-vue-next'
+import { Play, Pause, SkipBack, SkipForward, Maximize2, Minimize2, Volume2, VolumeX, Repeat, Loader2, ImageOff } from 'lucide-vue-next'
 
 const projectStore = useProjectStore()
 const playerStore = usePlayerStore()
@@ -19,12 +19,18 @@ onMounted(() => {
   playerStore.fetchMediaServerPort()
   startTicker()
   setTimeout(() => playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {}), 100)
+  document.addEventListener('fullscreenchange', onFullscreenChange)
 })
 
 onUnmounted(() => {
   stopTicker()
   destroyAudioElements()
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
 })
+
+function onFullscreenChange() {
+  isFullscreen.value = !!document.fullscreenElement
+}
 
 // ---- Playback ticker: advance currentTime every animation frame ----
 function startTicker() {
@@ -306,6 +312,43 @@ const visibleClips = computed(() => {
   const t = timelineStore.currentTime
   return timelineStore.clips.filter(c => t >= c.startTime && t < c.startTime + c.duration)
 })
+
+// ---- Live CSS preview of clip color/transform/opacity ----
+const livePreviewStyle = computed(() => {
+  const clip = currentVideoClip.value
+  if (!clip) return {}
+
+  const c = clip.color || {}
+  const t = clip.transform || {}
+  const opacity = clip.opacity ?? 1
+
+  // CSS filter chain from ColorGrade
+  const filters = []
+  if (c.brightness) filters.push(`brightness(${1 + c.brightness / 100})`)
+  if (c.contrast) filters.push(`contrast(${1 + c.contrast / 100})`)
+  if (c.saturation) filters.push(`saturate(${1 + c.saturation / 100})`)
+  if (c.hue) filters.push(`hue-rotate(${c.hue}deg)`)
+  if (c.blur) filters.push(`blur(${c.blur}px)`)
+  if (c.sharpness) filters.push(`contrast(${1 + c.sharpness / 200})`)
+
+  // CSS transform from Transform
+  const transforms = []
+  if (t.scaleX !== undefined && t.scaleX !== 1) transforms.push(`scaleX(${t.scaleX})`)
+  if (t.scaleY !== undefined && t.scaleY !== 1) transforms.push(`scaleY(${t.scaleY})`)
+  if (t.rotation) transforms.push(`rotate(${t.rotation}deg)`)
+  if (t.flipH) transforms.push('scaleX(-1)')
+  if (t.flipV) transforms.push('scaleY(-1)')
+
+  const style = {}
+  if (filters.length) style.filter = filters.join(' ')
+  if (transforms.length) style.transform = transforms.join(' ')
+  if (opacity < 1) style.opacity = opacity
+  return style
+})
+
+function exitFullscreen() {
+  document.exitFullscreen?.().catch(() => {})
+}
 </script>
 
 <template>
@@ -321,7 +364,8 @@ const visibleClips = computed(() => {
           v-show="useVideoElement && videoSrc"
           ref="videoRef"
           :src="videoSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
+          class="absolute inset-0 w-full h-full object-contain bg-black transition-[filter,transform,opacity] duration-150"
+          :style="livePreviewStyle"
           preload="auto"
           playsinline
           muted
@@ -332,7 +376,8 @@ const visibleClips = computed(() => {
         <img
           v-show="!useVideoElement && previewSrc"
           :src="previewSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
+          class="absolute inset-0 w-full h-full object-contain bg-black transition-[filter,transform,opacity] duration-150"
+          :style="livePreviewStyle"
           alt="preview"
         />
         <div
@@ -398,6 +443,16 @@ const visibleClips = computed(() => {
             />
           </div>
         </div>
+
+        <!-- Exit fullscreen button -->
+        <button
+          v-if="isFullscreen"
+          class="absolute top-4 right-4 z-50 p-2.5 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm transition-all opacity-40 hover:opacity-100 focus:opacity-100"
+          @click="exitFullscreen"
+          title="Exit Fullscreen (Esc)"
+        >
+          <Minimize2 :size="20" />
+        </button>
       </div>
     </div>
 

@@ -4,7 +4,7 @@ import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { OpenFilePicker } from './lib/wails'
-import { Film, FolderOpen, FilePlus, Sparkles, Github } from 'lucide-vue-next'
+import { Film, FolderOpen, FilePlus, Sparkles, Github, Scissors, Palette, Headphones } from 'lucide-vue-next'
 import { useHotkeys } from './composables/useHotkeys'
 
 import TopBar from './components/layout/TopBar.vue'
@@ -219,6 +219,26 @@ function stopDrag() {
         <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'right')" />
 
         <RightPanel :style="{ width: rightWidth + 'px' }" />
+      </div>
+
+      <!-- DaVinci Resolve-style Workspace Bar -->
+      <div class="h-8 bg-panel border-t border-border flex items-center justify-center gap-1 flex-shrink-0 px-4">
+        <button
+          v-for="ws in [
+            { id: 'edit', label: 'Edit', icon: 'Scissors' },
+            { id: 'color', label: 'Color', icon: 'Palette' },
+            { id: 'audio', label: 'Audio', icon: 'Headphones' },
+          ]"
+          :key="ws.id"
+          class="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all"
+          :class="uiStore.activeWorkspace === ws.id
+            ? 'bg-accent/15 text-accent border border-accent/30'
+            : 'text-text-secondary hover:text-text-primary hover:bg-border/60 border border-transparent'"
+          @click="uiStore.setActiveWorkspace(ws.id)"
+        >
+          <component :is="ws.icon === 'Scissors' ? Scissors : ws.icon === 'Palette' ? Palette : Headphones" :size="12" />
+          {{ ws.label }}
+        </button>
       </div>
     </div>
 
