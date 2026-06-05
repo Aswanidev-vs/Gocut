@@ -1,9 +1,11 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
-import { Minus, Plus, RotateCcw } from 'lucide-vue-next'
+import { usePlayerStore } from '../../stores/playerStore'
+import { Minus, Plus, RotateCcw, BarChart2 } from 'lucide-vue-next'
 
 const timelineStore = useTimelineStore()
+const playerStore = usePlayerStore()
 const activeTab = ref('basic')
 
 type Preset = { name: string; color: any }
@@ -220,50 +222,175 @@ watch(selectedChannel, () => {
   draw()
 })
 
+const histogramCanvasRef = ref(null)
+const showHistogram = ref(true)
+
+function drawHistogram() {
+  const base64 = playerStore.previewImage
+  if (!base64) return
+
+  const img = new Image()
+  img.onload = () => {
+    const canvas = histogramCanvasRef.value
+    if (!canvas) return
+    const hctx = canvas.getContext('2d')
+    if (!hctx) return
+
+    const offscreen = document.createElement('canvas')
+    offscreen.width = 128
+    offscreen.height = 72
+    const octx = offscreen.getContext('2d')
+    if (!octx) return
+    octx.drawImage(img, 0, 0, 128, 72)
+    
+    const imgData = octx.getImageData(0, 0, 128, 72)
+    const data = imgData.data
+
+    const rHist = new Array(256).fill(0)
+    const gHist = new Array(256).fill(0)
+    const bHist = new Array(256).fill(0)
+    const lHist = new Array(256).fill(0)
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+
+      rHist[r]++
+      gHist[g]++
+      bHist[b]++
+      lHist[l]++
+    }
+
+    const W = canvas.width
+    const H = canvas.height
+    hctx.clearRect(0, 0, W, H)
+
+    const maxVal = Math.max(...rHist, ...gHist, ...bHist, ...lHist, 1)
+
+    // grid lines
+    hctx.strokeStyle = '#2A2A2A'
+    hctx.lineWidth = 1
+    for (let i = 1; i < 4; i++) {
+      const x = (W / 4) * i
+      hctx.beginPath()
+      hctx.moveTo(x, 0)
+      hctx.lineTo(x, H)
+      hctx.stroke()
+    }
+
+    const drawChannel = (hist, color) => {
+      hctx.strokeStyle = color
+      hctx.lineWidth = 1.5
+      hctx.beginPath()
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 255) * W
+        const y = H - (hist[i] / maxVal) * H * 0.95
+        if (i === 0) hctx.moveTo(x, y)
+        else hctx.lineTo(x, y)
+      }
+      hctx.stroke()
+    }
+
+    hctx.globalCompositeOperation = 'screen'
+    drawChannel(rHist, '#ef4444')
+    drawChannel(gHist, '#22c55e')
+    drawChannel(bHist, '#3b82f6')
+    drawChannel(lHist, 'rgba(232, 232, 232, 0.4)')
+    hctx.globalCompositeOperation = 'source-over'
+  }
+  img.src = 'data:image/jpeg;base64,' + base64
+}
+
+watch(() => playerStore.previewImage, () => {
+  if (showHistogram.value) {
+    drawHistogram()
+  }
+})
+
 onMounted(() => {
   draw()
+  drawHistogram()
 })
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
-    <div class="flex items-center justify-between mb-2">
-      <div class="text-xs font-semibold text-text-secondary">Curves</div>
-      <div class="flex items-center gap-1">
-        <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="addPoint" title="Add point">
-          <Plus :size="14" />
-        </button>
-        <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="removePoint" title="Remove point">
-          <Minus :size="14" />
-        </button>
-        <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="resetCurves" title="Reset">
-          <RotateCcw :size="14" />
+  <div class="flex flex-col h-full gap-4">
+    <!-- Curves section -->
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-text-secondary">Curves</div>
+        <div class="flex items-center gap-1">
+          <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="addPoint" title="Add point">
+            <Plus :size="14" />
+          </button>
+          <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="removePoint" title="Remove point">
+            <Minus :size="14" />
+          </button>
+          <button class="p-1 rounded hover:bg-border text-text-secondary hover:text-text-primary" @click="resetCurves" title="Reset">
+            <RotateCcw :size="14" />
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <button
+          v-for="ch in channelLabels"
+          :key="ch"
+          class="text-[10px] px-2 py-0.5 rounded border transition-colors"
+          :class="selectedChannel === ch ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary hover:text-text-primary'"
+          @click="selectedChannel = ch"
+        >
+          {{ ch.toUpperCase() }}
         </button>
       </div>
+      <div class="flex items-center justify-center bg-bg border border-border rounded p-1">
+        <canvas
+          ref="canvasRef"
+          :width="canvasSize.w"
+          :height="canvasSize.h"
+          class="w-full h-auto cursor-crosshair select-none"
+          style="image-rendering: auto"
+          @mousedown="onMouseDown"
+          @mousemove="onMouseMove"
+          @mouseup="onMouseUp"
+          @mouseleave="onMouseUp"
+        />
+      </div>
     </div>
-    <div class="flex items-center gap-2 mb-2">
-      <button
-        v-for="ch in channelLabels"
-        :key="ch"
-        class="text-[10px] px-2 py-0.5 rounded border transition-colors"
-        :class="selectedChannel === ch ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary hover:text-text-primary'"
-        @click="selectedChannel = ch"
+
+    <!-- Histogram Section -->
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-text-secondary flex items-center gap-1">
+          <BarChart2 :size="14" class="text-accent" />
+          Real-time Histogram
+        </div>
+        <button
+          class="text-[10px] px-1.5 py-0.5 rounded border border-border text-text-secondary hover:text-text-primary"
+          @click="showHistogram = !showHistogram"
+        >
+          {{ showHistogram ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+      
+      <div
+        v-show="showHistogram"
+        class="flex items-center justify-center bg-bg/80 border border-border rounded p-2 relative h-32"
       >
-        {{ ch.toUpperCase() }}
-      </button>
-    </div>
-    <div class="flex-1 flex items-center justify-center bg-bg border border-border rounded p-1">
-      <canvas
-        ref="canvasRef"
-        :width="canvasSize.w"
-        :height="canvasSize.h"
-        class="w-full h-auto cursor-crosshair select-none"
-        style="image-rendering: auto"
-        @mousedown="onMouseDown"
-        @mousemove="onMouseMove"
-        @mouseup="onMouseUp"
-        @mouseleave="onMouseUp"
-      />
+        <canvas
+          ref="histogramCanvasRef"
+          width="256"
+          height="128"
+          class="w-full h-full select-none"
+        />
+        <div
+          v-if="!playerStore.previewImage"
+          class="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary bg-bg/90"
+        >
+          Import media / play timeline to analyze colors
+        </div>
+      </div>
     </div>
   </div>
 </template>

@@ -110,7 +110,13 @@ function onDragLeave() {}
 async function pickAndImport() {
   isImporting.value = true
   try {
+    const allExtensions = [
+      ...extensions.video.extensions,
+      ...extensions.audio.extensions,
+      ...extensions.image.extensions
+    ]
     const result = await OpenFilePicker([
+      { name: 'All Media', extensions: allExtensions },
       extensions.video,
       extensions.audio,
       extensions.image,

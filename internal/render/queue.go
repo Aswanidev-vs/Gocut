@@ -397,7 +397,14 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
 				}
 				if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
-					clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", clip.Transition.Duration))
+					trans := clip.Transition
+					D := trans.Duration
+					switch trans.Type {
+					case "fade", "dissolve":
+						clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", D))
+					case "blur":
+						clipFilters = append(clipFilters, fmt.Sprintf("boxblur=luma_radius='if(lt(t\\,%g)\\,20*(1-t/%g)\\,0)'", D, D))
+					}
 				}
 
 				ptsExpr := "PTS-STARTPTS"
@@ -442,6 +449,24 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		nextV := fmt.Sprintf("[ov%d]", i)
 		xExpr := fmt.Sprintf("(W-w)/2+%.0f", vo.clip.Transform.X)
 		yExpr := fmt.Sprintf("(H-h)/2+%.0f", vo.clip.Transform.Y)
+		
+		if vo.clip.Transition != nil && vo.clip.Transition.Type != "none" && vo.clip.Transition.Duration > 0 {
+			trans := vo.clip.Transition
+			start := vo.clip.StartTime
+			dur := trans.Duration
+			finalX := fmt.Sprintf("((W-w)/2+%.0f)", vo.clip.Transform.X)
+			
+			switch trans.Type {
+			case "slideleft":
+				xExpr = fmt.Sprintf("if(lt(t,%g),W-(W-%s)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
+			case "slideright":
+				xExpr = fmt.Sprintf("if(lt(t,%g),-w+(%s+w)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
+			case "zoomin":
+				// zoomin transition is implemented as scale in the clipFilters if needed, 
+				// or we can simulate it by moving from center offset
+			}
+		}
+		
 		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=x='%s':y='%s':eof_action=pass%s", lastV, vo.label, xExpr, yExpr, nextV))
 		lastV = nextV
 	}

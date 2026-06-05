@@ -476,7 +476,9 @@ func joinPatterns(exts []string) string {
 		if i > 0 {
 			out += ";"
 		}
-		out += "*." + e
+		lower := strings.ToLower(e)
+		upper := strings.ToUpper(e)
+		out += "*." + lower + ";*." + upper
 	}
 	return out
 }
