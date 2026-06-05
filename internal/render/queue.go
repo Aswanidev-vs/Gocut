@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -169,6 +170,8 @@ func (q *Queue) runJob(job *Job) {
 		return
 	}
 
+	log.Printf("[render] ffmpeg args: %v", args)
+
 	ctx, cancel := context.WithCancel(q.ctx)
 	job.Cancel = cancel
 
@@ -185,14 +188,18 @@ func (q *Queue) runJob(job *Job) {
 		return
 	}
 
-	// Parse ffmpeg's stderr line-by-line for progress updates.
-	go q.parseProgress(job, stderr)
+	// Parse ffmpeg's stderr line-by-line for progress updates,
+	// and collect tail lines so we can report errors.
+	stderrLines := q.parseProgressAndCapture(job, stderr)
 
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() != nil {
 			return
 		}
-		q.failJob(job, fmt.Errorf("ffmpeg exited: %w", err))
+		// Include the last few stderr lines so the user sees the real FFmpeg error.
+		tail := stderrTail(stderrLines, 8)
+		log.Printf("[render] ffmpeg failed: %v\nstderr tail:\n%s", err, tail)
+		q.failJob(job, fmt.Errorf("ffmpeg exited: %w\n%s", err, tail))
 		return
 	}
 
@@ -221,11 +228,13 @@ func (q *Queue) failJob(job *Job, err error) {
 	})
 }
 
-func (q *Queue) parseProgress(job *Job, r io.ReadCloser) {
+// parseProgressAndCapture reads FFmpeg stderr, emits progress events, and
+// returns all collected lines so the caller can report errors.
+func (q *Queue) parseProgressAndCapture(job *Job, r io.ReadCloser) []string {
 	defer r.Close()
 	scanner := bufio.NewScanner(r)
-	
-	// FFmpeg uses \r (carriage return) for progress updates, not \n. 
+
+	// FFmpeg uses \r (carriage return) for progress updates, not \n.
 	// Default scanner splits on \n, meaning it blocks until end of job.
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
@@ -240,8 +249,12 @@ func (q *Queue) parseProgress(job *Job, r io.ReadCloser) {
 		return 0, nil, nil
 	})
 
+	var lines []string
 	for scanner.Scan() {
 		line := scanner.Text()
+		if line != "" {
+			lines = append(lines, line)
+		}
 		// ffmpeg writes lines like:
 		// frame=  120 fps= 30 q=29.0 size=    1024kB time=00:00:04.00 bitrate=2097.2kbits/s
 		if !strings.Contains(line, "time=") {
@@ -266,6 +279,15 @@ func (q *Queue) parseProgress(job *Job, r io.ReadCloser) {
 			})
 		}
 	}
+	return lines
+}
+
+// stderrTail returns the last N non-empty lines from FFmpeg stderr.
+func stderrTail(lines []string, n int) string {
+	if len(lines) <= n {
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[len(lines)-n:], "\n")
 }
 
 func (q *Queue) jobTotalDuration(job *Job) float64 {
@@ -328,7 +350,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	
 	// Create base video and base audio
 	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=1280x720:r=30:d=%.3f[basev]", duration))
-	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo:d=%.3f[basea]", duration))
+	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
+	// than the 'd' parameter which some builds don't recognise on anullsrc.
+	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo,atrim=duration=%.3f[basea]", duration))
 
 	inputIdx := 0
 	audioLabels := []string{"[basea]"}
