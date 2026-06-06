@@ -48,7 +48,7 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 			if track.Type == project.TrackVideo || track.Type == project.TrackText {
 				filterParts = append(filterParts, fmt.Sprintf("[%d:v]trim=start=%g:end=%g,setpts=PTS-STARTPTS",
 					videoIdx, clip.TrimStart, clip.TrimStart+clip.Duration))
-				if tf := filters.BuildTransformFilter(clip.Transform); tf != "" {
+				if tf := filters.BuildTransformFilter(clip); tf != "" {
 					filterParts = append(filterParts, tf)
 				}
 				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {

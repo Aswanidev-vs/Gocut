@@ -4,15 +4,26 @@ import (
 	"fmt"
 	"strings"
 
+	"Gocut/internal/ffmpeg"
 	"Gocut/internal/project"
 )
 
-func BuildTransformFilter(t project.Transform) string {
+func BuildTransformFilter(clip project.Clip) string {
 	var parts []string
-	if t.Rotation != 0 {
-		parts = append(parts, fmt.Sprintf("rotate=%g*PI/180", t.Rotation))
+	t := clip.Transform
+
+	rotExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "rotation", t.Rotation)
+	if rotExpr != "0" {
+		parts = append(parts, fmt.Sprintf("rotate='%s*PI/180'", rotExpr))
 	}
-	parts = append(parts, fmt.Sprintf("scale=%g:%g", t.ScaleX, t.ScaleY))
+	
+	scaleXExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "scaleX", t.ScaleX)
+	scaleYExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "scaleY", t.ScaleY)
+	
+	if scaleXExpr != "1" || scaleYExpr != "1" || t.ScaleX != 1 || t.ScaleY != 1 {
+		parts = append(parts, fmt.Sprintf("scale=w='iw*%s':h='ih*%s':eval=frame", scaleXExpr, scaleYExpr))
+	}
+
 	if t.CropW > 0 && t.CropH > 0 {
 		parts = append(parts, fmt.Sprintf("crop=%g:%g:%g:%g", t.CropW, t.CropH, t.CropX, t.CropY))
 	}

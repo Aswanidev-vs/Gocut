@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { useTimelineStore } from '../../stores/timelineStore'
+import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { Play, Pause, SkipBack, SkipForward, Maximize2, Minimize2, Volume2, VolumeX, Repeat, Loader2, ImageOff } from 'lucide-vue-next'
 
 const projectStore = useProjectStore()
@@ -314,13 +314,27 @@ const visibleClips = computed(() => {
 })
 
 // ---- Live CSS preview of clip color/transform/opacity ----
+function getClipTransform(clip) {
+  const clipTime = timelineStore.currentTime - clip.startTime;
+  const def = clip.transform || {};
+  return {
+    x: getInterpolatedProperty(clip, 'x', clipTime, def.x || 0),
+    y: getInterpolatedProperty(clip, 'y', clipTime, def.y || 0),
+    scaleX: getInterpolatedProperty(clip, 'scaleX', clipTime, def.scaleX !== undefined ? def.scaleX : 1),
+    scaleY: getInterpolatedProperty(clip, 'scaleY', clipTime, def.scaleY !== undefined ? def.scaleY : 1),
+    rotation: getInterpolatedProperty(clip, 'rotation', clipTime, def.rotation || 0),
+    opacity: getInterpolatedProperty(clip, 'opacity', clipTime, clip.opacity !== undefined ? clip.opacity : 1),
+    flipH: def.flipH,
+    flipV: def.flipV,
+  }
+}
+
 const livePreviewStyle = computed(() => {
   const clip = currentVideoClip.value
   if (!clip) return {}
 
   const c = clip.color || {}
-  const t = clip.transform || {}
-  const opacity = clip.opacity ?? 1
+  const tf = getClipTransform(clip)
 
   // CSS filter chain from ColorGrade
   const filters = []
@@ -333,11 +347,11 @@ const livePreviewStyle = computed(() => {
 
   // CSS transform from Transform
   const transforms = []
-  if (t.scaleX !== undefined && t.scaleX !== 1) transforms.push(`scaleX(${t.scaleX})`)
-  if (t.scaleY !== undefined && t.scaleY !== 1) transforms.push(`scaleY(${t.scaleY})`)
-  if (t.rotation) transforms.push(`rotate(${t.rotation}deg)`)
-  if (t.flipH) transforms.push('scaleX(-1)')
-  if (t.flipV) transforms.push('scaleY(-1)')
+  if (tf.scaleX !== 1) transforms.push(`scaleX(${tf.scaleX})`)
+  if (tf.scaleY !== 1) transforms.push(`scaleY(${tf.scaleY})`)
+  if (tf.rotation) transforms.push(`rotate(${tf.rotation}deg)`)
+  if (tf.flipH) transforms.push('scaleX(-1)')
+  if (tf.flipV) transforms.push('scaleY(-1)')
 
   const currentTime = timelineStore.currentTime
   const clipTime = currentTime - clip.startTime
@@ -392,7 +406,7 @@ const livePreviewStyle = computed(() => {
   if (transforms.length || transTransform) {
     style.transform = (transforms.join(' ') + ' ' + transTransform).trim()
   }
-  const finalOpacity = opacity * transOpacity
+  const finalOpacity = tf.opacity * transOpacity
   if (finalOpacity < 1) style.opacity = finalOpacity
   if (transClipPath) style.clipPath = transClipPath
 
@@ -459,12 +473,12 @@ function exitFullscreen() {
             :style="{
               left: '50%',
               top: '50%',
-              opacity: it.clip.opacity ?? 1,
-              transform: `translate(calc(-50% + ${it.clip.transform?.x || 0}px), calc(-50% + ${it.clip.transform?.y || 0}px)) ` +
-                         `scale(${it.clip.transform?.scaleX || 1}, ${it.clip.transform?.scaleY || 1}) ` +
-                         `rotate(${it.clip.transform?.rotation || 0}deg) ` +
-                         `scaleX(${it.clip.transform?.flipH ? -1 : 1}) ` +
-                         `scaleY(${it.clip.transform?.flipV ? -1 : 1})`,
+              opacity: getClipTransform(it.clip).opacity,
+              transform: `translate(calc(-50% + ${getClipTransform(it.clip).x}px), calc(-50% + ${getClipTransform(it.clip).y}px)) ` +
+                         `scale(${getClipTransform(it.clip).scaleX}, ${getClipTransform(it.clip).scaleY}) ` +
+                         `rotate(${getClipTransform(it.clip).rotation}deg) ` +
+                         `scaleX(${getClipTransform(it.clip).flipH ? -1 : 1}) ` +
+                         `scaleY(${getClipTransform(it.clip).flipV ? -1 : 1})`,
             }"
           >
             <div

@@ -25,14 +25,21 @@ func (g *FilterGraph) Build() string {
 	return strings.Join(g.parts, ";")
 }
 
-func BuildTransformFilters(t project.Transform) string {
+func BuildTransformFilters(clip project.Clip) string {
 	var parts []string
-	if t.Rotation != 0 {
-		parts = append(parts, fmt.Sprintf("rotate=%g*PI/180:c=black@0", t.Rotation))
+	t := clip.Transform
+
+	rotExpr := BuildAnimatedExpression(clip.Keyframes, "rotation", t.Rotation)
+	if rotExpr != "0" {
+		parts = append(parts, fmt.Sprintf("rotate='%s*PI/180:c=black@0'", rotExpr))
 	}
-	if t.ScaleX != 1 || t.ScaleY != 1 {
-		parts = append(parts, fmt.Sprintf("scale=iw*%g:ih*%g", t.ScaleX, t.ScaleY))
+
+	scaleXExpr := BuildAnimatedExpression(clip.Keyframes, "scaleX", t.ScaleX)
+	scaleYExpr := BuildAnimatedExpression(clip.Keyframes, "scaleY", t.ScaleY)
+	if scaleXExpr != "1" || scaleYExpr != "1" || t.ScaleX != 1 || t.ScaleY != 1 {
+		parts = append(parts, fmt.Sprintf("scale=w='iw*%s':h='ih*%s':eval=frame", scaleXExpr, scaleYExpr))
 	}
+
 	if t.CropW > 0 && t.CropH > 0 {
 		parts = append(parts, fmt.Sprintf("crop=iw*%g:ih*%g:iw*%g:ih*%g", t.CropW, t.CropH, t.CropX, t.CropY))
 	}

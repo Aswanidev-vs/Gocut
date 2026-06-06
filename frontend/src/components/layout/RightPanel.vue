@@ -1,9 +1,9 @@
 <script setup>
 import { computed, watch } from 'vue'
-import { useTimelineStore } from '../../stores/timelineStore'
+import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { ChevronRight, Trash2, Copy, RotateCcw } from 'lucide-vue-next'
+import { ChevronRight, Trash2, Copy, RotateCcw, Diamond } from 'lucide-vue-next'
 
 const timelineStore = useTimelineStore()
 const projectStore = useProjectStore()
@@ -44,8 +44,47 @@ const tabs = computed(() => {
   return list
 })
 
+const clipTime = computed(() => {
+  if (!selectedClip.value) return 0
+  return timelineStore.currentTime - selectedClip.value.startTime
+})
+
+function hasKeyframe(prop) {
+  if (!selectedClip.value || !selectedClip.value.keyframes) return false
+  const t = clipTime.value
+  return selectedClip.value.keyframes.some(k => k.property === prop && Math.abs(k.time - t) < 0.001)
+}
+
+function hasAnyKeyframe(prop) {
+  if (!selectedClip.value || !selectedClip.value.keyframes) return false
+  return selectedClip.value.keyframes.some(k => k.property === prop)
+}
+
+function getPropValue(prop, defaultValue) {
+  if (!selectedClip.value) return defaultValue
+  if (hasAnyKeyframe(prop)) {
+    return getInterpolatedProperty(selectedClip.value, prop, clipTime.value, defaultValue)
+  }
+  if (prop === 'opacity') {
+    return selectedClip.value.opacity !== undefined ? selectedClip.value.opacity : 1.0
+  }
+  return selectedClip.value.transform?.[prop] !== undefined ? selectedClip.value.transform[prop] : defaultValue
+}
+
+function toggleKeyframe(prop, value) {
+  if (!selectedClip.value) return
+  if (hasKeyframe(prop)) {
+    timelineStore.removeKeyframeAtTime(selectedClip.value.id, prop, clipTime.value)
+  } else {
+    timelineStore.addKeyframe(selectedClip.value.id, prop, value, clipTime.value)
+  }
+}
+
 function setTransform(key, val) {
   if (!selectedClip.value) return
+  if (hasAnyKeyframe(key)) {
+    timelineStore.addKeyframe(selectedClip.value.id, key, val, clipTime.value)
+  }
   timelineStore.updateClipTransform(selectedClip.value.id, { [key]: val })
 }
 function setColor(key, val) {
@@ -59,6 +98,9 @@ function setTextProp(key, val) {
 }
 function updateClipField(key, val) {
   if (!selectedClip.value) return
+  if (key === 'opacity' && hasAnyKeyframe('opacity')) {
+    timelineStore.addKeyframe(selectedClip.value.id, 'opacity', val, clipTime.value)
+  }
   timelineStore.updateClip(selectedClip.value.id, { [key]: val })
 }
 function resetTransform() {
@@ -151,18 +193,30 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
               <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetTransform" title="Reset"><RotateCcw :size="10" /></button>
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <div><label class="text-[10px] text-text-secondary">X</label><input type="number" :value="selectedClip.transform.x" @input="(e) => setTransform('x', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" /></div>
-              <div><label class="text-[10px] text-text-secondary">Y</label><input type="number" :value="selectedClip.transform.y" @input="(e) => setTransform('y', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" /></div>
+              <div>
+                <div class="flex items-center justify-between mb-1"><label class="text-[10px] text-text-secondary">X</label><button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('x')}" @click="toggleKeyframe('x', getPropValue('x', 0))"><Diamond :size="10" :fill="hasKeyframe('x') ? 'currentColor' : 'none'" /></button></div>
+                <input type="number" :value="getPropValue('x', 0)" @input="(e) => setTransform('x', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1"><label class="text-[10px] text-text-secondary">Y</label><button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('y')}" @click="toggleKeyframe('y', getPropValue('y', 0))"><Diamond :size="10" :fill="hasKeyframe('y') ? 'currentColor' : 'none'" /></button></div>
+                <input type="number" :value="getPropValue('y', 0)" @input="(e) => setTransform('y', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              </div>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-2">
-              <div><label class="text-[10px] text-text-secondary">Scale W</label><input type="number" step="0.1" :value="selectedClip.transform.scaleX" @input="(e) => setTransform('scaleX', parseFloat(e.target.value) || 1)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" /></div>
-              <div><label class="text-[10px] text-text-secondary">Scale H</label><input type="number" step="0.1" :value="selectedClip.transform.scaleY" @input="(e) => setTransform('scaleY', parseFloat(e.target.value) || 1)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" /></div>
+              <div>
+                <div class="flex items-center justify-between mb-1"><label class="text-[10px] text-text-secondary">Scale W</label><button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('scaleX')}" @click="toggleKeyframe('scaleX', getPropValue('scaleX', 1))"><Diamond :size="10" :fill="hasKeyframe('scaleX') ? 'currentColor' : 'none'" /></button></div>
+                <input type="number" step="0.1" :value="getPropValue('scaleX', 1)" @input="(e) => setTransform('scaleX', parseFloat(e.target.value) || 1)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1"><label class="text-[10px] text-text-secondary">Scale H</label><button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('scaleY')}" @click="toggleKeyframe('scaleY', getPropValue('scaleY', 1))"><Diamond :size="10" :fill="hasKeyframe('scaleY') ? 'currentColor' : 'none'" /></button></div>
+                <input type="number" step="0.1" :value="getPropValue('scaleY', 1)" @input="(e) => setTransform('scaleY', parseFloat(e.target.value) || 1)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              </div>
             </div>
             <div class="mt-2">
-              <label class="text-[10px] text-text-secondary">Rotation</label>
+              <div class="flex items-center justify-between mb-1"><label class="text-[10px] text-text-secondary">Rotation</label><button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('rotation')}" @click="toggleKeyframe('rotation', getPropValue('rotation', 0))"><Diamond :size="10" :fill="hasKeyframe('rotation') ? 'currentColor' : 'none'" /></button></div>
               <div class="flex items-center gap-2">
-                <input type="range" min="-180" max="180" step="1" :value="selectedClip.transform.rotation" @input="(e) => setTransform('rotation', parseFloat(e.target.value))" class="flex-1 accent-accent" />
-                <input type="number" :value="selectedClip.transform.rotation" @input="(e) => setTransform('rotation', parseFloat(e.target.value) || 0)" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+                <input type="range" min="-180" max="180" step="1" :value="getPropValue('rotation', 0)" @input="(e) => setTransform('rotation', parseFloat(e.target.value))" class="flex-1 accent-accent" />
+                <input type="number" :value="getPropValue('rotation', 0)" @input="(e) => setTransform('rotation', parseFloat(e.target.value) || 0)" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
               </div>
             </div>
             <div class="flex items-center gap-2 mt-2">
@@ -204,10 +258,13 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
             </div>
           </div>
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Opacity</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Opacity</h4>
+              <button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('opacity')}" @click="toggleKeyframe('opacity', getPropValue('opacity', 1.0))"><Diamond :size="10" :fill="hasKeyframe('opacity') ? 'currentColor' : 'none'" /></button>
+            </div>
             <div class="flex items-center gap-2">
-              <input type="range" min="0" max="1" step="0.01" :value="selectedClip.opacity" @input="(e) => updateClipField('opacity', parseFloat(e.target.value))" class="flex-1 accent-accent" />
-              <input type="number" :value="Math.round(selectedClip.opacity * 100)" :step="1" min="0" max="100" @input="(e) => updateClipField('opacity', Math.max(0, Math.min(1, (parseFloat(e.target.value) || 0) / 100)))" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              <input type="range" min="0" max="1" step="0.01" :value="getPropValue('opacity', 1.0)" @input="(e) => updateClipField('opacity', parseFloat(e.target.value))" class="flex-1 accent-accent" />
+              <input type="number" :value="Math.round(getPropValue('opacity', 1.0) * 100)" :step="1" min="0" max="100" @input="(e) => updateClipField('opacity', Math.max(0, Math.min(1, (parseFloat(e.target.value) || 0) / 100)))" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
             </div>
           </div>
         </template>

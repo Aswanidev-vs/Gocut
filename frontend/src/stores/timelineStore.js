@@ -65,6 +65,25 @@ const DEFAULT_COLOR = () => ({
   curves: '',
 })
 
+export function getInterpolatedProperty(clip, property, time, defaultValue) {
+  if (!clip || !clip.keyframes) return defaultValue
+  const kfs = clip.keyframes.filter(k => k.property === property).sort((a, b) => a.time - b.time)
+  if (kfs.length === 0) return defaultValue
+  
+  if (time <= kfs[0].time) return parseFloat(kfs[0].value)
+  if (time >= kfs[kfs.length - 1].time) return parseFloat(kfs[kfs.length - 1].value)
+  
+  for (let i = 0; i < kfs.length - 1; i++) {
+    const k1 = kfs[i]
+    const k2 = kfs[i + 1]
+    if (time >= k1.time && time < k2.time) {
+      if (k1.time === k2.time) return parseFloat(k2.value)
+      return parseFloat(k1.value) + (parseFloat(k2.value) - parseFloat(k1.value)) * (time - k1.time) / (k2.time - k1.time)
+    }
+  }
+  return defaultValue
+}
+
 /**
  * The timeline store is the single source of truth for tracks/clips during
  * the current editing session. Persistence happens through projectStore which
@@ -255,6 +274,39 @@ export const useTimelineStore = defineStore('timeline', () => {
     safeMarkDirty()
   }
 
+  function addKeyframe(clipId, property, value, time) {
+    const clip = clips.value.find(c => c.id === clipId)
+    if (!clip) return
+    clip.keyframes = clip.keyframes || []
+    clip.keyframes = clip.keyframes.filter(k => !(k.property === property && Math.abs(k.time - time) < 0.001))
+    clip.keyframes.push({ id: generateId(), property, value, time, easing: 'linear' })
+    safeMarkDirty()
+  }
+
+  function removeKeyframeAtTime(clipId, property, time) {
+    const clip = clips.value.find(c => c.id === clipId)
+    if (!clip || !clip.keyframes) return
+    clip.keyframes = clip.keyframes.filter(k => !(k.property === property && Math.abs(k.time - time) < 0.001))
+    safeMarkDirty()
+  }
+
+  function removeKeyframe(clipId, keyframeId) {
+    const clip = clips.value.find(c => c.id === clipId)
+    if (!clip || !clip.keyframes) return
+    clip.keyframes = clip.keyframes.filter(k => k.id !== keyframeId)
+    safeMarkDirty()
+  }
+
+  function updateKeyframe(clipId, keyframeId, updates) {
+    const clip = clips.value.find(c => c.id === clipId)
+    if (!clip || !clip.keyframes) return
+    const kf = clip.keyframes.find(k => k.id === keyframeId)
+    if (kf) {
+      Object.assign(kf, updates)
+      safeMarkDirty()
+    }
+  }
+
   function snapToClips(t, exceptId = null) {
     if (!snapEnabled.value) return t
     const threshold = 8 / Math.max(1, zoom.value)
@@ -413,6 +465,10 @@ export const useTimelineStore = defineStore('timeline', () => {
     moveClip,
     trimClip,
     splitClipAt,
+    addKeyframe,
+    removeKeyframeAtTime,
+    removeKeyframe,
+    updateKeyframe,
     snapToClips,
     selectClip,
     clearSelection,

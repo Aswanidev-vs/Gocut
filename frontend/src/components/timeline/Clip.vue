@@ -85,6 +85,28 @@ function onMouseDown(e, mode) {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
+
+function onKeyframeMouseDown(e, kf) {
+  e.stopPropagation()
+  if (e.button !== 0) return
+  timelineStore.selectClip(props.clip.id, false)
+  const startX = e.clientX
+  const startTime = kf.time
+  
+  const onMove = (mv) => {
+    const dt = (mv.clientX - startX) / props.zoom
+    let newTime = startTime + dt
+    newTime = Math.max(0, Math.min(props.clip.duration, newTime))
+    timelineStore.updateKeyframe(props.clip.id, kf.id, { time: newTime })
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    projectStore.markDirty()
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 </script>
 
 <template>
@@ -131,6 +153,18 @@ function onMouseDown(e, mode) {
       class="absolute right-1 top-0.5 bottom-0.5 w-8 rounded-sm overflow-hidden pointer-events-none opacity-60"
     >
       <img :src="`data:image/jpeg;base64,${asset.thumbnail}`" class="w-full h-full object-cover" />
+    </div>
+
+    <!-- Keyframes -->
+    <div v-if="clip.keyframes && clip.keyframes.length" class="absolute left-0 right-0 bottom-0 top-0 pointer-events-none">
+      <div v-for="kf in clip.keyframes" :key="kf.id"
+           class="absolute top-0 bottom-0 w-3 flex items-end justify-center pointer-events-auto cursor-ew-resize group/kf"
+           :style="{ left: `calc(${kf.time * zoom}px - 6px)` }"
+           @mousedown.stop="(e) => onKeyframeMouseDown(e, kf)"
+           @dblclick.stop="timelineStore.removeKeyframe(clip.id, kf.id)"
+           :title="`${kf.property}: ${kf.value}`">
+        <div class="w-1.5 h-1.5 bg-accent rotate-45 mb-1 group-hover/kf:scale-150 transition-transform"></div>
+      </div>
     </div>
 
     <!-- Edge handles -->

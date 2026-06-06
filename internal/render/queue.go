@@ -414,7 +414,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if cf := ffmpeg.BuildColorFilters(clip.Color); cf != "" {
 					clipFilters = append(clipFilters, cf)
 				}
-				if tf := ffmpeg.BuildTransformFilters(clip.Transform); tf != "" {
+				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
 					clipFilters = append(clipFilters, tf)
 				}
 				if clip.Opacity > 0 && clip.Opacity < 1.0 {
