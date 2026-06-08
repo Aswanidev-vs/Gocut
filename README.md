@@ -1,11 +1,13 @@
 <div align="center">
 
-# 🎬 Gocut
+<img src="frontend/src/assets/images/logo-universal.png" alt="Gocut logo" width="180" />
 
 **Open-source, offline desktop video editor — a privacy-respecting CapCut alternative.**
 
 A native cross-platform app built with Go + Wails and a Vue 3 frontend.
 Powered by FFmpeg, with zero cloud, zero telemetry, and zero account required.
+
+> Latest implementation note: the repo now includes a tag-driven GitHub release workflow for shipping the latest Windows build automatically.
 
 [![Status](https://img.shields.io/badge/status-v0.1.0%20MVP-00D4FF?style=flat-square)](#-roadmap)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://go.dev)
@@ -146,7 +148,9 @@ ffprobe -version
 
 ```bash
 git clone https://github.com/<your-username>/Gocut.git
-cd Gocut/Gocut
+cd Gocut
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+cd frontend && npm install && cd ..
 wails dev
 ```
 
@@ -190,6 +194,15 @@ To build a redistributable, production-mode package, use `wails build`:
 cd Gocut
 wails build
 ```
+
+To publish a tagged release automatically, push a version tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The GitHub Actions workflow in `.github/workflows/release.yml` will build the latest Windows binary and attach it to the release.
 
 The compiled binary is written to `build/bin/`:
 
@@ -417,8 +430,12 @@ ffmpeg -version
 cd Gocut
 wails dev
 
-# 3. Build a release binary
+# 3. Build the host-platform binary
 wails build
+
+# 4. Create a tagged release (optional)
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ### Good first issues
