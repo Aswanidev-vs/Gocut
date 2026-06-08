@@ -184,6 +184,9 @@ export namespace project {
 	    gainG: number;
 	    gainB: number;
 	    curves: string;
+	    chromaKeyColor: string;
+	    chromaKeySimilarity: number;
+	    chromaKeyBlend: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ColorGrade(source);
@@ -213,6 +216,9 @@ export namespace project {
 	        this.gainG = source["gainG"];
 	        this.gainB = source["gainB"];
 	        this.curves = source["curves"];
+	        this.chromaKeyColor = source["chromaKeyColor"];
+	        this.chromaKeySimilarity = source["chromaKeySimilarity"];
+	        this.chromaKeyBlend = source["chromaKeyBlend"];
 	    }
 	}
 	export class Transform {

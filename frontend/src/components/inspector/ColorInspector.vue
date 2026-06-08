@@ -1,16 +1,30 @@
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { Minus, Plus, RotateCcw, BarChart2 } from 'lucide-vue-next'
+import { computeSpline } from '../../lib/curves'
 
 const timelineStore = useTimelineStore()
 const playerStore = usePlayerStore()
 const activeTab = ref('basic')
 
-type Preset = { name: string; color: any }
+const clip = computed(() => timelineStore.selectedClips[0])
+const chromaKeyColor = computed(() => clip.value?.color?.chromaKeyColor || '')
+const chromaKeySimilarity = computed(() => clip.value?.color?.chromaKeySimilarity || 0.01)
+const chromaKeyBlend = computed(() => clip.value?.color?.chromaKeyBlend || 0.0)
 
-const channelColors: Record<string, string> = {
+function updateChromaKey(key, value) {
+  if (!clip.value) return
+  timelineStore.updateClip(clip.value.id, {
+    color: {
+      ...clip.value.color,
+      [key]: value,
+    },
+  })
+}
+
+const channelColors = {
   rgb: '#ffffff',
   r: '#ef4444',
   g: '#22c55e',
@@ -26,15 +40,13 @@ const channels = reactive({
 })
 const selectedChannel = ref('rgb')
 const canvasRef = ref(null)
-const dragging = ref<{ idx: number; channel: string } | null>(null)
+const dragging = ref(null)
 
 const canvasSize = { w: 256, h: 256 }
 const margin = 24
 
-type Point = { x: number; y: number }
-
-function nearestPoint(channel: string, mx: number, my: number): number {
-  const pts = (channels as any)[channel].points as Point[]
+function nearestPoint(channel, mx, my) {
+  const pts = channels[channel].points
   let best = 0
   let bestDist = Infinity
   pts.forEach((p, i) => {
@@ -47,70 +59,92 @@ function nearestPoint(channel: string, mx: number, my: number): number {
   return bestDist < 18 ? best : -1
 }
 
-function clampPoint(p: Point): Point {
+function clampPoint(p) {
   return {
     x: Math.max(0, Math.min(100, p.x)),
     y: Math.max(0, Math.min(100, p.y)),
   }
 }
 
-function getCanvasPos(e: MouseEvent): Point {
+function getCanvasPos(e) {
   const canvas = canvasRef.value
   if (!canvas) return { x: 0, y: 0 }
   const rect = canvas.getBoundingClientRect()
-  const scaleX = (canvasSize.w - margin * 2) / rect.width
-  const scaleY = (canvasSize.h - margin * 2) / rect.height
-  return {
-    x: (e.clientX - rect.left - margin) * scaleX,
-    y: (e.clientY - rect.top - margin) * scaleY,
-  }
+  // Convert mouse position to 0-100 normalized coords
+  // CSS may scale the canvas, so use rect dimensions
+  const plotW = canvasSize.w - margin * 2
+  const plotH = canvasSize.h - margin * 2
+  // Mouse position relative to canvas element in CSS pixels
+  const cssX = e.clientX - rect.left
+  const cssY = e.clientY - rect.top
+  // Convert CSS pixels to canvas pixels
+  const canvasX = (cssX / rect.width) * canvasSize.w
+  const canvasY = (cssY / rect.height) * canvasSize.h
+  // Convert canvas pixels to 0-100 plot coords (Y inverted: canvas top = curve top = 100)
+  const normX = ((canvasX - margin) / plotW) * 100
+  const normY = (1 - (canvasY - margin) / plotH) * 100
+  return { x: normX, y: normY }
 }
 
-function onMouseDown(e: MouseEvent) {
+function onMouseDown(e) {
   const pos = getCanvasPos(e)
-  const idx = nearestPoint(selectedChannel.value, pos.x, pos.y)
+  const clamped = clampPoint(pos)
+  const idx = nearestPoint(selectedChannel.value, clamped.x, clamped.y)
   if (idx >= 0) {
     dragging.value = { idx, channel: selectedChannel.value }
+  } else {
+    // Click on empty area: add a new point
+    const pts = channels[selectedChannel.value].points
+    pts.push(clampPoint(pos))
+    pts.sort((a, b) => a.x - b.x)
+    const newIdx = pts.findIndex(p => p.x === clamped.x && p.y === clamped.y)
+    dragging.value = { idx: newIdx >= 0 ? newIdx : pts.length - 1, channel: selectedChannel.value }
+    draw()
+    emitCurves()
   }
 }
 
-function onMouseMove(e: MouseEvent) {
+function onMouseMove(e) {
   if (!dragging.value) return
   const pos = getCanvasPos(e)
   const ch = dragging.value.channel
-  const pts = (channels as any)[ch].points as Point[]
+  const pts = channels[ch].points
   const p = clampPoint(pos)
   pts[dragging.value.idx] = p
   draw()
+  emitCurves()
 }
 
 function onMouseUp() {
+  if (dragging.value) {
+    emitCurves()
+  }
   dragging.value = null
 }
 
 function addPoint() {
-  const pts = (channels as any)[selectedChannel.value].points as Point[]
+  const pts = channels[selectedChannel.value].points
   const x = 50
-  const before = pts.filter((p: Point) => p.x <= x).sort((a: Point, b: Point) => a.x - b.x)[0]
-  const after = pts.filter((p: Point) => p.x >= x).sort((a: Point, b: Point) => a.x - b.x)[pts.length - 1]
+  const before = pts.filter((p) => p.x <= x).sort((a, b) => a.x - b.x)[0]
+  const after = pts.filter((p) => p.x >= x).sort((a, b) => a.x - b.x)[pts.length - 1]
   // linear blend between surrounding points
   const t = after && before && after.x !== before.x ? (x - before.x) / (after.x - before.x) : 0.5
   const y = before.y + (after.y - before.y) * t
   pts.push(clampPoint({ x, y: Math.max(5, Math.min(95, y)) }))
-  pts.sort((a: Point, b: Point) => a.x - b.x)
+  pts.sort((a, b) => a.x - b.x)
   draw()
   emitCurves()
 }
 
 function removePoint() {
   const ch = selectedChannel.value
-  const pts = (channels as any)[ch].points as Point[]
+  const pts = channels[ch].points
   if (pts.length <= 2) return
   // remove the point closest to 50 unless min/max
   let remove = -1
   if (pts.length > 2) {
     let best = Infinity
-    pts.forEach((p: Point, i: number) => {
+    pts.forEach((p, i) => {
       if (i === 0 || i === pts.length - 1) return
       const d = Math.abs(p.x - 50) + Math.abs(p.y - 50)
       if (d < best) {
@@ -128,24 +162,35 @@ function removePoint() {
 
 function resetCurves() {
   Object.keys(channels).forEach((k) => {
-    ;(channels as any)[k].points = [{ x: 0, y: 0 }, { x: 100, y: 100 }]
+    channels[k].points = [{ x: 0, y: 0 }, { x: 100, y: 100 }]
   })
   draw()
   emitCurves()
 }
 
 function generateCurvesFilter() {
-  const spec = channelLabels
+  // Check if any channel has been modified from default (0,0)-(100,100)
+  let hasChanges = false
+  for (const ch of channelLabels) {
+    const pts = channels[ch].points
+    if (pts.length !== 2 || pts[0].x !== 0 || pts[0].y !== 0 || pts[1].x !== 100 || pts[1].y !== 100) {
+      hasChanges = true
+      break
+    }
+  }
+  if (!hasChanges) return ''
+
+  // FFmpeg curves filter format: master='x/y x/y':red='x/y':green='x/y':blue='x/y'
+  const channelMap = { rgb: 'master', r: 'red', g: 'green', b: 'blue' }
+  const parts = channelLabels
     .map((ch) => {
-      const pts = (channels as any)[ch].points as Point[]
+      const pts = [...channels[ch].points].sort((a, b) => a.x - b.x)
       const path = pts
-        .sort((a: Point, b: Point) => a.x - b.x)
-        .map((p: Point) => `${(p.x / 100).toFixed(4)}/${(p.y / 100).toFixed(4)}`)
+        .map((p) => `${(p.x / 100).toFixed(4)}/${(p.y / 100).toFixed(4)}`)
         .join(' ')
-      return `${ch}='${path}'`
+      return `${channelMap[ch]}='${path}'`
     })
-    .join(' ')
-  return spec
+  return parts.join(':')
 }
 
 function emitCurves() {
@@ -190,7 +235,7 @@ function draw() {
   ctx.lineTo(canvasSize.w - margin, canvasSize.h - margin)
   ctx.stroke()
 
-  function map(p: Point) {
+  function map(p) {
     return {
       x: margin + (p.x / 100) * (canvasSize.w - margin * 2),
       y: canvasSize.h - margin - (p.y / 100) * (canvasSize.h - margin * 2),
@@ -198,18 +243,29 @@ function draw() {
   }
 
   channelLabels.forEach((ch) => {
-    const pts = (channels as any)[ch].points as Point[]
-    const mapped = pts.map(map)
+    const pts = channels[ch].points
+    if (pts.length === 0) return
+
+    // Draw the smooth curve
     ctx.strokeStyle = channelColors[ch]
     ctx.lineWidth = ch === 'rgb' ? 1.5 : 1
     ctx.beginPath()
-    mapped.forEach((p: Point, i: number) => {
-      if (i === 0) ctx.moveTo(p.x, p.y)
-      else ctx.lineTo(p.x, p.y)
-    })
+    
+    const spline = computeSpline(pts)
+    // Draw in 1px increments across the canvas
+    const steps = canvasSize.w - margin * 2
+    for (let i = 0; i <= steps; i++) {
+      const x = (i / steps) * 100 // 0 to 100
+      const y = spline(x)
+      const mapped = map({ x, y: Math.max(0, Math.min(100, y)) })
+      if (i === 0) ctx.moveTo(mapped.x, mapped.y)
+      else ctx.lineTo(mapped.x, mapped.y)
+    }
     ctx.stroke()
 
-    mapped.forEach((p: Point) => {
+    // Draw the control points
+    const mappedPts = pts.map(map)
+    mappedPts.forEach((p) => {
       ctx.fillStyle = channelColors[ch]
       ctx.beginPath()
       ctx.arc(p.x, p.y, ch === 'rgb' ? 4 : 3, 0, Math.PI * 2)
@@ -356,6 +412,64 @@ onMounted(() => {
           @mouseup="onMouseUp"
           @mouseleave="onMouseUp"
         />
+      </div>
+    </div>
+
+    <!-- Chroma Key Section -->
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-text-secondary">Chroma Key</div>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <button
+          v-if="!chromaKeyColor"
+          class="text-xs px-3 py-1.5 rounded border border-border text-text-secondary hover:text-text-primary hover:bg-border transition-colors w-full"
+          @click="updateChromaKey('chromaKeyColor', '#00ff00')"
+        >
+          Enable Chroma Key
+        </button>
+        <template v-else>
+          <input
+            type="color"
+            :value="chromaKeyColor"
+            @input="updateChromaKey('chromaKeyColor', $event.target.value)"
+            class="w-8 h-8 rounded cursor-pointer border border-border p-0"
+          />
+          <button
+            class="text-[10px] px-2 py-1 rounded border border-border text-text-secondary hover:text-text-primary"
+            @click="updateChromaKey('chromaKeyColor', '')"
+          >
+            Clear
+          </button>
+        </template>
+      </div>
+      <div v-if="chromaKeyColor" class="flex flex-col gap-2">
+        <div>
+          <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+            <span>Similarity</span>
+            <span class="font-mono">{{ chromaKeySimilarity.toFixed(2) }}</span>
+          </div>
+          <input
+            type="range"
+            min="0.01" max="1.0" step="0.01"
+            :value="chromaKeySimilarity"
+            @input="updateChromaKey('chromaKeySimilarity', parseFloat($event.target.value))"
+            class="w-full accent-accent"
+          />
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+            <span>Blend</span>
+            <span class="font-mono">{{ chromaKeyBlend.toFixed(2) }}</span>
+          </div>
+          <input
+            type="range"
+            min="0.0" max="1.0" step="0.01"
+            :value="chromaKeyBlend"
+            @input="updateChromaKey('chromaKeyBlend', parseFloat($event.target.value))"
+            class="w-full accent-accent"
+          />
+        </div>
       </div>
     </div>
 

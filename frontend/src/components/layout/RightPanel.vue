@@ -4,6 +4,7 @@ import { useTimelineStore, getInterpolatedProperty } from '../../stores/timeline
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
 import { ChevronRight, Trash2, Copy, RotateCcw, Diamond } from 'lucide-vue-next'
+import ColorInspector from '../inspector/ColorInspector.vue'
 
 const timelineStore = useTimelineStore()
 const projectStore = useProjectStore()
@@ -119,6 +120,10 @@ function resetColor() {
     liftR: 0, liftG: 0, liftB: 0,
     gammaR: 0, gammaG: 0, gammaB: 0,
     gainR: 0, gainG: 0, gainB: 0,
+    curves: '',
+    chromaKeyColor: '',
+    chromaKeySimilarity: 0.01,
+    chromaKeyBlend: 0.0,
   })
 }
 function deleteSelected() { timelineStore.removeSelected() }
@@ -271,8 +276,12 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
         <!-- ======== COLOR TAB (Advanced) ======== -->
         <template v-if="activeTab === 'color'">
+          <ColorInspector class="mb-4" />
+
+          <hr class="border-border my-3" />
+
           <div class="flex items-center justify-between mb-1">
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Color Grading</h4>
+            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider font-bold">Primary Adjustments</h4>
             <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetColor" title="Reset all"><RotateCcw :size="10" /></button>
           </div>
 

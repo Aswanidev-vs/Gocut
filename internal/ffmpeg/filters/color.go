@@ -57,6 +57,19 @@ func BuildColorFilterChain(c project.ColorGrade) string {
 	if strings.TrimSpace(c.Curves) != "" {
 		parts = append(parts, fmt.Sprintf("curves=%s", c.Curves))
 	}
+	if c.ChromaKeyColor != "" {
+		similarity := c.ChromaKeySimilarity
+		if similarity <= 0 {
+			similarity = 0.01 // ffmpeg default
+		}
+		blend := c.ChromaKeyBlend
+		// Convert CSS hex (#00ff00) to FFmpeg format (0x00ff00)
+		color := c.ChromaKeyColor
+		if strings.HasPrefix(color, "#") {
+			color = "0x" + strings.TrimPrefix(color, "#")
+		}
+		parts = append(parts, fmt.Sprintf("chromakey=color=%s:similarity=%g:blend=%g", color, similarity, blend))
+	}
 	if len(parts) == 0 {
 		return ""
 	}

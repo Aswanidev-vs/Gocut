@@ -4,6 +4,7 @@ import { useProjectStore } from '../../stores/projectStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { Play, Pause, SkipBack, SkipForward, Maximize2, Minimize2, Volume2, VolumeX, Repeat, Loader2, ImageOff } from 'lucide-vue-next'
+import { getCombinedTables } from '../../lib/curves'
 
 const projectStore = useProjectStore()
 const playerStore = usePlayerStore()
@@ -344,6 +345,7 @@ const livePreviewStyle = computed(() => {
   if (c.hue) filters.push(`hue-rotate(${c.hue}deg)`)
   if (c.blur) filters.push(`blur(${c.blur}px)`)
   if (c.sharpness) filters.push(`contrast(${1 + c.sharpness / 200})`)
+  if (c.curves) filters.push(`url(#preview-curves-filter)`)
 
   // CSS transform from Transform
   const transforms = []
@@ -413,13 +415,29 @@ const livePreviewStyle = computed(() => {
   return style
 })
 
+const curvesSvgTables = computed(() => {
+  const clip = currentVideoClip.value
+  if (!clip || !clip.color || !clip.color.curves) return null
+  return getCombinedTables(clip.color.curves)
+})
+
 function exitFullscreen() {
   document.exitFullscreen?.().catch(() => {})
 }
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col bg-bg/50 min-h-0 overflow-hidden">
+  <div class="flex-1 flex flex-col bg-bg/50 min-h-0 overflow-hidden relative">
+    <svg v-if="curvesSvgTables" width="0" height="0" class="absolute pointer-events-none">
+      <filter id="preview-curves-filter" color-interpolation-filters="sRGB">
+        <feComponentTransfer>
+          <feFuncR type="table" :tableValues="curvesSvgTables.r" />
+          <feFuncG type="table" :tableValues="curvesSvgTables.g" />
+          <feFuncB type="table" :tableValues="curvesSvgTables.b" />
+        </feComponentTransfer>
+      </filter>
+    </svg>
+
     <!-- Aspect-ratio preview frame -->
     <div class="flex-1 flex items-center justify-center p-4 min-h-0">
       <div

@@ -63,6 +63,9 @@ const DEFAULT_COLOR = () => ({
   gammaR: 0, gammaG: 0, gammaB: 0,
   gainR: 0, gainG: 0, gainB: 0,
   curves: '',
+  chromaKeyColor: '',
+  chromaKeySimilarity: 0.01,
+  chromaKeyBlend: 0.0,
 })
 
 export function getInterpolatedProperty(clip, property, time, defaultValue) {

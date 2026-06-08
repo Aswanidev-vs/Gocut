@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"Gocut/internal/ffmpeg"
+	"Gocut/internal/ffmpeg/filters"
 	"Gocut/internal/project"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -411,7 +412,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				clipFilters = append(clipFilters, "pad=1280:720:(ow-iw)/2:(oh-ih)/2")
 				clipFilters = append(clipFilters, "setsar=1")
 
-				if cf := ffmpeg.BuildColorFilters(clip.Color); cf != "" {
+				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
 					clipFilters = append(clipFilters, cf)
 				}
 				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {

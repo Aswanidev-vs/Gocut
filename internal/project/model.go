@@ -93,8 +93,11 @@ type ColorGrade struct {
 	GammaB     int    `json:"gammaB"`
 	GainR      int    `json:"gainR"`
 	GainG      int    `json:"gainG"`
-	GainB      int    `json:"gainB"`
-	Curves     string `json:"curves"`
+	GainB               int     `json:"gainB"`
+	Curves              string  `json:"curves"`
+	ChromaKeyColor      string  `json:"chromaKeyColor"`
+	ChromaKeySimilarity float64 `json:"chromaKeySimilarity"`
+	ChromaKeyBlend      float64 `json:"chromaKeyBlend"`
 }
 
 type TextProps struct {

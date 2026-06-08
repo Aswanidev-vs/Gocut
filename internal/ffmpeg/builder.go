@@ -75,6 +75,18 @@ func BuildColorFilters(c project.ColorGrade) string {
 	if c.Blur > 0 {
 		parts = append(parts, fmt.Sprintf("boxblur=%d", c.Blur))
 	}
+	if c.ChromaKeyColor != "" {
+		similarity := c.ChromaKeySimilarity
+		if similarity <= 0 {
+			similarity = 0.01
+		}
+		blend := c.ChromaKeyBlend
+		color := c.ChromaKeyColor
+		if strings.HasPrefix(color, "#") {
+			color = "0x" + strings.TrimPrefix(color, "#")
+		}
+		parts = append(parts, fmt.Sprintf("chromakey=color=%s:similarity=%g:blend=%g", color, similarity, blend))
+	}
 	return strings.Join(parts, ",")
 }
 
