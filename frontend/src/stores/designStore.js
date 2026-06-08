@@ -4,9 +4,7 @@ import { ref, computed } from 'vue'
 const generateId = () => crypto.randomUUID()
 
 // ============== NODE TYPE DEFINITIONS ==============
-// Compact node palette: sources, transforms, composites, effects, math, output
-const NODE_DEFS = {
-  // ---- Sources ----
+export const NODE_TYPES = {
   media:    { cat: 'Sources',   label: 'Media In',   col: '#00D4FF', in: [],          out: ['out'], params: [
     { id: 'assetId',   label: 'Source',   type: 'asset' },
     { id: 'startTime', label: 'In',       type: 'number', def: 0, min: 0, step: 0.1, suffix: 's' },
@@ -47,8 +45,6 @@ const NODE_DEFS = {
     { id: 'color2', label: 'Color 2', type: 'color' },
     { id: 'angle',  label: 'Angle',   type: 'number', def: 90, min: 0, max: 360, step: 1, suffix: '°' },
   ], defaults: { color1: '#00D4FF', color2: '#EC4899' }},
-
-  // ---- Transform / Composite ----
   transform: { cat: 'Transform', label: 'Transform', col: '#8B5CF6', in: ['in'],       out: ['out'], params: [
     { id: 'x',         label: 'X',         type: 'number', def: 0, step: 1, suffix: 'px' },
     { id: 'y',         label: 'Y',         type: 'number', def: 0, step: 1, suffix: 'px' },
@@ -67,8 +63,6 @@ const NODE_DEFS = {
       { value: 'colorburn', label: 'Color Burn' },
     ]},
   ]},
-
-  // ---- Effects ----
   blur:        { cat: 'Effects', label: 'Blur',     col: '#EC4899', in: ['in'], out: ['out'], params: [
     { id: 'radius', label: 'Radius', type: 'number', def: 5, min: 0, max: 100, step: 0.5, suffix: 'px' },
   ]},
@@ -94,8 +88,6 @@ const NODE_DEFS = {
     { id: 'similarity', label: 'Similarity', type: 'number', def: 0.4, min: 0, max: 1, step: 0.01 },
     { id: 'smoothness', label: 'Smoothness', type: 'number', def: 0.1, min: 0, max: 1, step: 0.01 },
   ], defaults: { keyColor: '#00FF00' }},
-
-  // ---- Math ----
   math: { cat: 'Math', label: 'Math', col: '#A78BFA', in: ['a', 'b'], out: ['out'], params: [
     { id: 'operation', label: 'Operation', type: 'select', def: 'add', options: [
       { value: 'add', label: 'A + B' }, { value: 'subtract', label: 'A - B' },
@@ -104,115 +96,164 @@ const NODE_DEFS = {
       { value: 'sin', label: 'sin(A)' }, { value: 'cos', label: 'cos(A)' },
     ]},
   ]},
-
-  // ---- Output ----
   output: { cat: 'Output', label: 'Output', col: '#F472B6', in: ['in'], out: [], params: []},
 }
 
-export const NODE_TYPES = NODE_DEFS
-
-// Helper to get full type info with computed fields
 export function getNodeType(type) {
-  const def = NODE_DEFS[type]
+  const def = NODE_TYPES[type]
   if (!def) return null
-  return {
-    type,
-    category: def.cat,
-    label: def.label,
-    color: def.col,
-    inputs: def.in,
-    outputs: def.out,
-    params: def.params,
-  }
+  return { type, category: def.cat, label: def.label, color: def.col, inputs: def.in, outputs: def.out, params: def.params }
 }
 
-// Easing functions for keyframe animation
-export const EASING_TYPES = {
-  linear:        { label: 'Linear',           fn: (t) => t },
-  easeIn:        { label: 'Ease In',          fn: (t) => t * t },
-  easeOut:       { label: 'Ease Out',         fn: (t) => 1 - (1 - t) * (1 - t) },
-  easeInOut:     { label: 'Ease In/Out',      fn: (t) => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2 },
-  easeInCubic:   { label: 'Ease In Cubic',    fn: (t) => t*t*t },
-  easeOutCubic:  { label: 'Ease Out Cubic',   fn: (t) => 1 - Math.pow(1-t, 3) },
-  easeInOutCubic:{ label: 'Ease In/Out Cubic',fn: (t) => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2 },
-  bounce:        { label: 'Bounce',           fn: (t) => {
-    const n1=7.5625, d1=2.75
-    if (t<1/d1) return n1*t*t
-    if (t<2/d1) return n1*(t-=1.5/d1)*t+0.75
-    if (t<2.5/d1) return n1*(t-=2.25/d1)*t+0.9375
-    return n1*(t-=2.625/d1)*t+0.984375
-  }},
-  elastic:       { label: 'Elastic',          fn: (t) => {
-    const c4=(2*Math.PI)/3
-    return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1
-  }},
-}
+export const EASING_TYPES = [
+  { id: 'linear',   label: 'Linear' },
+  { id: 'easeIn',   label: 'Ease In' },
+  { id: 'easeOut',  label: 'Ease Out' },
+  { id: 'easeInOut',label: 'Ease In/Out' },
+  { id: 'bounce',   label: 'Bounce' },
+  { id: 'elastic',  label: 'Elastic' },
+]
 
 function makeDefaultParams(type) {
-  const def = NODE_DEFS[type]
+  const def = NODE_TYPES[type]
   if (!def) return {}
   const params = {}
   for (const p of def.params) {
     params[p.id] = p.def !== undefined ? p.def : (p.type === 'toggle' ? false : '')
   }
-  // Apply node-specific defaults
   if (def.defaults) Object.assign(params, def.defaults)
   return params
 }
 
-// Create starter composition with a working example
-function createStarterNodes() {
-  const text = {
-    id: generateId(), type: 'text', x: 80, y: 200,
-    params: { ...makeDefaultParams('text'), text: 'Welcome to Gocut Design' },
-    keyframes: {
-      x: [
-        { id: generateId(), time: 0,   value: 0,   easing: 'easeOut' },
-        { id: generateId(), time: 1.5, value: 320, easing: 'easeInOut' },
-      ],
-      opacity: [
-        { id: generateId(), time: 0,   value: 0, easing: 'easeOut' },
-        { id: generateId(), time: 0.8, value: 1, easing: 'linear' },
-      ],
-    },
-    visible: true, locked: false, label: 'Heading Text',
-  }
-  const glow = {
-    id: generateId(), type: 'glow', x: 420, y: 200,
-    params: { ...makeDefaultParams('glow') },
-    keyframes: {
-      intensity: [
-        { id: generateId(), time: 0,   value: 0.2, easing: 'easeInOut' },
-        { id: generateId(), time: 1.5, value: 2.0, easing: 'easeInOut' },
-        { id: generateId(), time: 3,   value: 1.0, easing: 'easeInOut' },
-      ],
-    },
-    visible: true, locked: false, label: 'Glow',
-  }
-  const out = {
-    id: generateId(), type: 'output', x: 760, y: 200,
-    params: {}, keyframes: {},
-    visible: true, locked: false, label: 'Output',
-  }
-  return [text, glow, out]
-}
-
-function createStarterConnections(nodes) {
-  return [
-    { id: generateId(), fromNode: nodes[0].id, fromPort: 'out', toNode: nodes[1].id, toPort: 'in' },
-    { id: generateId(), fromNode: nodes[1].id, fromPort: 'out', toNode: nodes[2].id, toPort: 'in' },
-  ]
-}
-
 export const useDesignStore = defineStore('design', () => {
-  // Composition metadata
-  const composition = ref({
-    name: 'Main Comp',
-    width: 1920,
-    height: 1080,
-    fps: 30,
-    duration: 5,
-    background: '#0a0a0a',
-  })
+  const composition = ref({ name: 'Main Comp', width: 1920, height: 1080, fps: 30, duration: 5, background: '#0a0a0a' })
+  const nodes = ref([])
+  const connections = ref([])
+  const selectedNodeId = ref(null)
+  const selectedConnectionId = ref(null)
+  const zoom = ref(1)
+  const panX = ref(0)
+  const panY = ref(0)
+  const snapEnabled = ref(true)
+  const presets = ref([])
 
+  const selectedNode = computed(() => nodes.value.find(n => n.id === selectedNodeId.value) || null)
+  const outputNode = computed(() => nodes.value.find(n => n.type === 'output') || null)
+
+  function addNode(type, opts = {}) {
+    if (!NODE_TYPES[type]) return null
+    const node = {
+      id: generateId(), type,
+      x: opts.x ?? 150 + Math.random() * 100,
+      y: opts.y ?? 150 + Math.random() * 100,
+      params: opts.params ?? makeDefaultParams(type),
+      keyframes: opts.keyframes ?? {},
+      visible: true, locked: false,
+      label: opts.label ?? NODE_TYPES[type].label,
+    }
+    nodes.value.push(node)
+    selectedNodeId.value = node.id
+    return node
+  }
+
+  function removeNode(nodeId) {
+    connections.value = connections.value.filter(c => c.fromNode !== nodeId && c.toNode !== nodeId)
+    nodes.value = nodes.value.filter(n => n.id !== nodeId)
+    if (selectedNodeId.value === nodeId) selectedNodeId.value = null
+  }
+
+  function removeSelectedNode() {
+    if (selectedNodeId.value) removeNode(selectedNodeId.value)
+  }
+
+  function duplicateSelectedNode() {
+    if (!selectedNodeId.value) return
+    const node = nodes.value.find(n => n.id === selectedNodeId.value)
+    if (!node) return
+    const cloned = JSON.parse(JSON.stringify(node))
+    cloned.id = generateId()
+    cloned.x += 40
+    cloned.y += 40
+    cloned.label = node.label + ' Copy'
+    nodes.value.push(cloned)
+    selectedNodeId.value = cloned.id
+  }
+
+  function addConnection(fromNode, fromPort, toNode, toPort) {
+    connections.value.push({ id: generateId(), fromNode, fromPort, toNode, toPort })
+  }
+
+  function addKeyframe(nodeId, paramId, time, value, easing = 'linear') {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return
+    if (!node.keyframes[paramId]) node.keyframes[paramId] = []
+    node.keyframes[paramId] = node.keyframes[paramId].filter(k => Math.abs(k.time - time) > 0.01)
+    node.keyframes[paramId].push({ id: generateId(), time, value, easing })
+    node.keyframes[paramId].sort((a, b) => a.time - b.time)
+  }
+
+  function removeKeyframe(nodeId, paramId, keyframeId) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node || !node.keyframes[paramId]) return
+    node.keyframes[paramId] = node.keyframes[paramId].filter(k => k.id !== keyframeId)
+  }
+
+  function getParamValue(nodeId, paramId, time) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node || !node.keyframes[paramId] || node.keyframes[paramId].length === 0) {
+      const def = NODE_TYPES[node?.type]
+      const pdef = def?.params.find(p => p.id === paramId)
+      return pdef?.def ?? node?.params[paramId] ?? 0
+    }
+    const kfs = node.keyframes[paramId]
+    if (time <= kfs[0].time) return kfs[0].value
+    if (time >= kfs[kfs.length - 1].time) return kfs[kfs.length - 1].value
+    for (let i = 0; i < kfs.length - 1; i++) {
+      const a = kfs[i], b = kfs[i + 1]
+      if (time >= a.time && time < b.time) {
+        const t = a.time === b.time ? 0 : (time - a.time) / (b.time - a.time)
+        return a.value + (b.value - a.value) * t
+      }
+    }
+    return node.params[paramId] ?? 0
+  }
+
+  function zoomIn() { zoom.value = Math.min(5, zoom.value * 1.2) }
+  function zoomOut() { zoom.value = Math.max(0.1, zoom.value / 1.2) }
+  function zoomFit() { zoom.value = 1; panX.value = 0; panY.value = 0 }
+
+  function saveAsPreset() {
+    presets.value.push({ id: generateId(), name: 'Preset ' + (presets.value.length + 1), nodes: JSON.parse(JSON.stringify(nodes.value)) })
+  }
+  function loadPreset(id) {
+    const p = presets.value.find(x => x.id === id)
+    if (p) nodes.value = JSON.parse(JSON.stringify(p.nodes))
+  }
+  function insertTemplate(nodesData) {
+    for (const n of nodesData) {
+      n.id = generateId()
+      n.x += 50
+      n.y += 50
+    }
+    nodes.value.push(...nodesData)
+  }
+
+  function updateNodeParam(nodeId, paramId, value) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (node) node.params[paramId] = value
+  }
+
+  function updateNodePosition(nodeId, x, y) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (node) { node.x = x; node.y = y }
+  }
+
+  return {
+    composition, nodes, connections, selectedNodeId, selectedConnectionId, zoom, panX, panY, snapEnabled, presets,
+    selectedNode, outputNode,
+    addNode, removeNode, removeSelectedNode, duplicateSelectedNode, addConnection,
+    addKeyframe, removeKeyframe, getParamValue,
+    zoomIn, zoomOut, zoomFit, saveAsPreset, loadPreset, insertTemplate,
+    updateNodeParam, updateNodePosition,
+  }
 })
