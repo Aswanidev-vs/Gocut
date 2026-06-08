@@ -7,18 +7,24 @@ const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
 const transitions = [
-  { name: 'None',      type: 'none',      duration: 0,   preview: null },
-  { name: 'Fade',      type: 'fade',      duration: 0.5, preview: 'fade' },
-  { name: 'Dissolve',  type: 'dissolve',  duration: 0.5, preview: 'dissolve' },
-  { name: 'Wipe L',    type: 'wipeleft',  duration: 0.5, preview: 'wipe-l' },
-  { name: 'Wipe R',    type: 'wiperight', duration: 0.5, preview: 'wipe-r' },
-  { name: 'Slide L',   type: 'slideleft', duration: 0.5, preview: 'slide-l' },
-  { name: 'Slide R',   type: 'slideright',duration: 0.5, preview: 'slide-r' },
-  { name: 'Zoom In',   type: 'zoomin',    duration: 0.5, preview: 'zoom' },
-  { name: 'Flip H',    type: 'hflip',     duration: 0.5, preview: 'flip' },
-  { name: 'Circle',    type: 'circleopen',duration: 0.5, preview: 'circle' },
-  { name: 'Pixelize',  type: 'pixelize',  duration: 0.5, preview: 'pixel' },
-  { name: 'Blur',      type: 'blur',      duration: 0.5, preview: 'blur' },
+  { name: 'None',        type: 'none',        duration: 0,   preview: null },
+  { name: 'Fade',        type: 'fade',        duration: 0.5, preview: 'fade' },
+  { name: 'Dissolve',    type: 'dissolve',    duration: 0.5, preview: 'dissolve' },
+  { name: 'Wipe L',      type: 'wipeleft',    duration: 0.5, preview: 'wipe-l' },
+  { name: 'Wipe R',      type: 'wiperight',   duration: 0.5, preview: 'wipe-r' },
+  { name: 'Slide L',     type: 'slideleft',   duration: 0.5, preview: 'slide-l' },
+  { name: 'Slide R',     type: 'slideright',  duration: 0.5, preview: 'slide-r' },
+  { name: 'Zoom In',     type: 'zoomin',      duration: 0.5, preview: 'zoom' },
+  { name: 'Flip H',      type: 'hflip',       duration: 0.5, preview: 'flip' },
+  { name: 'Circle',      type: 'circleopen',  duration: 0.5, preview: 'circle' },
+  { name: 'Pixelize',    type: 'pixelize',    duration: 0.5, preview: 'pixel' },
+  { name: 'Blur',        type: 'blur',        duration: 0.5, preview: 'blur' },
+  { name: 'Cross Zoom',  type: 'crosszoom',   duration: 0.6, preview: 'cross' },
+  { name: 'Soft Wipe',   type: 'softwipe',    duration: 0.6, preview: 'soft' },
+  { name: 'Split',       type: 'split',       duration: 0.55, preview: 'split' },
+  { name: 'Glow',        type: 'glow',        duration: 0.55, preview: 'glow' },
+  { name: 'Wave',        type: 'wave',        duration: 0.6, preview: 'wave' },
+  { name: 'Shatter',     type: 'shatter',     duration: 0.65, preview: 'shatter' },
 ]
 
 function applyTransition(t) {
@@ -53,6 +59,12 @@ function transitionStyle(t) {
     'circle':     { background: 'radial-gradient(circle at center, #00D4FF 0%, #00D4FF 30%, #EC4899 30%)' },
     'pixel':      { backgroundImage: 'repeating-linear-gradient(45deg, #00D4FF 0 6px, #EC4899 6px 12px)' },
     'blur':       { background: 'linear-gradient(90deg, #00D4FF, #EC4899)', filter: 'blur(2px)' },
+    'cross':      { background: 'radial-gradient(circle at 30% 30%, #22D3EE 0%, #8B5CF6 45%, #EC4899 100%)' },
+    'soft':       { background: 'linear-gradient(135deg, #0EA5E9 0%, #A78BFA 50%, #F472B6 100%)', opacity: 0.92 },
+    'split':      { background: 'linear-gradient(90deg, #111827 0%, #111827 50%, #00D4FF 50%, #00D4FF 100%)' },
+    'glow':       { background: 'linear-gradient(135deg, #22D3EE 0%, #14B8A6 35%, #F472B6 100%)', boxShadow: '0 0 18px rgba(56, 189, 248, 0.45)' },
+    'wave':       { background: 'repeating-linear-gradient(135deg, #00D4FF 0 8px, #EC4899 8px 16px, #111827 16px 24px)' },
+    'shatter':    { background: 'linear-gradient(145deg, #0F172A 0%, #111827 40%, #F472B6 100%)' },
   }
   return map[t.preview] || { background: base }
 }
