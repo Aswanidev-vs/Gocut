@@ -143,7 +143,7 @@ function stopDrag() {
     <div v-else-if="!projectStore.hasProject" class="flex-1 flex flex-col">
       <div class="h-12 px-4 flex items-center border-b border-border bg-panel">
         <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded bg-accent text-bg font-bold text-sm flex items-center justify-center">G</div>
+          <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-6 h-6 rounded" />
           <span class="text-sm font-semibold">Gocut</span>
           <span class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border font-mono">v0.1.0</span>
         </div>
@@ -154,7 +154,7 @@ function stopDrag() {
       </div>
       <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <div class="relative mb-6">
-          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent to-accent-hover flex items-center justify-center text-bg font-bold text-4xl shadow-2xl shadow-accent/20">G</div>
+          <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-20 h-20 rounded-2xl shadow-2xl shadow-accent/20 object-contain bg-accent/10" />
         </div>
         <h1 class="text-3xl font-bold text-text-primary mb-1 tracking-tight">Gocut</h1>
         <p class="text-sm text-text-secondary mb-1">Open-source, offline video editor.</p>
