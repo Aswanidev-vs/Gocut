@@ -65,8 +65,8 @@ function stopTicker() {
   }
 }
 
-// ---- Determine current video clip + asset at playhead ----
-const currentVideoClip = computed(() => {
+// ---- Determine current visual clip + asset at playhead ----
+const currentVisualClip = computed(() => {
   const t = timelineStore.currentTime
   for (const c of timelineStore.clips) {
     const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
@@ -77,14 +77,18 @@ const currentVideoClip = computed(() => {
   return null
 })
 
-const currentVideoAsset = computed(() => {
-  if (!currentVideoClip.value) return null
-  return projectStore.getAsset(currentVideoClip.value.assetId)
+const currentVisualAsset = computed(() => {
+  if (!currentVisualClip.value) return null
+  return projectStore.getAsset(currentVisualClip.value.assetId)
+})
+
+const isVideoPlaybackAsset = computed(() => {
+  return currentVisualAsset.value?.type === 'video' || currentVisualAsset.value?.type === 'gif'
 })
 
 const videoSrc = computed(() => {
-  if (!currentVideoAsset.value) return null
-  return playerStore.getMediaUrl(currentVideoAsset.value.path)
+  if (!isVideoPlaybackAsset.value || !currentVisualAsset.value) return null
+  return playerStore.getMediaUrl(currentVisualAsset.value.path)
 })
 
 const currentAudioClips = computed(() => {
@@ -168,10 +172,10 @@ function destroyAudioElements() {
 // When play/pause changes, control the video element
 watch(() => playerStore.isPlaying, (playing) => {
   if (playing) {
-    useVideoElement.value = true
+    useVideoElement.value = !!videoSrc.value
     const v = videoRef.value
     if (v && videoSrc.value) {
-      const clip = currentVideoClip.value
+      const clip = currentVisualClip.value
       if (clip) {
         const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
         v.currentTime = clipTime
@@ -195,8 +199,8 @@ watch(() => playerStore.isPlaying, (playing) => {
 // Sync volume changes
 watch(() => playerStore.volume, () => {
   const vid = videoRef.value
-  if (vid && currentVideoClip.value) {
-    const clip = currentVideoClip.value
+  if (vid && currentVisualClip.value) {
+    const clip = currentVisualClip.value
     const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
     const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
     vid.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
@@ -210,7 +214,7 @@ watch(videoSrc, (newSrc, oldSrc) => {
     nextTick(() => {
       const v = videoRef.value
       if (v) {
-        const clip = currentVideoClip.value
+        const clip = currentVisualClip.value
         if (clip) {
           const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
           v.currentTime = clipTime
@@ -331,7 +335,7 @@ function getClipTransform(clip) {
 }
 
 const livePreviewStyle = computed(() => {
-  const clip = currentVideoClip.value
+  const clip = currentVisualClip.value
   if (!clip) return {}
 
   const c = clip.color || {}
@@ -416,7 +420,7 @@ const livePreviewStyle = computed(() => {
 })
 
 const curvesSvgTables = computed(() => {
-  const clip = currentVideoClip.value
+  const clip = currentVisualClip.value
   if (!clip || !clip.color || !clip.color.curves) return null
   return getCombinedTables(clip.color.curves)
 })

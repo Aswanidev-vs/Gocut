@@ -31,6 +31,14 @@ const tracksByType = computed(() => {
   return map
 })
 
+function rowTrackCount(type) {
+  return Math.max(1, tracksByType.value[type]?.length || 0)
+}
+
+function rowHeight(type) {
+  return TRACK_HEIGHT * rowTrackCount(type)
+}
+
 function addTrackOfType(type) {
   timelineStore.addTrack(type)
   projectStore.markDirty()
@@ -227,7 +235,7 @@ const typeIcons = { video: Video, audio: Music, text: Type, sticker: Smile, fx: 
           v-for="type in trackOrder"
           :key="type"
           class="flex items-center gap-1 px-2 border-b border-border text-[10px] text-text-secondary"
-          :style="{ minHeight: TRACK_HEIGHT + 'px' }"
+          :style="{ minHeight: rowHeight(type) + 'px' }"
         >
           <component :is="typeIcons[type]" :size="11" />
           <span class="capitalize">{{ type }}</span>
@@ -251,7 +259,7 @@ const typeIcons = { video: Video, audio: Music, text: Type, sticker: Smile, fx: 
             <div
               v-for="type in trackOrder"
               :key="type"
-              :style="{ height: TRACK_HEIGHT + 'px' }"
+              :style="{ minHeight: rowHeight(type) + 'px' }"
               class="relative border-b border-border"
             >
               <template v-if="tracksByType[type]?.length">
