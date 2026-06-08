@@ -15,7 +15,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./Gocut
+        working-directory: .
 
     steps:
       - name: Check out repository
@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -49,14 +49,14 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install
-        working-directory: ./Gocut/frontend
+        working-directory: ./frontend
 
       - name: Build Windows release binary
         run: wails build -platform windows/amd64 -clean
 
       - name: Locate release binary
         run: |
-          FILE=$(find "$GITHUB_WORKSPACE/Gocut/build/bin" -maxdepth 1 -type f -name 'Gocut.exe' | head -n 1)
+          FILE=$(find "$GITHUB_WORKSPACE/build/bin" -maxdepth 1 -type f -name 'Gocut.exe' | head -n 1)
           if [ -z "$FILE" ]; then
             echo "Windows binary was not found in build/bin" >&2
             exit 1
