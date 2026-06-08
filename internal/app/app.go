@@ -516,10 +516,29 @@ func (a *App) startMediaServer() {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		if a.currentProject == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		projectRoot, err := filepath.Abs(filepath.Clean(a.currentProject.Path))
+		if err != nil {
+			http.Error(w, "invalid project path", http.StatusInternalServerError)
+			return
+		}
+		absAssetPath, err := filepath.Abs(filepath.Clean(assetPath))
+		if err != nil {
+			http.Error(w, "invalid asset path", http.StatusBadRequest)
+			return
+		}
+		rel, err := filepath.Rel(projectRoot, absAssetPath)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Range")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges")
-		f, err := os.Open(assetPath)
+		f, err := os.Open(absAssetPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -530,7 +549,7 @@ func (a *App) startMediaServer() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.ServeContent(w, r, filepath.Base(assetPath), stat.ModTime(), f)
+		http.ServeContent(w, r, filepath.Base(absAssetPath), stat.ModTime(), f)
 	})
 
 	mux.HandleFunc("/audio", func(w http.ResponseWriter, r *http.Request) {
