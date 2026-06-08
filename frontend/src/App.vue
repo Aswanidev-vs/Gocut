@@ -141,17 +141,19 @@ function stopDrag() {
 
     <!-- Home screen (no project) -->
     <div v-else-if="!projectStore.hasProject" class="flex-1 flex flex-col">
-      <div class="h-12 px-4 flex items-center border-b border-border bg-panel">
+      <!-- <div class="h-12 px-4 flex items-center border-b border-border bg-panel">
         <div class="flex items-center gap-2">
           <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-6 h-6 rounded" />
           <span class="text-sm font-semibold">Gocut</span>
           <span class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border font-mono">v0.1.0</span>
         </div>
         <div class="flex-1" />
-        <a href="https://github.com/" target="_blank" rel="noopener" class="text-text-secondary hover:text-text-primary transition-colors p-1.5 rounded hover:bg-border">
+       
+      </div> -->
+       <!-- <a href="https://github.com/Aswanidev-vs/Gocut" target="_blank" rel="noopener">
           <Github :size="14" />
-        </a>
-      </div>
+        </a> -->
+        
       <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <div class="relative mb-6">
           <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-20 h-20 rounded-2xl shadow-2xl shadow-accent/20 object-contain bg-accent/10" />

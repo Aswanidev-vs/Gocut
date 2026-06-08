@@ -85,8 +85,8 @@ function openSettings() {
       @click="projectStore.closeProject()"
       title="Back to home"
     >
-      <div class="w-5 h-5 rounded bg-accent text-bg font-bold text-[11px] flex items-center justify-center">G</div>
-      Gocut
+      <!-- <div class="w-5 h-5 rounded bg-accent text-bg font-bold text-[11px] flex items-center justify-center">G</div> -->
+      <img src="../../assets/images/logo-universal.png" alt="Gocut Logo" class="w-5 h-5 rounded" />
     </button>
 
     <div class="h-5 w-px bg-border mx-1" />
