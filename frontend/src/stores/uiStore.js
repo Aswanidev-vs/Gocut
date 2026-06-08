@@ -18,6 +18,7 @@ export const useUiStore = defineStore('ui', () => {
     { id: 'text', label: 'Text', icon: 'Type' },
     { id: 'stickers', label: 'Stickers', icon: 'Smile' },
     { id: 'fx', label: 'FX', icon: 'Sparkles' },
+    { id: 'design', label: 'Design', icon: 'Palette' },
     { id: 'transitions', label: 'Transitions', icon: 'ArrowRightLeft' },
   ]
 

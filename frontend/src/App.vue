@@ -15,6 +15,7 @@ import PreviewPlayer from './components/preview/PreviewPlayer.vue'
 import NewProjectDialog from './components/common/NewProjectDialog.vue'
 import ExportDialog from './components/export/ExportDialog.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
+import DesignPanel from './components/panels/DesignPanel.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
@@ -211,11 +212,23 @@ function stopDrag() {
         <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'left')" />
 
         <div class="flex-1 flex flex-col overflow-hidden bg-bg">
-          <PreviewPlayer class="flex-1" />
-          
-          <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
+          <template v-if="uiStore.activeWorkspace === 'design'">
+            <div class="border-b border-border bg-panel/95 px-4 py-3">
+              <div class="text-[11px] uppercase tracking-[0.22em] text-text-secondary">Design / Animation</div>
+              <div class="mt-1 text-sm text-text-primary font-semibold">Lite Resolve-style creative workspace</div>
+              <p class="text-[11px] text-text-secondary">Build motion, text FX, and composite layers from one dedicated panel.</p>
+            </div>
+            <div class="flex-1 overflow-y-auto">
+              <DesignPanel />
+            </div>
+          </template>
+          <template v-else>
+            <PreviewPlayer class="flex-1" />
 
-          <TimelinePanel :style="{ height: bottomHeight + 'px' }" />
+            <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
+
+            <TimelinePanel :style="{ height: bottomHeight + 'px' }" />
+          </template>
         </div>
         
         <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'right')" />
@@ -228,6 +241,7 @@ function stopDrag() {
         <button
           v-for="ws in [
             { id: 'edit', label: 'Edit', icon: 'Scissors' },
+            { id: 'design', label: 'Design', icon: 'Sparkles' },
             { id: 'color', label: 'Color', icon: 'Palette' },
             { id: 'audio', label: 'Audio', icon: 'Headphones' },
           ]"
@@ -238,7 +252,7 @@ function stopDrag() {
             : 'text-text-secondary hover:text-text-primary hover:bg-border/60 border border-transparent'"
           @click="uiStore.setActiveWorkspace(ws.id)"
         >
-          <component :is="ws.icon === 'Scissors' ? Scissors : ws.icon === 'Palette' ? Palette : Headphones" :size="12" />
+          <component :is="ws.icon === 'Scissors' ? Scissors : ws.icon === 'Palette' ? Palette : ws.icon === 'Sparkles' ? Sparkles : Headphones" :size="12" />
           {{ ws.label }}
         </button>
       </div>

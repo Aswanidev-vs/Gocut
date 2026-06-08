@@ -1,12 +1,13 @@
 <script setup>
 import { computed } from 'vue'
 import { useUiStore } from '../../stores/uiStore'
-import { Video, Music, Type, Smile, Sparkles, ArrowRightLeft, Search, Plus } from 'lucide-vue-next'
+import { Video, Music, Type, Smile, Sparkles, ArrowRightLeft, Search, Palette } from 'lucide-vue-next'
 import AssetPool from '../panels/AssetPool.vue'
 import TextPanel from '../panels/TextPanel.vue'
 import StickerPanel from '../panels/StickerPanel.vue'
 import TransitionsPanel from '../panels/TransitionsPanel.vue'
 import AudioPanel from '../panels/AudioPanel.vue'
+import DesignPanel from '../panels/DesignPanel.vue'
 
 const uiStore = useUiStore()
 
@@ -16,6 +17,7 @@ const tabs = [
   { id: 'text',        label: 'Text',        icon: Type },
   { id: 'stickers',    label: 'Stickers',    icon: Smile },
   { id: 'fx',          label: 'Effects',     icon: Sparkles },
+  // { id: 'design',      label: 'Design',      icon: Palette },
   { id: 'transitions', label: 'Transitions', icon: ArrowRightLeft },
 ]
 
@@ -26,6 +28,7 @@ const activeComponent = computed(() => {
     case 'text':        return TextPanel
     case 'stickers':    return StickerPanel
     case 'fx':          return TransitionsPanel
+    case 'design':      return DesignPanel
     case 'transitions': return TransitionsPanel
     default:            return AssetPool
   }
@@ -52,7 +55,7 @@ const activeComponent = computed(() => {
     </div>
 
     <!-- Search bar (some panels) -->
-    <div v-if="['media', 'audio', 'text', 'stickers', 'transitions'].includes(uiStore.activePanelTab)"
+    <div v-if="['media', 'audio', 'text', 'stickers', 'design', 'transitions'].includes(uiStore.activePanelTab)"
          class="px-2 pt-2">
       <div class="relative">
         <Search :size="12" class="absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />

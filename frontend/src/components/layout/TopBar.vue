@@ -148,14 +148,14 @@ function openSettings() {
 
     <div class="h-5 w-px bg-border mx-1" />
 
-    <button
+    <!-- <button
       class="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
       @click="onSave"
       title="Save (Ctrl+S)"
     >
       <Save :size="14" />
       Save
-    </button>
+    </button> -->
 
     <button
       class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-accent text-bg text-xs font-medium hover:bg-accent-hover transition-colors"
