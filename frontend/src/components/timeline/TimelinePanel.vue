@@ -239,16 +239,25 @@ const typeIcons = {
       </div>
     </div>
 
-    <!-- Timeline body: header column + scrollable content -->
+    <!-- Timeline body: header column + scrollable content.
+         The header column and the body column must render with the
+         EXACT same row heights for every track type — otherwise the
+         icons on the left drift up/down relative to the timeline rows
+         on the right when the panel is narrow.
+         We achieve this by:
+           * using a CSS grid where every cell is `h-14` (== TRACK_HEIGHT),
+           * forcing `flex-shrink-0` so cells never collapse below 56px,
+           * keeping the body row as a flex column of `h-14` slots that
+             stack vertically when multiple tracks of the same type exist. -->
     <div class="flex-1 flex overflow-hidden">
       <!-- Track headers column -->
       <div class="w-24 bg-bg/40 border-r border-border flex-shrink-0 flex flex-col">
-        <div class="h-7 border-b border-border" />
+        <div class="h-7 border-b border-border flex-shrink-0" />
         <div
           v-for="type in trackOrder"
           :key="type"
-          class="flex items-center gap-1 px-2 border-b border-border text-[10px] text-text-secondary"
-          :style="{ minHeight: rowHeight(type) + 'px' }"
+          class="flex items-center justify-center gap-1 px-2 border-b border-border text-[10px] text-text-secondary whitespace-nowrap overflow-hidden flex-shrink-0"
+          :style="{ height: rowHeight(type) + 'px' }"
         >
           <component :is="typeIcons[type]" :size="11" />
           <span class="capitalize">{{ type }}</span>
@@ -272,21 +281,21 @@ const typeIcons = {
             <div
               v-for="type in trackOrder"
               :key="type"
-              :style="{ minHeight: rowHeight(type) + 'px' }"
-              class="relative border-b border-border"
+              class="border-b border-border flex-shrink-0"
+              :style="{ height: rowHeight(type) + 'px' }"
             >
-              <template v-if="tracksByType[type]?.length">
-                <Track
-                  v-for="track in tracksByType[type]"
-                  :key="track.id"
-                  :track="track"
-                  :track-meta="timelineStore.TRACK_TYPES[type]"
-                  :duration="visibleDuration"
-                />
-              </template>
+              <Track
+                v-if="tracksByType[type]?.length"
+                v-for="track in tracksByType[type]"
+                :key="track.id"
+                :track="track"
+                :track-meta="timelineStore.TRACK_TYPES[type]"
+                :duration="visibleDuration"
+                class="h-14"
+              />
               <div
-                v-else
-                class="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary/40 italic transition-colors"
+                v-if="!tracksByType[type]?.length"
+                class="h-full flex items-center justify-center text-[10px] text-text-secondary/40 italic transition-colors"
                 :class="emptyRowDragOver === type ? 'bg-accent/10 text-accent' : ''"
                 @dragover="(e) => onEmptyRowDragOver(e, type)"
                 @dragleave="onEmptyRowDragLeave(type)"
