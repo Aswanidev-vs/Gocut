@@ -7,6 +7,8 @@ type TrackType string
 const (
 	TrackVideo   TrackType = "video"
 	TrackAudio   TrackType = "audio"
+	TrackImage   TrackType = "image"
+	TrackPIP     TrackType = "pip"
 	TrackText    TrackType = "text"
 	TrackSticker TrackType = "sticker"
 	TrackFX      TrackType = "fx"
@@ -73,26 +75,26 @@ type Transform struct {
 }
 
 type ColorGrade struct {
-	Brightness int    `json:"brightness"`
-	Contrast   int    `json:"contrast"`
-	Saturation int    `json:"saturation"`
-	Hue        int    `json:"hue"`
-	Sharpness  int    `json:"sharpness"`
-	Vignette   int    `json:"vignette"`
-	Grain      int    `json:"grain"`
-	Blur       int    `json:"blur"`
-	Tint       int    `json:"tint"`
-	Temp       int    `json:"temp"`
-	Highlights int    `json:"highlights"`
-	Shadows    int    `json:"shadows"`
-	LiftR      int    `json:"liftR"`
-	LiftG      int    `json:"liftG"`
-	LiftB      int    `json:"liftB"`
-	GammaR     int    `json:"gammaR"`
-	GammaG     int    `json:"gammaG"`
-	GammaB     int    `json:"gammaB"`
-	GainR      int    `json:"gainR"`
-	GainG      int    `json:"gainG"`
+	Brightness          int     `json:"brightness"`
+	Contrast            int     `json:"contrast"`
+	Saturation          int     `json:"saturation"`
+	Hue                 int     `json:"hue"`
+	Sharpness           int     `json:"sharpness"`
+	Vignette            int     `json:"vignette"`
+	Grain               int     `json:"grain"`
+	Blur                int     `json:"blur"`
+	Tint                int     `json:"tint"`
+	Temp                int     `json:"temp"`
+	Highlights          int     `json:"highlights"`
+	Shadows             int     `json:"shadows"`
+	LiftR               int     `json:"liftR"`
+	LiftG               int     `json:"liftG"`
+	LiftB               int     `json:"liftB"`
+	GammaR              int     `json:"gammaR"`
+	GammaG              int     `json:"gammaG"`
+	GammaB              int     `json:"gammaB"`
+	GainR               int     `json:"gainR"`
+	GainG               int     `json:"gainG"`
 	GainB               int     `json:"gainB"`
 	Curves              string  `json:"curves"`
 	ChromaKeyColor      string  `json:"chromaKeyColor"`

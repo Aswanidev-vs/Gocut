@@ -66,12 +66,19 @@ function stopTicker() {
 }
 
 // ---- Determine current visual clip + asset at playhead ----
+// Z-order: video → image → pip (PIP sits on top of everything else).
+// We pick the top-most active clip so the preview reflects what the
+// viewer will see in the final composition.
+const visualTrackPriority = ['video', 'image', 'pip', 'text']
 const currentVisualClip = computed(() => {
   const t = timelineStore.currentTime
-  for (const c of timelineStore.clips) {
-    const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
-    if (track?.type === 'video' && t >= c.startTime && t < c.startTime + c.duration) {
-      return c
+  for (const want of visualTrackPriority) {
+    for (const c of timelineStore.clips) {
+      const track = timelineStore.tracks.find(tr => tr.id === c.trackId)
+      if (track?.type !== want) continue
+      if (t >= c.startTime && t < c.startTime + c.duration) {
+        return c
+      }
     }
   }
   return null

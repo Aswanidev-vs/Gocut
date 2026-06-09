@@ -46,6 +46,34 @@ function endDragAsset() {
   draggingAssetId.value = null
 }
 
+// Pick the track that should receive a freshly-imported asset.
+// Images go to the dedicated 'image' track (not the main video track)
+// so they can be composited independently of the background video.
+function trackTypeForAsset(asset) {
+  if (asset.type === 'audio') return 'audio'
+  if (asset.type === 'image') return 'image'
+  return 'video'
+}
+
+function placeAssetOnTimeline(asset) {
+  timelineStore.addClip({
+    assetId: asset.id,
+    trackType: trackTypeForAsset(asset),
+    startTime: timelineStore.currentTime,
+    duration: asset.duration || 3,
+  })
+  // Video assets always get a paired audio clip so the imported clip
+  // plays its sound. Image / audio assets do not get this treatment.
+  if (asset.type === 'video') {
+    timelineStore.addClip({
+      assetId: asset.id,
+      trackType: 'audio',
+      startTime: timelineStore.currentTime,
+      duration: asset.duration || 3,
+    })
+  }
+}
+
 /**
  * Run the actual import + add-to-timeline pipeline once we have a list of
  * absolute file paths. Used by both the picker and drag-and-drop handlers.
@@ -60,24 +88,7 @@ async function importPaths(paths) {
       return
     }
     for (const asset of imported) {
-      let trackType = 'video'
-      if (asset.type === 'audio') trackType = 'audio'
-      else if (asset.type === 'image') trackType = 'video'
-      timelineStore.addClip({
-        assetId: asset.id,
-        trackType,
-        startTime: timelineStore.currentTime,
-        duration: asset.duration || 3,
-      })
-      // If it's a video, automatically add an associated audio clip on the audio track
-      if (asset.type === 'video') {
-        timelineStore.addClip({
-          assetId: asset.id,
-          trackType: 'audio',
-          startTime: timelineStore.currentTime,
-          duration: asset.duration || 3,
-        })
-      }
+      placeAssetOnTimeline(asset)
     }
     uiStore.addToast(`Imported ${imported.length} file${imported.length > 1 ? 's' : ''}`, 'success', 2000)
   } catch (err) {
@@ -136,24 +147,7 @@ async function pickAndImport() {
 }
 
 function addToTimeline(asset) {
-  let trackType = 'video'
-  if (asset.type === 'audio') trackType = 'audio'
-  else if (asset.type === 'image') trackType = 'video'
-  timelineStore.addClip({
-    assetId: asset.id,
-    trackType,
-    startTime: timelineStore.currentTime,
-    duration: asset.duration || 3,
-  })
-  // If it's a video, automatically add an associated audio clip on the audio track
-  if (asset.type === 'video') {
-    timelineStore.addClip({
-      assetId: asset.id,
-      trackType: 'audio',
-      startTime: timelineStore.currentTime,
-      duration: asset.duration || 3,
-    })
-  }
+  placeAssetOnTimeline(asset)
   uiStore.addToast('Added to timeline', 'success', 1200)
 }
 

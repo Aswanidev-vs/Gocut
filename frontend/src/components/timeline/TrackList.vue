@@ -10,7 +10,10 @@ const props = defineProps({
 const timelineStore = useTimelineStore()
 
 const trackTypeMeta = computed(() => {
-  const types = ['video', 'audio', 'text', 'sticker', 'fx']
+  // Order matches TimelinePanel.vue: video / image / audio / pip /
+  // text / sticker / fx. The image track hosts still assets, the
+  // pip track is for overlay/PIP compositing.
+  const types = ['video', 'image', 'audio', 'pip', 'text', 'sticker', 'fx']
   return types.map(type => ({
     type,
     ...timelineStore.TRACK_TYPES[type],

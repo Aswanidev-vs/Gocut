@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { Plus, ZoomIn, ZoomOut, Maximize2, Link2, Scissors, Trash2, Volume2, VolumeX, Lock, Unlock, Video, Music, Type, Smile, Sparkles, Magnet } from 'lucide-vue-next'
+import { Plus, ZoomIn, ZoomOut, Maximize2, Link2, Scissors, Trash2, Volume2, VolumeX, Lock, Unlock, Video, Music, Type, Smile, Sparkles, Magnet, Image as ImageIcon, PictureInPicture } from 'lucide-vue-next'
 import TimelineRuler from './TimelineRuler.vue'
 import Track from './Track.vue'
 import Playhead from './Playhead.vue'
@@ -20,7 +20,10 @@ const TRACK_HEADER_WIDTH = 96
 const visibleDuration = computed(() => Math.max(timelineStore.duration + 10, 30))
 const totalWidth = computed(() => visibleDuration.value * timelineStore.zoom)
 
-const trackOrder = ['video', 'audio', 'text', 'sticker', 'fx']
+// Display order for the timeline rows. The new image track sits in the
+// main composition area (between video and audio) and the pip (picture-
+// in-picture) track is drawn on top of everything else.
+const trackOrder = ['video', 'image', 'audio', 'pip', 'text', 'sticker', 'fx']
 
 const tracksByType = computed(() => {
   const map = {}
@@ -137,7 +140,17 @@ function deleteSelected() {
   timelineStore.removeSelected()
 }
 
-const typeIcons = { video: Video, audio: Music, text: Type, sticker: Smile, fx: Sparkles }
+// Lucide icon components keyed by track type. The new image and pip
+// entries use the dedicated Image and PictureInPicture icons.
+const typeIcons = {
+  video:   Video,
+  audio:   Music,
+  image:   ImageIcon,
+  pip:     PictureInPicture,
+  text:    Type,
+  sticker: Smile,
+  fx:      Sparkles,
+}
 </script>
 
 <template>

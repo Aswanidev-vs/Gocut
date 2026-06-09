@@ -43,11 +43,17 @@ function safeMarkDirty() {
 }
 
 export const TRACK_TYPES = {
-  video:   { label: 'V',  name: 'Video',   icon: 'Video',   color: '#00D4FF' },
-  audio:   { label: 'A',  name: 'Audio',   icon: 'Music',   color: '#8B5CF6' },
-  text:    { label: 'T',  name: 'Text',    icon: 'Type',    color: '#F59E0B' },
-  sticker: { label: 'S',  name: 'Sticker', icon: 'Smile',   color: '#EC4899' },
-  fx:      { label: 'FX', name: 'Effects', icon: 'Sparkles',color: '#10B981' },
+  // Order here defines the natural z-stacking: video (background)
+  // → image (still background / image-only segment) → pip (foreground
+  // overlay, drawn on top of the main composition) → text / sticker /
+  // fx (decoration on the very top).
+  video:   { label: 'V',  name: 'Video',   icon: 'Video',     color: '#00D4FF' },
+  audio:   { label: 'A',  name: 'Audio',   icon: 'Music',     color: '#8B5CF6' },
+  image:   { label: 'I',  name: 'Image',   icon: 'Image',     color: '#22C55E' },
+  pip:     { label: 'P',  name: 'PIP',     icon: 'PictureInPicture', color: '#F472B6' },
+  text:    { label: 'T',  name: 'Text',    icon: 'Type',      color: '#F59E0B' },
+  sticker: { label: 'S',  name: 'Sticker', icon: 'Smile',     color: '#EC4899' },
+  fx:      { label: 'FX', name: 'Effects', icon: 'Sparkles',  color: '#10B981' },
 }
 
 const DEFAULT_TRANSFORM = () => ({

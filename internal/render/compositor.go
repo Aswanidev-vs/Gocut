@@ -54,7 +54,11 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 
 			inputIdx := assetToInput[clip.AssetID]
 
-			if track.Type == project.TrackVideo || track.Type == project.TrackText {
+			// Visual track types contribute to the video mix. We include
+			// the new image and pip (picture-in-picture) tracks here so
+			// stills and overlay clips render through the same filter
+			// chain as the main video track.
+			if isVisualTrackType(track.Type) {
 				if asset.Type == project.AssetImage {
 					// Stills: hold the single frame for clip.Duration seconds.
 					// We rely on the input already being declared with `-loop 1`.
@@ -151,4 +155,20 @@ func findAsset(assets []project.Asset, id string) *project.Asset {
 		}
 	}
 	return nil
+}
+
+// isVisualTrackType reports whether a track contributes to the video
+// composition. The new image and pip (picture-in-picture) track types
+// are treated the same as the main video track for filter-graph
+// purposes — they each emit a [vN] stream that the final concat step
+// can stitch together.
+func isVisualTrackType(t project.TrackType) bool {
+	switch t {
+	case project.TrackVideo,
+		project.TrackText,
+		project.TrackImage,
+		project.TrackPIP:
+		return true
+	}
+	return false
 }
