@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -23,7 +22,9 @@ func (e *Executor) Probe(ctx context.Context, path string) (*project.MediaInfo, 
 		"-show_streams",
 		path,
 	}
-	cmd := exec.CommandContext(ctx, e.ffprobePath, args...)
+	// Goes through the runFFprobe chokepoint so CREATE_NO_WINDOW is
+	// applied on Windows (no cmd.exe popup while probing).
+	cmd := e.runFFprobe(ctx, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w: %s", err, string(out))

@@ -18,6 +18,7 @@ import (
 	"Gocut/internal/ffmpeg"
 	"Gocut/internal/ffmpeg/filters"
 	"Gocut/internal/project"
+
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -176,7 +177,12 @@ func (q *Queue) runJob(job *Job) {
 	ctx, cancel := context.WithCancel(q.ctx)
 	job.Cancel = cancel
 
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	// Route through the ffmpeg executor's chokepoint so CREATE_NO_WINDOW
+	// is applied on Windows; without it ffmpeg.exe briefly pops a cmd
+	// window on every render. The render pipeline puts the program
+	// name in args[0] (it varies by build) so we use the package-level
+	// helper which takes the program path explicitly.
+	cmd := ffmpeg.RunWithHiddenWindowProgram(ctx, args[0], args[1:]...)
 	job.Cmd = cmd
 
 	stderr, err := cmd.StderrPipe()
@@ -348,7 +354,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	}
 
 	filterParts := []string{}
-	
+
 	// Create base video and base audio
 	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=1280x720:r=30:d=%.3f[basev]", duration))
 	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
@@ -474,24 +480,24 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		nextV := fmt.Sprintf("[ov%d]", i)
 		xExpr := fmt.Sprintf("(W-w)/2+%.0f", vo.clip.Transform.X)
 		yExpr := fmt.Sprintf("(H-h)/2+%.0f", vo.clip.Transform.Y)
-		
+
 		if vo.clip.Transition != nil && vo.clip.Transition.Type != "none" && vo.clip.Transition.Duration > 0 {
 			trans := vo.clip.Transition
 			start := vo.clip.StartTime
 			dur := trans.Duration
 			finalX := fmt.Sprintf("((W-w)/2+%.0f)", vo.clip.Transform.X)
-			
+
 			switch trans.Type {
 			case "slideleft":
 				xExpr = fmt.Sprintf("if(lt(t,%g),W-(W-%s)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
 			case "slideright":
 				xExpr = fmt.Sprintf("if(lt(t,%g),-w+(%s+w)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
 			case "zoomin":
-				// zoomin transition is implemented as scale in the clipFilters if needed, 
+				// zoomin transition is implemented as scale in the clipFilters if needed,
 				// or we can simulate it by moving from center offset
 			}
 		}
-		
+
 		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=x='%s':y='%s':eof_action=pass%s", lastV, vo.label, xExpr, yExpr, nextV))
 		lastV = nextV
 	}
@@ -570,13 +576,13 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		"-crf", "23",
 		"-pix_fmt", "yuv420p",
 	)
-	
+
 	audioBitrate := settings.AudioBitrate
 	if audioBitrate == "" {
 		audioBitrate = "192k"
 	}
 	args = append(args, "-c:a", "aac", "-b:a", audioBitrate)
-	
+
 	args = append(args, outputPath)
 	return args
 }

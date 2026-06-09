@@ -34,23 +34,59 @@ function onFullscreenChange() {
 }
 
 // ---- Playback ticker: advance currentTime every animation frame ----
+//
+// Two clocks can move the playhead:
+//
+//  1. The native <video> element when useVideoElement is true. The browser
+//     updates videoRef.currentTime on its own clock; we mirror that into
+//     timelineStore.currentTime so the playhead stays in lock-step with
+//     what's actually on screen.
+//  2. The rAF ticker (performance.now based) when the video element is
+//     not the source of truth (paused preview, image-only timeline, etc).
+//
+// We always run a single rAF loop but only mutate currentTime from one
+// of the two sources so they never fight each other.
 function startTicker() {
   stopTicker()
   let last = performance.now()
   const tick = (now) => {
     const dt = (now - last) / 1000
     last = now
+
     if (playerStore.isPlaying) {
-      const next = timelineStore.currentTime + dt
-      if (next >= Math.max(timelineStore.duration, 0.5)) {
-        if (playerStore.loop) {
-          timelineStore.setCurrentTime(0)
-        } else {
-          playerStore.pause()
-          return
+      // Prefer the <video> element's currentTime when it is driving
+      // playback; this guarantees the playhead and the rendered frame
+      // stay perfectly in sync (and fixes the bug where the playhead
+      // would freeze while the video continued playing).
+      if (useVideoElement.value && videoRef.value && !videoRef.value.paused) {
+        const t = videoRef.value.currentTime
+        if (Number.isFinite(t)) {
+          if (t >= Math.max(timelineStore.duration, 0.5)) {
+            if (playerStore.loop) {
+              videoRef.value.currentTime = 0
+              timelineStore.setCurrentTime(0)
+            } else {
+              playerStore.pause()
+              return
+            }
+          } else if (Math.abs(t - timelineStore.currentTime) > 0.01) {
+            timelineStore.setCurrentTime(t)
+          }
         }
       } else {
-        timelineStore.setCurrentTime(next)
+        // Fallback clock: driven by wall-clock elapsed time, used for
+        // the static-frame preview, the audio-only timeline, etc.
+        const next = timelineStore.currentTime + dt
+        if (next >= Math.max(timelineStore.duration, 0.5)) {
+          if (playerStore.loop) {
+            timelineStore.setCurrentTime(0)
+          } else {
+            playerStore.pause()
+            return
+          }
+        } else {
+          timelineStore.setCurrentTime(next)
+        }
       }
     }
     playInterval.value = requestAnimationFrame(tick)
@@ -188,6 +224,26 @@ function destroyAudioElements() {
 }
 
 // ---- Video element sync ----
+
+// Mirror the <video> element's currentTime into the timeline store so
+// the playhead stays in lock-step with the rendered frame, even when
+// the rAF ticker is throttled or the tab is backgrounded.
+function onVideoTimeUpdate() {
+  if (!useVideoElement.value || !videoRef.value) return
+  const t = videoRef.value.currentTime
+  if (!Number.isFinite(t)) return
+  // Convert asset-local time back to timeline time: add trimStart,
+  // subtract the clip's start time on the timeline.
+  const clip = currentVisualClip.value
+  if (!clip) return
+  const timelineT = clip.startTime + Math.max(0, t - (clip.trimStart || 0))
+  if (Math.abs(timelineT - timelineStore.currentTime) > 0.005) {
+    timelineStore.setCurrentTime(timelineT)
+  }
+}
+function onVideoSeeked() {
+  onVideoTimeUpdate()
+}
 
 // When play/pause changes, control the video element
 watch(() => playerStore.isPlaying, (playing) => {
@@ -478,7 +534,12 @@ function exitFullscreen() {
           alt="image preview"
         />
 
-        <!-- Live <video> element for playback (video only, audio proxy handles sound) -->
+        <!-- Live <video> element for playback (video only, audio proxy handles sound).
+             The timeupdate + seeked handlers are the authoritative source
+             of currentTime while the video element is driving playback;
+             they overwrite any stale value the rAF ticker might have
+             written, so the playhead and the rendered frame can never
+             disagree. -->
         <video
           v-show="useVideoElement && videoSrc"
           ref="videoRef"
@@ -489,6 +550,8 @@ function exitFullscreen() {
           playsinline
           muted
           @error="() => { /* fallback to ffmpeg frame on error */ useVideoElement = false }"
+          @timeupdate="onVideoTimeUpdate"
+          @seeked="onVideoSeeked"
         />
 
         <!-- Static frame from ffmpeg (shown when paused or no video element) -->
