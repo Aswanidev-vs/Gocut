@@ -23,7 +23,7 @@ const totalWidth = computed(() => visibleDuration.value * timelineStore.zoom)
 // Display order for the timeline rows. The new image track sits in the
 // main composition area (between video and audio) and the pip (picture-
 // in-picture) track is drawn on top of everything else.
-const trackOrder = ['video', 'image', 'audio', 'pip', 'text', 'sticker', 'fx']
+const trackOrder = ['video','audio','image', 'pip', 'text', 'sticker', 'fx']
 
 const tracksByType = computed(() => {
   const map = {}
