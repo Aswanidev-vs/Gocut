@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -31,20 +31,20 @@ var audioExtracting sync.Map
 
 // App is the root application object bound to Wails frontend.
 type App struct {
-	ctx            context.Context
-	executor       *ffmpeg.Executor
-	importer       *media.Importer
-	projectMgr     *project.Manager
-	store          *project.Store
-	renderQueue    *render.Queue
-	compositor     *render.Compositor
-	thumbCache     *cache.ThumbnailCache
-	frameCache     *cache.FrameCache
-	fontScanner    *fonts.Scanner
-	autosave       *project.AutoSaver
-	currentProject *project.Project
-	ffmpegPath     string
-	ffprobePath    string
+	ctx             context.Context
+	executor        *ffmpeg.Executor
+	importer        *media.Importer
+	projectMgr      *project.Manager
+	store           *project.Store
+	renderQueue     *render.Queue
+	compositor      *render.Compositor
+	thumbCache      *cache.ThumbnailCache
+	frameCache      *cache.FrameCache
+	fontScanner     *fonts.Scanner
+	autosave        *project.AutoSaver
+	currentProject  *project.Project
+	ffmpegPath      string
+	ffprobePath     string
 	prefetchMu      sync.Mutex
 	prefetchAsset   string
 	prefetchTime    float64
@@ -151,8 +151,16 @@ func (a *App) ExtractThumbnail(assetID string, timeMs int) (string, error) {
 		return "", err
 	}
 	outPath := filepath.Join(thumbDir, assetID+".png")
-	if err := a.executor.ExtractThumbnail(a.ctx, asset.Path, float64(timeMs)/1000.0, outPath); err != nil {
-		return "", err
+
+	// For still images there is no seek; just decode the first frame.
+	if asset.Type == project.AssetImage {
+		if err := a.executor.ExtractImageThumbnail(a.ctx, asset.Path, outPath); err != nil {
+			return "", err
+		}
+	} else {
+		if err := a.executor.ExtractThumbnail(a.ctx, asset.Path, float64(timeMs)/1000.0, outPath); err != nil {
+			return "", err
+		}
 	}
 
 	data, err := os.ReadFile(outPath)
@@ -259,19 +267,48 @@ func (a *App) OpenOutputFolder(path string) error {
 
 // --- Preview ---
 
+// resolveVisualAsset returns the asset that should be rendered at the
+// given timeline time, and a "source time" within that asset.
+// For stills the source time is forced to 0 so that ffmpeg's image2
+// demuxer always succeeds.
+func (a *App) resolveVisualAsset(p project.Project, t float64) (*project.Asset, float64) {
+	if asset, src := a.assetAtTime(p, t); asset != nil {
+		return asset, src
+	}
+	// Fallback: if a still image exists in the project but no clip
+	// happens to cover t, return the first image so the preview is at
+	// least a meaningful placeholder rather than a black frame.
+	for i := range p.Assets {
+		if p.Assets[i].Type == project.AssetImage {
+			return &p.Assets[i], 0
+		}
+	}
+	return nil, 0
+}
+
 func (a *App) GetPreviewFrame(p project.Project, timeSeconds float64, width int, height int) (string, error) {
-	asset, sourceTime := a.assetAtTime(p, timeSeconds)
+	asset, sourceTime := a.resolveVisualAsset(p, timeSeconds)
 	if asset == nil {
 		return "", fmt.Errorf("no asset at time %.2fs", timeSeconds)
 	}
 
+	// Image assets are single-frame stills; cache by asset only.
 	cacheKey := fmt.Sprintf("preview/%s/%.3f.jpg", asset.ID, sourceTime)
+	if asset.Type == project.AssetImage {
+		cacheKey = fmt.Sprintf("preview/%s/img.jpg", asset.ID)
+	}
 
 	if cached, ok := a.thumbCache.Get(cacheKey); ok {
 		return base64.StdEncoding.EncodeToString(cached), nil
 	}
 
-	data, err := a.executor.ExtractThumbnailPipe(a.ctx, asset.Path, sourceTime)
+	var data []byte
+	var err error
+	if asset.Type == project.AssetImage {
+		data, err = a.executor.ExtractImageThumbnailPipe(a.ctx, asset.Path)
+	} else {
+		data, err = a.executor.ExtractThumbnailPipe(a.ctx, asset.Path, sourceTime)
+	}
 	if err != nil {
 		return "", fmt.Errorf("thumbnail extraction failed: %w", err)
 	}
@@ -284,8 +321,13 @@ func (a *App) GetPreviewFrame(p project.Project, timeSeconds float64, width int,
 func (a *App) PreloadFrames(p project.Project, startTime float64, count int) error {
 	for i := 0; i < count; i++ {
 		t := startTime + float64(i)*(1.0/30.0)
-		asset, sourceTime := a.assetAtTime(p, t)
+		asset, sourceTime := a.resolveVisualAsset(p, t)
 		if asset == nil {
+			continue
+		}
+		// Skip preloading for stills: there is only one frame and
+		// GetPreviewFrame will have already cached it.
+		if asset.Type == project.AssetImage {
 			continue
 		}
 		cacheKey := fmt.Sprintf("preview/%s/%.3f.jpg", asset.ID, sourceTime)
@@ -316,8 +358,14 @@ func (a *App) assetAtTime(p project.Project, t float64) (*project.Asset, float64
 			if t >= c.StartTime && t < c.StartTime+c.Duration {
 				for k := range p.Assets {
 					if p.Assets[k].ID == c.AssetID {
+						asset := &p.Assets[k]
+						// Still images have no timeline; always seek to 0 so
+						// ffmpeg's image2 demuxer can produce a frame.
+						if asset.Type == project.AssetImage {
+							return asset, 0
+						}
 						src := c.TrimStart + (t - c.StartTime)
-						return &p.Assets[k], src
+						return asset, src
 					}
 				}
 			}
@@ -546,16 +594,16 @@ func (a *App) startMediaServer() {
 
 		cacheDir, _ := ensureAppDataSubdir("audio_cache")
 		pathBytes := []byte(assetPath)
-		hash := fmt.Sprintf("%x", md5.Sum(pathBytes))
+		// SHA-256 (rather than MD5) is used here purely as a stable
+		// cache-key derivation; it is not a security primitive, but
+		// using a modern hash also keeps static-analysis tooling happy.
+		hash := fmt.Sprintf("%x", sha256.Sum256(pathBytes))
 		cachedPath := filepath.Join(cacheDir, hash+".mp3")
 
-		// Check if cached file already exists on disk (use os.Stat, NOT exec.LookPath).
 		if _, statErr := os.Stat(cachedPath); os.IsNotExist(statErr) {
-			// Deduplicate: if another goroutine is already extracting this file, wait.
 			doneCh := make(chan struct{})
 			actual, loaded := audioExtracting.LoadOrStore(cachedPath, doneCh)
 			if loaded {
-				// Another goroutine is extracting; wait for it.
 				select {
 				case <-actual.(chan struct{}):
 				case <-r.Context().Done():
@@ -563,7 +611,6 @@ func (a *App) startMediaServer() {
 					return
 				}
 			} else {
-				// We are the extractor.
 				defer func() {
 					audioExtracting.Delete(cachedPath)
 					close(doneCh)
@@ -572,7 +619,6 @@ func (a *App) startMediaServer() {
 					http.Error(w, "ffmpeg not found", http.StatusInternalServerError)
 					return
 				}
-				// Extract audio: use aac for speed (universally supported), fallback copy
 				cmd := exec.CommandContext(r.Context(), a.ffmpegPath,
 					"-y", "-i", assetPath,
 					"-vn",
@@ -581,7 +627,6 @@ func (a *App) startMediaServer() {
 					cachedPath,
 				)
 				if err := cmd.Run(); err != nil {
-					// Remove partial file if any
 					_ = os.Remove(cachedPath)
 					http.Error(w, "audio extraction failed: "+err.Error(), http.StatusInternalServerError)
 					return
@@ -607,7 +652,7 @@ func (a *App) startMediaServer() {
 		return
 	}
 	a.mediaServerPort = listener.Addr().(*net.TCPAddr).Port
-	
+
 	server := &http.Server{
 		Handler:  mux,
 		ErrorLog: log.New(io.Discard, "", 0),

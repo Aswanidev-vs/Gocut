@@ -27,11 +27,18 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 		args = append(args, "-ss", ffmpeg.FloatToStr(settings.StartTime))
 	}
 
-	var inputs []string
+	// Track asset -> input index so the filter graph can reference the
+	// correct [N:v] stream for each clip. For still images we add
+	// `-loop 1` so ffmpeg's image2 demuxer treats the file as a
+	// frame-looped video stream that can be trimmed.
+	assetToInput := make(map[string]int, len(p.Assets))
 	for _, asset := range p.Assets {
-		inputs = append(inputs, asset.Path)
+		assetToInput[asset.ID] = len(args)
+		if asset.Type == project.AssetImage {
+			args = append(args, "-loop", "1")
+		}
+		args = append(args, "-i", asset.Path)
 	}
-	args = append(args, inputs...)
 
 	var filterParts []string
 
@@ -45,9 +52,20 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 				continue
 			}
 
+			inputIdx := assetToInput[clip.AssetID]
+
 			if track.Type == project.TrackVideo || track.Type == project.TrackText {
-				filterParts = append(filterParts, fmt.Sprintf("[%d:v]trim=start=%g:end=%g,setpts=PTS-STARTPTS",
-					videoIdx, clip.TrimStart, clip.TrimStart+clip.Duration))
+				if asset.Type == project.AssetImage {
+					// Stills: hold the single frame for clip.Duration seconds.
+					// We rely on the input already being declared with `-loop 1`.
+					filterParts = append(filterParts, fmt.Sprintf(
+						"[%d:v]trim=duration=%g,setpts=PTS-STARTPTS",
+						inputIdx, clip.Duration))
+				} else {
+					filterParts = append(filterParts, fmt.Sprintf(
+						"[%d:v]trim=start=%g:end=%g,setpts=PTS-STARTPTS",
+						inputIdx, clip.TrimStart, clip.TrimStart+clip.Duration))
+				}
 				if tf := filters.BuildTransformFilter(clip); tf != "" {
 					filterParts = append(filterParts, tf)
 				}
@@ -59,8 +77,13 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 			}
 
 			if track.Type == project.TrackAudio || track.Type == project.TrackVideo {
+				// Images have no audio stream; skip them to avoid
+				// ffmpeg errors when a still is dragged in as video.
+				if asset.Type == project.AssetImage {
+					continue
+				}
 				filterParts = append(filterParts, fmt.Sprintf("[%d:a]atrim=start=%g:end=%g,asetpts=PTS-STARTPTS",
-					audioIdx, clip.TrimStart, clip.TrimStart+clip.Duration))
+					inputIdx, clip.TrimStart, clip.TrimStart+clip.Duration))
 				if af := filters.BuildAudioFilterChain(clip.Volume, false, false, 0.5, clip.Duration); af != "" {
 					filterParts = append(filterParts, af)
 				}

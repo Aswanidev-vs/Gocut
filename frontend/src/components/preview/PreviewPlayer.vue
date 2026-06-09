@@ -86,6 +86,19 @@ const isVideoPlaybackAsset = computed(() => {
   return currentVisualAsset.value?.type === 'video' || currentVisualAsset.value?.type === 'gif'
 })
 
+const isImageAsset = computed(() => {
+  return currentVisualAsset.value?.type === 'image'
+})
+
+// Direct image URL: the media server's /media endpoint serves the file
+// straight from disk, so the WebView can render it as a normal <img>
+// without going through ffmpeg. This is what the preview should show
+// for still-image clips.
+const imageSrc = computed(() => {
+  if (!isImageAsset.value || !currentVisualAsset.value) return null
+  return playerStore.getMediaUrl(currentVisualAsset.value.path)
+})
+
 const videoSrc = computed(() => {
   if (!isVideoPlaybackAsset.value || !currentVisualAsset.value) return null
   return playerStore.getMediaUrl(currentVisualAsset.value.path)
@@ -448,6 +461,16 @@ function exitFullscreen() {
         class="preview-frame relative bg-black rounded-md overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-border max-h-full"
         :style="{ ...aspectStyle, maxWidth: '100%', maxHeight: '100%', width: '100%' }"
       >
+        <!-- Direct <img> for still image clips: served straight from
+             the media server so it does not require an ffmpeg roundtrip. -->
+        <img
+          v-show="isImageAsset && imageSrc && !useVideoElement"
+          :src="imageSrc"
+          class="absolute inset-0 w-full h-full object-contain bg-black"
+          :style="livePreviewStyle"
+          alt="image preview"
+        />
+
         <!-- Live <video> element for playback (video only, audio proxy handles sound) -->
         <video
           v-show="useVideoElement && videoSrc"
@@ -462,6 +485,8 @@ function exitFullscreen() {
         />
 
         <!-- Static frame from ffmpeg (shown when paused or no video element) -->
+        <!-- For non-image assets, this is the ffmpeg-extracted frame. -->
+        <!-- For image assets, the direct <img> above is preferred. -->
         <img
           v-show="!useVideoElement && previewSrc"
           :src="previewSrc"
@@ -470,7 +495,7 @@ function exitFullscreen() {
           alt="preview"
         />
         <div
-          v-show="!useVideoElement && !previewSrc"
+          v-show="!useVideoElement && !previewSrc && !imageSrc"
           class="absolute inset-0 flex flex-col items-center justify-center text-text-secondary text-sm gap-2"
         >
           <ImageOff :size="32" class="opacity-40" />
