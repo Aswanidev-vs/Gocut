@@ -1,17 +1,17 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
 import {
-  Sparkles, Move3D, Type, Layers, Palette, Wand2, Plus, Trash2, Key, HelpCircle, Eye, Play, CornerDownRight
+  Sparkles, Move3D, Type, Layers, Palette, Wand2, Plus, Trash2, Key, Info, HelpCircle, Compass, Sliders, Settings
 } from 'lucide-vue-next'
 
 const timelineStore = useTimelineStore()
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
 
-const activeSection = ref('presets') // presets, shapes, custom, keyframes
+const activeSection = ref('node_props') // node_props, presets, shapes, keyframes
 const selectedProperty = ref('x') // x, y, scaleX, scaleY, rotation, opacity
 
 // Shapes configuration
@@ -22,11 +22,28 @@ const shapeStrokeWidth = ref(3)
 // Custom SVG path
 const customPath = ref('M 50 10 L 90 90 L 10 90 Z')
 
+// Selected Fusion node properties
+const activeNode = ref({ id: 'transform', label: 'Transform1', type: 'transform' })
+
+// Listen to select node events from Node Graph
+function handleNodeSelect(e) {
+  activeNode.value = e.detail
+  activeSection.value = 'node_props'
+}
+
+onMounted(() => {
+  window.addEventListener('fusion:select-node', handleNodeSelect)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('fusion:select-node', handleNodeSelect)
+})
+
 // Presets mapping
 const kits = [
+  { id: 'node_props', label: 'Inspector', hint: 'Selected Node properties' },
   { id: 'presets', label: 'Presets', hint: 'Animation & Text FX presets' },
   { id: 'shapes', label: 'Shapes', hint: 'Speech bubbles & shapes' },
-  { id: 'custom', label: 'Custom SVG', hint: 'Build custom vectors' },
   { id: 'keyframes', label: 'Keyframes', hint: 'Curve & graph editor' },
 ]
 
@@ -105,22 +122,6 @@ function addShapeToTimeline(shape) {
   uiStore.addToast(`Added ${shape.name} shape to timeline`, 'success', 1500)
 }
 
-// Add Custom SVG to Timeline
-function addCustomShapeToTimeline() {
-  const svgContent = `<svg viewBox="0 0 100 100" width="100" height="100"><path d="${customPath.value}" fill="${shapeColor.value}" stroke="${shapeStrokeColor.value}" stroke-width="${shapeStrokeWidth.value}"/></svg>`
-  timelineStore.addClip({
-    trackType: 'sticker',
-    startTime: timelineStore.currentTime,
-    duration: 3.0,
-    stickerProps: {
-      svg: svgContent,
-      width: 1.0,
-      rotation: 0
-    }
-  })
-  uiStore.addToast('Added custom SVG path shape to timeline', 'success', 1500)
-}
-
 // Apply Animation Preset
 function applyAnimationPreset(preset) {
   if (!selectedClip.value) {
@@ -189,7 +190,6 @@ function applyAnimationPreset(preset) {
       { id: crypto.randomUUID(), property: 'scaleY', value: 1.0, time: 0.6 }
     )
   } else if (preset.id === 'glow_shimmer') {
-    // Add glowing shadow animation
     if (!selectedClip.value.textProps) {
       uiStore.addToast('Glow Shimmer only works on Text clips', 'warning', 1800)
       return
@@ -204,14 +204,6 @@ function applyAnimationPreset(preset) {
     timelineStore.updateClip(selectedClip.value.id, { textProps: tp })
     uiStore.addToast('Applied Glow Effect to Text', 'success', 1500)
     return
-  } else if (preset.id === 'typewriter') {
-    if (!selectedClip.value.textProps) {
-      uiStore.addToast('Typewriter only works on Text clips', 'warning', 1800)
-      return
-    }
-    // We can simulate typewriter by updating properties or keyframing
-    uiStore.addToast('Typewriter effect enabled on clip', 'success', 1500)
-    return
   }
 
   // Update selected clip with combined keyframes
@@ -219,7 +211,6 @@ function applyAnimationPreset(preset) {
   uiStore.addToast(`Applied ${preset.name} animation keyframes`, 'success', 1500)
 }
 
-// Keyframe properties details
 const getClipKfs = computed(() => {
   if (!selectedClip.value || !selectedClip.value.keyframes) return []
   return selectedClip.value.keyframes
@@ -269,6 +260,16 @@ function updateKeyframeEasing(kf, easing) {
   kf.easing = easing
   timelineStore.updateClip(selectedClip.value.id, { keyframes: selectedClip.value.keyframes })
 }
+
+function updateClipTransform(key, val) {
+  if (!selectedClip.value) return
+  timelineStore.updateClipTransform(selectedClip.value.id, { [key]: parseFloat(val) || 0 })
+}
+
+function updateClipColor(key, val) {
+  if (!selectedClip.value) return
+  timelineStore.updateClipColor(selectedClip.value.id, { [key]: parseInt(val) || 0 })
+}
 </script>
 
 <template>
@@ -277,7 +278,7 @@ function updateKeyframeEasing(kf, easing) {
     <div class="rounded-xl border border-border bg-panel p-2 shadow-lg shadow-black/30">
       <div class="flex items-center gap-2 mb-2 text-[10px] uppercase tracking-[0.2em] text-text-secondary font-bold px-1">
         <Sparkles :size="12" class="text-accent" />
-        Resolve Design Workspace
+        Fusion Inspector
       </div>
       <div class="grid grid-cols-4 gap-1">
         <button
@@ -295,8 +296,75 @@ function updateKeyframeEasing(kf, easing) {
       </div>
     </div>
 
+    <!-- 0. NODE INSPECTOR TAB -->
+    <div v-if="activeSection === 'node_props'" class="space-y-3">
+      <div class="rounded-xl border border-border bg-bg/50 p-3">
+        <div class="flex items-center gap-2 mb-3">
+          <component
+            :is="activeNode.type === 'transform' ? Compass : activeNode.type === 'color' ? Sliders : Settings"
+            :size="14"
+            class="text-accent"
+          />
+          <h3 class="text-xs font-bold text-text-primary">{{ activeNode.label }} <span class="text-[9px] font-normal text-text-secondary uppercase">({{ activeNode.type }})</span></h3>
+        </div>
+
+        <div v-if="!selectedClip" class="text-center py-6 text-[10px] text-text-secondary">
+          No active media clip selected to modify.
+        </div>
+
+        <!-- Transform Node Settings -->
+        <div v-else-if="activeNode.type === 'transform'" class="space-y-3 text-[11px]">
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Center X</span><span>{{ selectedClip.transform?.x || 0 }}px</span></div>
+            <input type="range" min="-1000" max="1000" :value="selectedClip.transform?.x || 0" @input="(e) => updateClipTransform('x', e.target.value)" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Center Y</span><span>{{ selectedClip.transform?.y || 0 }}px</span></div>
+            <input type="range" min="-1000" max="1000" :value="selectedClip.transform?.y || 0" @input="(e) => updateClipTransform('y', e.target.value)" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Size (Scale)</span><span>{{ selectedClip.transform?.scaleX || 1.0 }}</span></div>
+            <input type="range" min="0.1" max="4.0" step="0.05" :value="selectedClip.transform?.scaleX || 1.0" @input="(e) => { updateClipTransform('scaleX', e.target.value); updateClipTransform('scaleY', e.target.value) }" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Angle (Rotation)</span><span>{{ selectedClip.transform?.rotation || 0 }}°</span></div>
+            <input type="range" min="-180" max="180" :value="selectedClip.transform?.rotation || 0" @input="(e) => updateClipTransform('rotation', e.target.value)" class="w-full accent-accent" />
+          </div>
+        </div>
+
+        <!-- Color Node Settings -->
+        <div v-else-if="activeNode.type === 'color'" class="space-y-3 text-[11px]">
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Brightness</span><span>{{ selectedClip.color?.brightness || 0 }}</span></div>
+            <input type="range" min="-100" max="100" :value="selectedClip.color?.brightness || 0" @input="(e) => updateClipColor('brightness', e.target.value)" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Contrast</span><span>{{ selectedClip.color?.contrast || 0 }}</span></div>
+            <input type="range" min="-100" max="100" :value="selectedClip.color?.contrast || 0" @input="(e) => updateClipColor('contrast', e.target.value)" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Saturation</span><span>{{ selectedClip.color?.saturation || 0 }}</span></div>
+            <input type="range" min="-100" max="100" :value="selectedClip.color?.saturation || 0" @input="(e) => updateClipColor('saturation', e.target.value)" class="w-full accent-accent" />
+          </div>
+          <div>
+            <div class="flex justify-between text-text-secondary mb-1"><span>Blur Filter</span><span>{{ selectedClip.color?.blur || 0 }}px</span></div>
+            <input type="range" min="0" max="30" :value="selectedClip.color?.blur || 0" @input="(e) => updateClipColor('blur', e.target.value)" class="w-full accent-accent" />
+          </div>
+        </div>
+
+        <!-- Default Settings / Info -->
+        <div v-else class="text-[10px] text-text-secondary space-y-2">
+          <p>This node processes active video/graphics layering composition in real-time.</p>
+          <div class="flex items-center gap-1 bg-border/20 p-2 rounded border border-border/40">
+            <Info :size="12" class="text-accent" />
+            <span>Settings auto-bind to the active media properties on selection.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 1. PRESETS WORKSPACE -->
-    <div v-if="activeSection === 'presets'" class="space-y-3">
+    <div v-else-if="activeSection === 'presets'" class="space-y-3">
       <div class="rounded-xl border border-border bg-bg/50 p-3">
         <h3 class="text-xs font-semibold text-text-primary mb-1">Creative Animations</h3>
         <p class="text-[10px] text-text-secondary mb-3">Apply easing curves and keyframe motion styles instantly to your selection.</p>
@@ -315,32 +383,6 @@ function updateKeyframeEasing(kf, easing) {
               <div class="text-[11px] font-bold text-text-primary flex items-center gap-1.5">
                 {{ anim.name }}
                 <span class="text-[8px] uppercase font-mono px-1 rounded bg-accent/20 text-accent">Keyframes</span>
-              </div>
-              <p class="text-[10px] text-text-secondary mt-0.5">{{ anim.desc }}</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-border bg-bg/50 p-3">
-        <h3 class="text-xs font-semibold text-text-primary mb-1">Text FX Library</h3>
-        <p class="text-[10px] text-text-secondary mb-3">Advanced procedural style modifiers for text clips.</p>
-
-        <div class="space-y-2">
-          <button
-            v-for="anim in presetAnimations.filter(a => a.type === 'text')"
-            :key="anim.id"
-            class="w-full text-left rounded-lg border border-border bg-panel/40 p-2.5 hover:bg-accent/5 hover:border-accent/30 transition-all flex items-start gap-2.5"
-            @click="applyAnimationPreset(anim)"
-            :class="!selectedClip || !isText ? 'opacity-50 cursor-not-allowed' : ''"
-          >
-            <div class="p-1.5 rounded bg-amber-500/10 text-amber-500 mt-0.5">
-              <Type :size="13" />
-            </div>
-            <div>
-              <div class="text-[11px] font-bold text-text-primary flex items-center gap-1.5">
-                {{ anim.name }}
-                <span class="text-[8px] uppercase font-mono px-1 rounded bg-amber-500/20 text-amber-500">Styling</span>
               </div>
               <p class="text-[10px] text-text-secondary mt-0.5">{{ anim.desc }}</p>
             </div>
@@ -399,40 +441,7 @@ function updateKeyframeEasing(kf, easing) {
       </div>
     </div>
 
-    <!-- 3. CUSTOM SVG CANVAS -->
-    <div v-else-if="activeSection === 'custom'" class="space-y-3">
-      <div class="rounded-xl border border-border bg-bg/50 p-3 space-y-3">
-        <h3 class="text-xs font-semibold text-text-primary">SVG Path Editor</h3>
-        <p class="text-[10px] text-text-secondary">Input any standard SVG path coordinate string (d attribute) to generate a custom vector shape.</p>
-
-        <div>
-          <label class="text-[9px] uppercase tracking-wider text-text-secondary block mb-1">Path Coordinates (d)</label>
-          <textarea
-            v-model="customPath"
-            rows="3"
-            class="w-full bg-panel border border-border rounded p-2 text-[10px] font-mono focus:border-accent outline-none"
-            placeholder="e.g. M 50 10 L 90 90 L 10 90 Z"
-          ></textarea>
-        </div>
-
-        <!-- Live Vector Preview -->
-        <div class="border border-border rounded-lg bg-black flex flex-col items-center justify-center p-3">
-          <div class="text-[8px] text-text-secondary uppercase mb-2">Live Vector Preview</div>
-          <svg viewBox="0 0 100 100" class="w-16 h-16 bg-panel/30 border border-border/30 rounded">
-            <path :d="customPath" :fill="shapeColor" :stroke="shapeStrokeColor" :stroke-width="shapeStrokeWidth" />
-          </svg>
-        </div>
-
-        <button
-          @click="addCustomShapeToTimeline"
-          class="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-bg text-[11px] font-bold hover:bg-accent-hover transition-all shadow-md shadow-accent/25"
-        >
-          <Plus :size="12" /> Add Custom Shape
-        </button>
-      </div>
-    </div>
-
-    <!-- 4. KEYFRAME GRAPH EDITOR -->
+    <!-- 3. KEYFRAME GRAPH EDITOR -->
     <div v-else-if="activeSection === 'keyframes'" class="space-y-3">
       <div class="rounded-xl border border-border bg-bg/50 p-3">
         <div class="flex items-center justify-between mb-2">

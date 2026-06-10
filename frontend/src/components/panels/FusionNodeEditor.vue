@@ -1,26 +1,22 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
-import { Plus, Trash2, Sliders, Play, Settings, Move, Compass, Database } from 'lucide-vue-next'
+import { 
+  Plus, Trash2, Sliders, Play, Settings, Move, Compass, Database, 
+  Image, Type, CircleDot, Spline, Shield, RefreshCw, Info, Search 
+} from 'lucide-vue-next'
 
 const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
-const selectedClip = computed(() => {
-  if (timelineStore.selectedClips.length > 0) {
-    return timelineStore.selectedClips[0]
-  }
-  return null
-})
-
-// Node template definitions
+// Store node instances
 const nodes = ref([
-  { id: 'media_in', label: 'MediaIn1', type: 'source', x: 80, y: 80, color: 'bg-amber-500/10 border-amber-500/50 text-amber-400' },
-  { id: 'color_correct', label: 'ColorCorrect1', type: 'color', x: 240, y: 80, color: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' },
-  { id: 'transform', label: 'Transform1', type: 'transform', x: 400, y: 80, color: 'bg-blue-500/10 border-blue-500/50 text-blue-400' },
-  { id: 'merge', label: 'Merge1', type: 'merge', x: 560, y: 80, color: 'bg-purple-500/10 border-purple-500/50 text-purple-400' },
-  { id: 'media_out', label: 'MediaOut1', type: 'output', x: 720, y: 80, color: 'bg-rose-500/10 border-rose-500/50 text-rose-400' }
+  { id: 'media_in', label: 'MediaIn1', type: 'source', x: 60, y: 110, activeViewer: 1, color: 'bg-amber-500/10 border-amber-500/50 text-amber-400' },
+  { id: 'color_correct', label: 'ColorCorrect1', type: 'color', x: 220, y: 110, activeViewer: null, color: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' },
+  { id: 'transform', label: 'Transform1', type: 'transform', x: 380, y: 110, activeViewer: 2, color: 'bg-blue-500/10 border-blue-500/50 text-blue-400' },
+  { id: 'merge', label: 'Merge1', type: 'merge', x: 540, y: 110, activeViewer: null, color: 'bg-purple-500/10 border-purple-500/50 text-purple-400' },
+  { id: 'media_out', label: 'MediaOut1', type: 'output', x: 700, y: 110, activeViewer: null, color: 'bg-rose-500/10 border-rose-500/50 text-rose-400' }
 ])
 
 const connections = ref([
@@ -34,22 +30,31 @@ const selectedNodeId = ref('transform')
 const draggingNodeId = ref(null)
 const dragOffset = { x: 0, y: 0 }
 
+// Shift+Space / Add Tool Search Dialog
+const isSearchOpen = ref(false)
+const searchQuery = ref('')
+const allTools = [
+  { type: 'transform', label: 'Transform (XF)', desc: 'Translate, rotate, scale' },
+  { type: 'color', label: 'Color Corrector (CC)', desc: 'Lift, gamma, gain, saturation' },
+  { type: 'text', label: 'Text+ (TXT)', desc: '3D title and styled text overlays' },
+  { type: 'mask', label: 'Rectangle Mask (MR)', desc: 'Crop or isolate region' },
+  { type: 'ellipse', label: 'Ellipse Mask (ME)', desc: 'Circular compositing mask' },
+  { type: 'blur', label: 'Gaussian Blur (BL)', desc: 'Smooth image filters' },
+  { type: 'merge', label: 'Merge (MRG)', desc: 'Combine foreground and background' }
+]
+
+const filteredTools = computed(() => {
+  return allTools.filter(t => t.label.toLowerCase().includes(searchQuery.value.toLowerCase()))
+})
+
 function selectNode(id, type) {
   selectedNodeId.value = id
+  uiStore.setActiveInspectorTab(type === 'color' ? 'color' : 'edit')
   
-  // Map selected node to uiStore / inspector tabs for immediate feedback
-  if (type === 'color') {
-    uiStore.setActiveInspectorTab('color')
-  } else if (type === 'transform') {
-    uiStore.setActiveInspectorTab('edit')
-  } else if (type === 'source') {
-    uiStore.setActiveInspectorTab('edit')
-  }
-  
-  uiStore.addToast(`Selected node: ${id}`, 'info', 1000)
+  // Custom event to sync DesignPanel.vue
+  window.dispatchEvent(new CustomEvent('fusion:select-node', { detail: { id, type } }))
 }
 
-// Node dragging logic
 function startDrag(e, nodeId) {
   draggingNodeId.value = nodeId
   const node = nodes.value.find(n => n.id === nodeId)
@@ -67,7 +72,7 @@ function onDrag(e) {
     const node = nodes.value.find(n => n.id === draggingNodeId.value)
     if (node) {
       node.x = e.clientX - dragOffset.x
-      node.y = Math.max(20, Math.min(e.clientY - dragOffset.y, 220)) // constrain inside viewport
+      node.y = Math.max(10, Math.min(e.clientY - dragOffset.y, 240))
     }
   }
 }
@@ -78,16 +83,15 @@ function stopDrag() {
   document.removeEventListener('mouseup', stopDrag)
 }
 
-// Calculate SVG Bezier Spline paths
 function getBezierPath(fromNodeId, toNodeId) {
   const fromNode = nodes.value.find(n => n.id === fromNodeId)
   const toNode = nodes.value.find(n => n.id === toNodeId)
   if (!fromNode || !toNode) return ''
 
-  const startX = fromNode.x + 100 // Right side of node box
-  const startY = fromNode.y + 24
-  const endX = toNode.x           // Left side of node box
-  const endY = toNode.y + 24
+  const startX = fromNode.x + 120 
+  const startY = fromNode.y + 20
+  const endX = toNode.x           
+  const endY = toNode.y + 20
 
   const controlX1 = startX + 60
   const controlY1 = startY
@@ -97,83 +101,129 @@ function getBezierPath(fromNodeId, toNodeId) {
   return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
 }
 
-function addFusionNode(type) {
-  const lastNode = nodes.value[nodes.value.length - 2] // node before media_out
-  const outputNode = nodes.value[nodes.value.length - 1]
-  
+// Add Node from quick shelf or search
+function addNode(type) {
+  const count = nodes.value.filter(n => n.type === type).length + 1
+  const labelMap = {
+    transform: `Transform${count}`,
+    color: `ColorCorrect${count}`,
+    text: `Text${count}`,
+    mask: `RectangleMask${count}`,
+    ellipse: `EllipseMask${count}`,
+    blur: `Blur${count}`,
+    merge: `Merge${count}`
+  }
+
+  const colorMap = {
+    transform: 'bg-blue-500/10 border-blue-500/50 text-blue-400',
+    color: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400',
+    text: 'bg-amber-500/10 border-amber-500/50 text-amber-400',
+    mask: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400',
+    ellipse: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400',
+    blur: 'bg-pink-500/10 border-pink-500/50 text-pink-400',
+    merge: 'bg-purple-500/10 border-purple-500/50 text-purple-400'
+  }
+
   const id = `${type}_${Date.now().toString().slice(-4)}`
-  const label = type.charAt(0).toUpperCase() + type.slice(1) + 'Node'
+  const label = labelMap[type] || `${type}${count}`
+  const color = colorMap[type] || 'bg-gray-500/10 border-gray-500/50 text-gray-400'
+
+  // Insert node relative to selected or output
+  const insertX = 350 + (count * 20)
+  const insertY = 160
+
+  nodes.value.push({ id, label, type, x: insertX, y: insertY, activeViewer: null, color })
+
+  // Auto connect if a node is selected
+  if (selectedNodeId.value && selectedNodeId.value !== 'media_out') {
+    const oldTarget = connections.value.find(c => c.from === selectedNodeId.value)
+    if (oldTarget) {
+      connections.value = connections.value.filter(c => !(c.from === selectedNodeId.value))
+      connections.value.push(
+        { from: selectedNodeId.value, to: id },
+        { from: id, to: oldTarget.to }
+      )
+    } else {
+      connections.value.push({ from: selectedNodeId.value, to: id })
+    }
+  }
+
+  selectNode(id, type)
+  isSearchOpen.value = false
+  searchQuery.value = ''
+  uiStore.addToast(`Added Fusion node: ${label}`, 'success', 1200)
+}
+
+function deleteSelectedNode() {
+  if (!selectedNodeId.value || ['media_in', 'media_out'].includes(selectedNodeId.value)) {
+    uiStore.addToast('Cannot delete system source or output node', 'warning', 1500)
+    return
+  }
+
+  const prevConn = connections.value.find(c => c.to === selectedNodeId.value)
+  const nextConn = connections.value.find(c => c.from === selectedNodeId.value)
+
+  // Remove node
+  nodes.value = nodes.value.filter(n => n.id !== selectedNodeId.value)
   
-  let color = 'bg-sky-500/10 border-sky-500/50 text-sky-400'
-  if (type === 'mask') color = 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400'
-  if (type === 'effect') color = 'bg-pink-500/10 border-pink-500/50 text-pink-400'
+  // Re-route connection
+  connections.value = connections.value.filter(c => c.from !== selectedNodeId.value && c.to !== selectedNodeId.value)
+  if (prevConn && nextConn) {
+    connections.value.push({ from: prevConn.from, to: nextConn.to })
+  }
 
-  // Position between last node and output
-  const newX = (lastNode.x + outputNode.x) / 2
-  const newY = lastNode.y + 30
+  uiStore.addToast('Removed Node', 'info', 1200)
+  selectedNodeId.value = 'media_in'
+}
 
-  // Insert node
-  nodes.value.splice(nodes.value.length - 1, 0, {
-    id, label, type, x: newX, y: newY, color
+function setViewer(node, viewerNum) {
+  nodes.value.forEach(n => {
+    if (n.activeViewer === viewerNum) n.activeViewer = null
   })
-
-  // Re-route connections
-  connections.value = connections.value.filter(c => c.to !== 'media_out')
-  connections.value.push(
-    { from: lastNode.id, to: id },
-    { from: id, to: 'media_out' }
-  )
-
-  uiStore.addToast(`Inserted node: ${label}`, 'success', 1200)
+  node.activeViewer = node.activeViewer === viewerNum ? null : viewerNum
+  uiStore.addToast(`Routing output of ${node.label} to Viewer ${viewerNum}`, 'info', 1200)
 }
 </script>
 
 <template>
   <div class="h-full bg-black/95 flex flex-col select-none overflow-hidden relative border-t border-border">
-    <!-- Top toolbar of Node Graph -->
-    <div class="h-9 px-3 border-b border-border bg-panel/60 flex items-center justify-between text-xs">
-      <div class="flex items-center gap-4">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Fusion Node Graph</span>
-        <div class="flex items-center gap-1.5 border-l border-border pl-4">
-          <button
-            @click="addFusionNode('mask')"
-            class="px-2 py-0.5 rounded bg-border/40 hover:bg-border text-text-primary text-[10px] flex items-center gap-1"
-          >
-            <Plus :size="10" /> Add Mask
-          </button>
-          <button
-            @click="addFusionNode('effect')"
-            class="px-2 py-0.5 rounded bg-border/40 hover:bg-border text-text-primary text-[10px] flex items-center gap-1"
-          >
-            <Plus :size="10" /> Add Effect
-          </button>
-        </div>
+    <!-- Fusion Quick Tool Shelf -->
+    <div class="h-10 px-3 border-b border-border bg-panel/60 flex items-center justify-between">
+      <div class="flex items-center gap-1">
+        <!-- Quick tool buttons matching Resolve Fusion Page -->
+        <button @click="addNode('text')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-amber-400 transition-colors" title="Text+ (Txt)"><Type :size="14" /></button>
+        <button @click="addNode('color')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-emerald-400 transition-colors" title="Color Corrector (CC)"><Sliders :size="14" /></button>
+        <button @click="addNode('transform')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-blue-400 transition-colors" title="Transform (Xf)"><Compass :size="14" /></button>
+        <button @click="addNode('merge')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-purple-400 transition-colors" title="Merge (Mrg)"><Plus :size="14" /></button>
+        <div class="h-4 w-px bg-border mx-1" />
+        <button @click="addNode('mask')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-indigo-400 transition-colors" title="Rectangle Mask (Msk)"><CircleDot :size="14" /></button>
+        <button @click="addNode('blur')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-pink-400 transition-colors" title="Blur (Blr)"><Spline :size="14" /></button>
       </div>
-      
-      <div class="text-[10px] text-text-secondary flex items-center gap-1">
-        <Move :size="10" /> Drag nodes to structure your composition pipeline
+
+      <div class="flex items-center gap-2">
+        <button
+          @click="isSearchOpen = true"
+          class="px-2.5 py-1 rounded bg-border/40 hover:bg-border text-text-primary text-[10px] flex items-center gap-1 font-bold"
+        >
+          <Search :size="10" /> Shift+Space Tool Finder
+        </button>
+        <button
+          @click="deleteSelectedNode"
+          class="p-1.5 rounded hover:bg-red-950 text-text-secondary hover:text-red-400 transition-colors"
+          title="Delete Node"
+        >
+          <Trash2 :size="12" />
+        </button>
       </div>
     </div>
 
     <!-- Canvas Node Workspace -->
-    <div class="flex-1 relative overflow-auto bg-[radial-gradient(#202020_1px,transparent_1px)] [background-size:16px_16px]">
+    <div class="flex-1 relative overflow-auto bg-[radial-gradient(#1e1e24_1px,transparent_1px)] [background-size:16px_16px]">
       <!-- SVG Connectors Layer -->
       <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
         <g v-for="(conn, idx) in connections" :key="idx">
-          <!-- Shadow path for glowing line effect -->
-          <path
-            :d="getBezierPath(conn.from, conn.to)"
-            fill="none"
-            stroke="rgba(0, 212, 255, 0.15)"
-            stroke-width="5"
-          />
-          <path
-            :d="getBezierPath(conn.from, conn.to)"
-            fill="none"
-            :stroke="selectedNodeId === conn.from || selectedNodeId === conn.to ? '#00D4FF' : '#4b5563'"
-            stroke-width="2"
-            class="transition-all duration-300"
-          />
+          <path :d="getBezierPath(conn.from, conn.to)" fill="none" stroke="rgba(0, 212, 255, 0.15)" stroke-width="5" />
+          <path :d="getBezierPath(conn.from, conn.to)" fill="none" :stroke="selectedNodeId === conn.from || selectedNodeId === conn.to ? '#00D4FF' : '#52525b'" stroke-width="2" />
         </g>
       </svg>
 
@@ -182,21 +232,29 @@ function addFusionNode(type) {
         v-for="node in nodes"
         :key="node.id"
         :style="{ left: node.x + 'px', top: node.y + 'px' }"
-        class="absolute w-[120px] rounded border px-3 py-2 flex flex-col justify-between cursor-grab active:cursor-grabbing z-10 transition-shadow duration-200"
+        class="absolute w-[120px] rounded border px-3 py-2 flex flex-col justify-between cursor-grab active:cursor-grabbing z-10 shadow-lg shadow-black/80"
         :class="[
           node.color,
-          selectedNodeId === node.id ? 'ring-2 ring-accent shadow-lg shadow-accent/20' : 'shadow shadow-black/50'
+          selectedNodeId === node.id ? 'ring-2 ring-accent border-transparent' : ''
         ]"
         @mousedown="startDrag($event, node.id)"
         @click.stop="selectNode(node.id, node.type)"
       >
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-bold truncate">{{ node.label }}</span>
-          <component
-            :is="node.type === 'source' ? Database : node.type === 'color' ? Sliders : node.type === 'transform' ? Compass : Settings"
-            :size="10"
-            class="opacity-60"
-          />
+          <!-- Viewer routing dots (Resolve style 1 & 2 circles) -->
+          <div class="flex items-center gap-0.5">
+            <button
+              @click.stop="setViewer(node, 1)"
+              class="w-2.5 h-2.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
+              :class="node.activeViewer === 1 ? 'bg-accent border-accent text-bg font-bold' : 'border-border text-text-secondary hover:text-text-primary'"
+            >1</button>
+            <button
+              @click.stop="setViewer(node, 2)"
+              class="w-2.5 h-2.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
+              :class="node.activeViewer === 2 ? 'bg-amber-500 border-amber-500 text-bg font-bold' : 'border-border text-text-secondary hover:text-text-primary'"
+            >2</button>
+          </div>
         </div>
         
         <!-- Connector Terminals -->
@@ -208,6 +266,38 @@ function addFusionNode(type) {
           <!-- Output terminal -->
           <div v-if="node.type !== 'output'" class="w-1.5 h-1.5 rounded-full bg-accent border border-white/40 -mr-4" />
           <div v-else />
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Tool Dialog (Shift + Space style) -->
+    <div v-if="isSearchOpen" class="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div class="bg-panel border border-border w-full max-w-sm rounded-xl overflow-hidden shadow-2xl">
+        <div class="p-3 border-b border-border flex items-center gap-2">
+          <Search :size="14" class="text-text-secondary" />
+          <input
+            ref="searchInputRef"
+            type="text"
+            v-model="searchQuery"
+            placeholder="Select Tool / Effect Node…"
+            class="flex-1 bg-transparent text-text-primary text-xs outline-none"
+            @keydown.esc="isSearchOpen = false"
+            v-focus
+          />
+        </div>
+        <div class="max-h-60 overflow-y-auto p-1.5">
+          <button
+            v-for="tool in filteredTools"
+            :key="tool.type"
+            @click="addNode(tool.type)"
+            class="w-full text-left p-2 rounded-lg hover:bg-accent/10 hover:text-accent transition-all flex flex-col"
+          >
+            <span class="text-[11px] font-bold text-text-primary">{{ tool.label }}</span>
+            <span class="text-[9px] text-text-secondary mt-0.5">{{ tool.desc }}</span>
+          </button>
+        </div>
+        <div class="p-2 border-t border-border bg-panel/30 flex justify-end">
+          <button @click="isSearchOpen = false" class="px-2.5 py-1 rounded bg-border text-text-primary text-[10px]">Cancel</button>
         </div>
       </div>
     </div>
