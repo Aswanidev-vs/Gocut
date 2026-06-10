@@ -473,8 +473,10 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	lastV := "[basev]"
 	for i, vo := range videoOverlays {
 		nextV := fmt.Sprintf("[ov%d]", i)
-		xExpr := fmt.Sprintf("(W-w)/2+%.0f", vo.clip.Transform.X)
-		yExpr := fmt.Sprintf("(H-h)/2+%.0f", vo.clip.Transform.Y)
+		xAnim := ffmpeg.BuildAnimatedExpression(vo.clip.Keyframes, "x", vo.clip.Transform.X)
+		yAnim := ffmpeg.BuildAnimatedExpression(vo.clip.Keyframes, "y", vo.clip.Transform.Y)
+		xExpr := fmt.Sprintf("(W-w)/2+%s", xAnim)
+		yExpr := fmt.Sprintf("(H-h)/2+%s", yAnim)
 		
 		if vo.clip.Transition != nil && vo.clip.Transition.Type != "none" && vo.clip.Transition.Duration > 0 {
 			trans := vo.clip.Transition

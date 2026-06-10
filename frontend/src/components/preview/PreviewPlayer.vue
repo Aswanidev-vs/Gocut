@@ -373,6 +373,7 @@ const livePreviewStyle = computed(() => {
 
   // CSS transform from Transform
   const transforms = []
+  if (tf.x || tf.y) transforms.push(`translate(${tf.x}px, ${tf.y}px)`)
   if (tf.scaleX !== 1) transforms.push(`scaleX(${tf.scaleX})`)
   if (tf.scaleY !== 1) transforms.push(`scaleY(${tf.scaleY})`)
   if (tf.rotation) transforms.push(`rotate(${tf.rotation}deg)`)
