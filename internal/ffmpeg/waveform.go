@@ -23,6 +23,7 @@ func (e *Executor) ExtractWaveform(ctx context.Context, inputPath string, sample
 	}
 
 	cmd := exec.CommandContext(ctx, e.ffmpegPath, args...)
+	PrepareCmd(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("waveform extraction failed: %w", err)

@@ -24,6 +24,7 @@ func (e *Executor) Probe(ctx context.Context, path string) (*project.MediaInfo, 
 		path,
 	}
 	cmd := exec.CommandContext(ctx, e.ffprobePath, args...)
+	PrepareCmd(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w: %s", err, string(out))

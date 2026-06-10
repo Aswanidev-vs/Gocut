@@ -52,6 +52,7 @@ func (e *Executor) ExtractImageThumbnailPipe(ctx context.Context, inputPath stri
 		"-",
 	}
 	cmd := exec.CommandContext(ctx, e.ffmpegPath, args...)
+	PrepareCmd(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -117,6 +118,7 @@ func (e *Executor) ExtractThumbnailPipe(ctx context.Context, inputPath string, t
 		}
 	}
 	cmd := exec.CommandContext(ctx, e.ffmpegPath, args...)
+	PrepareCmd(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err

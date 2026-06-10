@@ -395,6 +395,7 @@ func (a *App) CheckFFmpegInstalled() (string, error) {
 		return "", fmt.Errorf("ffprobe not found")
 	}
 	cmd := exec.Command(a.ffmpegPath, "-version")
+	ffmpeg.PrepareCmd(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -626,6 +627,7 @@ func (a *App) startMediaServer() {
 					"-ar", "44100",
 					cachedPath,
 				)
+				ffmpeg.PrepareCmd(cmd)
 				if err := cmd.Run(); err != nil {
 					_ = os.Remove(cachedPath)
 					http.Error(w, "audio extraction failed: "+err.Error(), http.StatusInternalServerError)

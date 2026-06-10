@@ -177,6 +177,7 @@ func (q *Queue) runJob(job *Job) {
 	job.Cancel = cancel
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	ffmpeg.PrepareCmd(cmd)
 	job.Cmd = cmd
 
 	stderr, err := cmd.StderrPipe()

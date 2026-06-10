@@ -24,11 +24,13 @@ func (e *Executor) FFprobePath() string {
 
 func (e *Executor) Run(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, e.ffmpegPath, args...)
+	PrepareCmd(cmd)
 	return cmd.CombinedOutput()
 }
 
 func (e *Executor) RunBackground(ctx context.Context, args ...string) (*exec.Cmd, error) {
 	cmd := exec.CommandContext(ctx, e.ffmpegPath, args...)
+	PrepareCmd(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
