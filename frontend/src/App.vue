@@ -16,6 +16,7 @@ import NewProjectDialog from './components/common/NewProjectDialog.vue'
 import ExportDialog from './components/export/ExportDialog.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
 import DesignPanel from './components/panels/DesignPanel.vue'
+import FusionNodeEditor from './components/panels/FusionNodeEditor.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
@@ -230,9 +231,9 @@ function stopDrag() {
               </div>
             </div>
 
-            <!-- Resize handle & Timeline at bottom -->
+            <!-- Resize handle & Node Editor at bottom -->
             <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
-            <TimelinePanel :style="{ height: bottomHeight + 'px' }" />
+            <FusionNodeEditor :style="{ height: bottomHeight + 'px' }" />
           </template>
           <template v-else>
             <PreviewPlayer class="flex-1" />
