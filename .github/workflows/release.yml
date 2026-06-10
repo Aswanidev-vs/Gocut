@@ -11,16 +11,27 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract version from tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $version = $Matches[1]
+          } else {
+            $version = "0.0.0-dev"
+          }
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+          echo "Resolved version: $version"
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.25.0"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,41 +40,112 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Linux build dependencies (Wails requirement)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev
-
       - name: Install Wails CLI
+        shell: pwsh
         run: |
           go install github.com/wailsapp/wails/v2/cmd/wails@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          $gopath = go env GOPATH
+          echo "$gopath\bin" >> $env:GITHUB_PATH
 
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
 
       - name: Build application (Windows)
-        env:
-          GOOS: windows
-          GOARCH: amd64
-        run: wails build -clean -platform windows/amd64
+        shell: pwsh
+        run: |
+          wails build -clean -platform windows/amd64 -ldflags "-X 'Gocut/internal/app.Version=${{ env.APP_VERSION }}'"
 
       - name: Find build artifact
+        shell: pwsh
         run: |
-          FILE=$(find build/bin -type f -name "*.exe" | head -n 1)
-          if [ -z "$FILE" ]; then
-            echo "No Windows binary found" >&2
+          $file = Get-ChildItem -Path build/bin -Filter "*.exe" -Recurse | Select-Object -First 1
+          if (-not $file) {
+            Write-Error "No Windows binary found"
             exit 1
-          fi
-          echo "RELEASE_FILE=$FILE" >> $GITHUB_ENV
+          }
+          echo "RELEASE_FILE=$($file.FullName)" >> $env:GITHUB_ENV
+          echo "RELEASE_NAME=$($file.Name)" >> $env:GITHUB_ENV
+          echo "Found artifact: $($file.FullName)"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          # Add ISCC to PATH
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+
+      - name: Generate Inno Setup script and compile installer
+        shell: pwsh
+        run: |
+          $version = "${{ env.APP_VERSION }}"
+          $exePath = "${{ env.RELEASE_FILE }}"
+          $iconPath = "${{ github.workspace }}\build\windows\icon.ico"
+          $outputDir = "${{ github.workspace }}\build\bin"
+          $issPath = "${{ github.workspace }}\build\installer.iss"
+
+          # Generate the .iss script inline
+          $issContent = @"
+          [Setup]
+          AppId={{B5E92A3F-7C1D-4F8A-9D2E-6A3B8C4D5E7F}
+          AppName=Gocut
+          AppVersion=$version
+          AppVerName=Gocut $version
+          AppPublisher=Gocut
+          DefaultDirName={autopf}\Gocut
+          DefaultGroupName=Gocut
+          DisableProgramGroupPage=yes
+          OutputDir=$outputDir
+          OutputBaseFilename=Gocut-$version-Setup
+          SetupIconFile=$iconPath
+          UninstallDisplayIcon={app}\Gocut.exe
+          Compression=lzma2/ultra64
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=lowest
+          PrivilegesRequiredOverridesAllowed=dialog
+
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
+
+          [Tasks]
+          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+          [Files]
+          Source: "$exePath"; DestDir: "{app}"; DestName: "Gocut.exe"; Flags: ignoreversion
+
+          [Icons]
+          Name: "{group}\Gocut"; Filename: "{app}\Gocut.exe"
+          Name: "{autodesktop}\Gocut"; Filename: "{app}\Gocut.exe"; Tasks: desktopicon
+          Name: "{group}\Uninstall Gocut"; Filename: "{uninstallexe}"
+
+          [Run]
+          Filename: "{app}\Gocut.exe"; Description: "{cm:LaunchProgram,Gocut}"; Flags: nowait postinstall skipifsilent
+          "@
+
+          # Write the .iss file
+          $issContent | Out-File -FilePath $issPath -Encoding UTF8
+          echo "Generated ISS at: $issPath"
+
+          # Compile with ISCC
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" $issPath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup compilation failed"
+            exit 1
+          }
+
+          # Find the generated installer
+          $installer = Get-ChildItem -Path $outputDir -Filter "Gocut-*-Setup.exe" | Select-Object -First 1
+          echo "INSTALLER_FILE=$($installer.FullName)" >> $env:GITHUB_ENV
+          echo "Installer built: $($installer.FullName)"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.RELEASE_FILE }}
+          name: Gocut v${{ env.APP_VERSION }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ env.RELEASE_FILE }}
+            ${{ env.INSTALLER_FILE }}
           generate_release_notes: true

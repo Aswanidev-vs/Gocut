@@ -26,6 +26,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// Version is set at build time via -ldflags "-X 'Gocut/internal/app.Version=x.y.z'"
+var Version = "dev"
+
 // audioExtracting tracks in-progress audio extractions to avoid duplicate ffmpeg runs.
 var audioExtracting sync.Map
 
@@ -452,7 +455,7 @@ func (a *App) SaveFilePicker(defaultName string, filters []project.FileFilter) (
 }
 
 func (a *App) GetAppVersion() string {
-	return "0.1.0"
+	return Version
 }
 
 func (a *App) Minimise() {
