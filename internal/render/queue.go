@@ -441,13 +441,34 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 
 				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
 				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
+
+				// Also process embedded audio from video clips
+				aLabel := fmt.Sprintf("[va%d]", inputIdx)
+				var aFilters []string
+				aFilters = append(aFilters, "asetpts=PTS-STARTPTS")
+				if clip.Speed > 0 && clip.Speed != 1.0 {
+					aFilters = append(aFilters, fmt.Sprintf("atempo=%g", clip.Speed))
+				}
+				vol := clip.Volume
+				if vol > 0 && vol != 1.0 {
+					aFilters = append(aFilters, fmt.Sprintf("volume=%g", vol))
+				}
+				if track.Muted {
+					aFilters = append(aFilters, "volume=0")
+				}
+				delayMs := int(clip.StartTime * 1000)
+				aFilters = append(aFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
+				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(aFilters, ","), aLabel))
+				audioLabels = append(audioLabels, aLabel)
+
 			} else if track.Type == project.TrackAudio {
 				label := fmt.Sprintf("[a%d]", inputIdx)
 				var clipFilters []string
 
-				atempo := ""
+				// Reset PTS first, then apply speed
+				clipFilters = append(clipFilters, "asetpts=PTS-STARTPTS")
 				if clip.Speed > 0 && clip.Speed != 1.0 {
-					atempo = fmt.Sprintf("atempo=%g,", clip.Speed)
+					clipFilters = append(clipFilters, fmt.Sprintf("atempo=%g", clip.Speed))
 				}
 
 				fadeIn := clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0
@@ -460,10 +481,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				}
 
 				delayMs := int(clip.StartTime * 1000)
-				clipFilters = append(clipFilters, fmt.Sprintf("asetpts=PTS-STARTPTS,adelay=%d|%d", delayMs, delayMs))
+				clipFilters = append(clipFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
 
-				filterChain := atempo + strings.Join(clipFilters, ",")
-				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, filterChain, label))
+				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
 				audioLabels = append(audioLabels, label)
 			}
 			inputIdx++
