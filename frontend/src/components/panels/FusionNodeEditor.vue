@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
 import { 
@@ -10,13 +10,12 @@ import {
 const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
-// Store node instances
 const nodes = ref([
-  { id: 'media_in', label: 'MediaIn1', type: 'source', x: 60, y: 110, activeViewer: 1, color: 'bg-amber-500/10 border-amber-500/50 text-amber-400' },
-  { id: 'color_correct', label: 'ColorCorrect1', type: 'color', x: 220, y: 110, activeViewer: null, color: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' },
-  { id: 'transform', label: 'Transform1', type: 'transform', x: 380, y: 110, activeViewer: 2, color: 'bg-blue-500/10 border-blue-500/50 text-blue-400' },
-  { id: 'merge', label: 'Merge1', type: 'merge', x: 540, y: 110, activeViewer: null, color: 'bg-purple-500/10 border-purple-500/50 text-purple-400' },
-  { id: 'media_out', label: 'MediaOut1', type: 'output', x: 700, y: 110, activeViewer: null, color: 'bg-rose-500/10 border-rose-500/50 text-rose-400' }
+  { id: 'media_in', label: 'MediaIn1', type: 'source', x: 60, y: 110, activeViewer: 1, color: 'bg-amber-500/10 border-amber-500/40 text-amber-400' },
+  { id: 'color_correct', label: 'ColorCorrect1', type: 'color', x: 220, y: 110, activeViewer: null, color: 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' },
+  { id: 'transform', label: 'Transform1', type: 'transform', x: 380, y: 110, activeViewer: 2, color: 'bg-blue-500/10 border-blue-500/40 text-blue-400' },
+  { id: 'merge', label: 'Merge1', type: 'merge', x: 540, y: 110, activeViewer: null, color: 'bg-purple-500/10 border-purple-500/40 text-purple-400' },
+  { id: 'media_out', label: 'MediaOut1', type: 'output', x: 700, y: 110, activeViewer: null, color: 'bg-rose-500/10 border-rose-500/40 text-rose-400' }
 ])
 
 const connections = ref([
@@ -33,6 +32,8 @@ const dragOffset = { x: 0, y: 0 }
 // Shift+Space / Add Tool Search Dialog
 const isSearchOpen = ref(false)
 const searchQuery = ref('')
+const searchInputRef = ref(null)
+
 const allTools = [
   { type: 'transform', label: 'Transform (XF)', desc: 'Translate, rotate, scale' },
   { type: 'color', label: 'Color Corrector (CC)', desc: 'Lift, gamma, gain, saturation' },
@@ -50,8 +51,6 @@ const filteredTools = computed(() => {
 function selectNode(id, type) {
   selectedNodeId.value = id
   uiStore.setActiveInspectorTab(type === 'color' ? 'color' : 'edit')
-  
-  // Custom event to sync DesignPanel.vue
   window.dispatchEvent(new CustomEvent('fusion:select-node', { detail: { id, type } }))
 }
 
@@ -101,7 +100,6 @@ function getBezierPath(fromNodeId, toNodeId) {
   return `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
 }
 
-// Add Node from quick shelf or search
 function addNode(type) {
   const count = nodes.value.filter(n => n.type === type).length + 1
   const labelMap = {
@@ -115,26 +113,24 @@ function addNode(type) {
   }
 
   const colorMap = {
-    transform: 'bg-blue-500/10 border-blue-500/50 text-blue-400',
-    color: 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400',
-    text: 'bg-amber-500/10 border-amber-500/50 text-amber-400',
-    mask: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400',
-    ellipse: 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400',
-    blur: 'bg-pink-500/10 border-pink-500/50 text-pink-400',
-    merge: 'bg-purple-500/10 border-purple-500/50 text-purple-400'
+    transform: 'bg-blue-500/10 border-blue-500/40 text-blue-400',
+    color: 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400',
+    text: 'bg-amber-500/10 border-amber-500/40 text-amber-400',
+    mask: 'bg-indigo-500/10 border-indigo-500/40 text-indigo-400',
+    ellipse: 'bg-indigo-500/10 border-indigo-500/40 text-indigo-400',
+    blur: 'bg-pink-500/10 border-pink-500/40 text-pink-400',
+    merge: 'bg-purple-500/10 border-purple-500/40 text-purple-400'
   }
 
   const id = `${type}_${Date.now().toString().slice(-4)}`
   const label = labelMap[type] || `${type}${count}`
-  const color = colorMap[type] || 'bg-gray-500/10 border-gray-500/50 text-gray-400'
+  const color = colorMap[type] || 'bg-gray-500/10 border-gray-500/40 text-gray-400'
 
-  // Insert node relative to selected or output
   const insertX = 350 + (count * 20)
   const insertY = 160
 
   nodes.value.push({ id, label, type, x: insertX, y: insertY, activeViewer: null, color })
 
-  // Auto connect if a node is selected
   if (selectedNodeId.value && selectedNodeId.value !== 'media_out') {
     const oldTarget = connections.value.find(c => c.from === selectedNodeId.value)
     if (oldTarget) {
@@ -163,10 +159,7 @@ function deleteSelectedNode() {
   const prevConn = connections.value.find(c => c.to === selectedNodeId.value)
   const nextConn = connections.value.find(c => c.from === selectedNodeId.value)
 
-  // Remove node
   nodes.value = nodes.value.filter(n => n.id !== selectedNodeId.value)
-  
-  // Re-route connection
   connections.value = connections.value.filter(c => c.from !== selectedNodeId.value && c.to !== selectedNodeId.value)
   if (prevConn && nextConn) {
     connections.value.push({ from: prevConn.from, to: nextConn.to })
@@ -183,6 +176,35 @@ function setViewer(node, viewerNum) {
   node.activeViewer = node.activeViewer === viewerNum ? null : viewerNum
   uiStore.addToast(`Routing output of ${node.label} to Viewer ${viewerNum}`, 'info', 1200)
 }
+
+// Global Keyboard Shortcuts for Fusion Nodes (Shift+Space & Delete)
+function handleGlobalKeys(e) {
+  // Ignore if user typing in input fields
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return
+
+  // Shift + Space: Open Tool Finder
+  if (e.shiftKey && e.code === 'Space') {
+    e.preventDefault()
+    isSearchOpen.value = true
+    nextTick(() => {
+      if (searchInputRef.value) searchInputRef.value.focus()
+    })
+  }
+
+  // Delete / Backspace: Remove Node
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    e.preventDefault()
+    deleteSelectedNode()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeys)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeys)
+})
 </script>
 
 <template>
@@ -190,7 +212,6 @@ function setViewer(node, viewerNum) {
     <!-- Fusion Quick Tool Shelf -->
     <div class="h-10 px-3 border-b border-border bg-panel/60 flex items-center justify-between">
       <div class="flex items-center gap-1">
-        <!-- Quick tool buttons matching Resolve Fusion Page -->
         <button @click="addNode('text')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-amber-400 transition-colors" title="Text+ (Txt)"><Type :size="14" /></button>
         <button @click="addNode('color')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-emerald-400 transition-colors" title="Color Corrector (CC)"><Sliders :size="14" /></button>
         <button @click="addNode('transform')" class="p-1.5 rounded hover:bg-border/60 text-text-secondary hover:text-blue-400 transition-colors" title="Transform (Xf)"><Compass :size="14" /></button>
@@ -202,15 +223,15 @@ function setViewer(node, viewerNum) {
 
       <div class="flex items-center gap-2">
         <button
-          @click="isSearchOpen = true"
-          class="px-2.5 py-1 rounded bg-border/40 hover:bg-border text-text-primary text-[10px] flex items-center gap-1 font-bold"
+          @click="isSearchOpen = true; nextTick(() => searchInputRef?.focus())"
+          class="px-2.5 py-1 rounded bg-border/40 hover:bg-border text-text-primary text-[10px] flex items-center gap-1 font-bold shadow-sm"
         >
           <Search :size="10" /> Shift+Space Tool Finder
         </button>
         <button
           @click="deleteSelectedNode"
           class="p-1.5 rounded hover:bg-red-950 text-text-secondary hover:text-red-400 transition-colors"
-          title="Delete Node"
+          title="Delete Node (Delete)"
         >
           <Trash2 :size="12" />
         </button>
@@ -218,12 +239,27 @@ function setViewer(node, viewerNum) {
     </div>
 
     <!-- Canvas Node Workspace -->
-    <div class="flex-1 relative overflow-auto bg-[radial-gradient(#1e1e24_1px,transparent_1px)] [background-size:16px_16px]">
+    <div class="flex-1 relative overflow-auto bg-[radial-gradient(#202028_1.2px,transparent_1.2px)] [background-size:20px_20px]">
       <!-- SVG Connectors Layer -->
       <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
         <g v-for="(conn, idx) in connections" :key="idx">
-          <path :d="getBezierPath(conn.from, conn.to)" fill="none" stroke="rgba(0, 212, 255, 0.15)" stroke-width="5" />
-          <path :d="getBezierPath(conn.from, conn.to)" fill="none" :stroke="selectedNodeId === conn.from || selectedNodeId === conn.to ? '#00D4FF' : '#52525b'" stroke-width="2" />
+          <!-- Outer glowing flow spline -->
+          <path
+            :d="getBezierPath(conn.from, conn.to)"
+            fill="none"
+            stroke="rgba(0, 212, 255, 0.12)"
+            stroke-width="6"
+            class="glow-path"
+          />
+          <!-- Core flowing spline (marching ants effect) -->
+          <path
+            :d="getBezierPath(conn.from, conn.to)"
+            fill="none"
+            :stroke="selectedNodeId === conn.from || selectedNodeId === conn.to ? '#00D4FF' : '#52525b'"
+            stroke-width="2.5"
+            stroke-dasharray="6, 6"
+            class="flow-line transition-all duration-300"
+          />
         </g>
       </svg>
 
@@ -232,27 +268,27 @@ function setViewer(node, viewerNum) {
         v-for="node in nodes"
         :key="node.id"
         :style="{ left: node.x + 'px', top: node.y + 'px' }"
-        class="absolute w-[120px] rounded border px-3 py-2 flex flex-col justify-between cursor-grab active:cursor-grabbing z-10 shadow-lg shadow-black/80"
+        class="absolute w-[120px] rounded-lg border px-3 py-2 flex flex-col justify-between cursor-grab active:cursor-grabbing z-10 transition-all duration-200"
         :class="[
           node.color,
-          selectedNodeId === node.id ? 'ring-2 ring-accent border-transparent' : ''
+          selectedNodeId === node.id ? 'ring-2 ring-accent ring-offset-2 ring-offset-black shadow-lg shadow-accent/20 border-transparent bg-accent/20 scale-[1.03]' : 'shadow-md shadow-black/80 hover:scale-[1.01]'
         ]"
         @mousedown="startDrag($event, node.id)"
         @click.stop="selectNode(node.id, node.type)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-[10px] font-bold truncate">{{ node.label }}</span>
+          <span class="text-[10px] font-bold truncate tracking-wide text-text-primary">{{ node.label }}</span>
           <!-- Viewer routing dots (Resolve style 1 & 2 circles) -->
           <div class="flex items-center gap-0.5">
             <button
               @click.stop="setViewer(node, 1)"
-              class="w-2.5 h-2.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
-              :class="node.activeViewer === 1 ? 'bg-accent border-accent text-bg font-bold' : 'border-border text-text-secondary hover:text-text-primary'"
+              class="w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
+              :class="node.activeViewer === 1 ? 'bg-accent border-accent text-bg font-bold shadow-sm shadow-accent/50' : 'border-zinc-700 text-zinc-500 hover:text-text-primary'"
             >1</button>
             <button
               @click.stop="setViewer(node, 2)"
-              class="w-2.5 h-2.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
-              :class="node.activeViewer === 2 ? 'bg-amber-500 border-amber-500 text-bg font-bold' : 'border-border text-text-secondary hover:text-text-primary'"
+              class="w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[7px] font-mono leading-none transition-all"
+              :class="node.activeViewer === 2 ? 'bg-amber-500 border-amber-500 text-bg font-bold shadow-sm shadow-amber-500/50' : 'border-zinc-700 text-zinc-500 hover:text-text-primary'"
             >2</button>
           </div>
         </div>
@@ -260,19 +296,19 @@ function setViewer(node, viewerNum) {
         <!-- Connector Terminals -->
         <div class="flex justify-between items-center mt-2.5">
           <!-- Input terminal -->
-          <div v-if="node.type !== 'source'" class="w-1.5 h-1.5 rounded-full bg-border border border-white/40 -ml-4" />
+          <div v-if="node.type !== 'source'" class="w-2 h-2 rounded bg-zinc-800 border border-zinc-600 -ml-4" />
           <div v-else />
           
           <!-- Output terminal -->
-          <div v-if="node.type !== 'output'" class="w-1.5 h-1.5 rounded-full bg-accent border border-white/40 -mr-4" />
+          <div v-if="node.type !== 'output'" class="w-2 h-2 rounded bg-accent border border-white/40 -mr-4" />
           <div v-else />
         </div>
       </div>
     </div>
 
     <!-- Search Tool Dialog (Shift + Space style) -->
-    <div v-if="isSearchOpen" class="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div class="bg-panel border border-border w-full max-w-sm rounded-xl overflow-hidden shadow-2xl">
+    <div v-if="isSearchOpen" class="absolute inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div class="bg-panel border border-border w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-150">
         <div class="p-3 border-b border-border flex items-center gap-2">
           <Search :size="14" class="text-text-secondary" />
           <input
@@ -282,15 +318,14 @@ function setViewer(node, viewerNum) {
             placeholder="Select Tool / Effect Node…"
             class="flex-1 bg-transparent text-text-primary text-xs outline-none"
             @keydown.esc="isSearchOpen = false"
-            v-focus
           />
         </div>
-        <div class="max-h-60 overflow-y-auto p-1.5">
+        <div class="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
           <button
             v-for="tool in filteredTools"
             :key="tool.type"
             @click="addNode(tool.type)"
-            class="w-full text-left p-2 rounded-lg hover:bg-accent/10 hover:text-accent transition-all flex flex-col"
+            class="w-full text-left p-2 rounded-lg hover:bg-accent/15 hover:text-accent transition-all flex flex-col"
           >
             <span class="text-[11px] font-bold text-text-primary">{{ tool.label }}</span>
             <span class="text-[9px] text-text-secondary mt-0.5">{{ tool.desc }}</span>
@@ -303,3 +338,18 @@ function setViewer(node, viewerNum) {
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes flow {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.flow-line {
+  animation: flow 1.2s linear infinite;
+}
+</style>
