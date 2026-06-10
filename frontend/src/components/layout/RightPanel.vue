@@ -1,9 +1,9 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { ChevronRight, Trash2, Copy, RotateCcw, Diamond } from 'lucide-vue-next'
+import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus } from 'lucide-vue-next'
 import ColorInspector from '../inspector/ColorInspector.vue'
 
 const timelineStore = useTimelineStore()
@@ -195,15 +195,304 @@ function applyPreset(p) {
   uiStore.addToast('Applied ' + p.name, 'success', 1200)
 }
 function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
+
+// --- Fusion Workspace Custom Shape / Animation State ---
+const designSubTab = ref('shapes') // shapes, animations
+const shapeType = ref('star') // star, polygon, bubble
+const starPoints = ref(5)
+const starInnerRadius = ref(20)
+const starOuterRadius = ref(45)
+const polySides = ref(5)
+const shapeColor = ref('#ffffff')
+const shapeStrokeColor = ref('#000000')
+const shapeStrokeWidth = ref(3)
+const bubbleTailPosition = ref('bottom-left')
+
+const animType = ref('drift')
+const animDuration = ref(3.0)
+const animStrength = ref(1.0)
+const animEasing = ref('linear')
+
+const customShapeSvg = computed(() => {
+  const fill = shapeColor.value
+  const stroke = shapeStrokeColor.value
+  const sw = shapeStrokeWidth.value
+  
+  if (shapeType.value === 'star') {
+    const path = generateStarPath(starPoints.value, starInnerRadius.value, starOuterRadius.value)
+    return `<svg viewBox="0 0 100 100" width="100" height="100"><path d="${path}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`
+  } else if (shapeType.value === 'polygon') {
+    const path = generatePolygonPath(polySides.value, 45)
+    return `<svg viewBox="0 0 100 100" width="100" height="100"><path d="${path}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`
+  } else {
+    const tailD = bubbleTailPosition.value === 'bottom-left' ? 'L 25 90 L 45 82' : 'L 75 90 L 55 82'
+    return `<svg viewBox="0 0 100 100" width="100" height="100"><path d="M 50 10 C 25 10, 10 25, 10 45 C 10 57, 18 68, 30 74 ${tailD} C 47 82, 48 82, 50 82 C 75 82, 90 67, 90 45 C 90 25, 75 10, 50 10 Z" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/></svg>`
+  }
+})
+
+function generateStarPath(points, innerRadius, outerRadius) {
+  let path = ''
+  const cx = 50, cy = 50
+  const angle = Math.PI / points
+  for (let i = 0; i < 2 * points; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius
+    const currAngle = i * angle - Math.PI / 2
+    const x = cx + r * Math.cos(currAngle)
+    const y = cy + r * Math.sin(currAngle)
+    path += (i === 0 ? 'M' : 'L') + ` ${x.toFixed(2)} ${y.toFixed(2)}`
+  }
+  path += ' Z'
+  return path
+}
+
+function generatePolygonPath(sides, radius) {
+  let path = ''
+  const cx = 50, cy = 50
+  const angle = (2 * Math.PI) / sides
+  for (let i = 0; i < sides; i++) {
+    const currAngle = i * angle - Math.PI / 2
+    const x = cx + radius * Math.cos(currAngle)
+    const y = cy + radius * Math.sin(currAngle)
+    path += (i === 0 ? 'M' : 'L') + ` ${x.toFixed(2)} ${y.toFixed(2)}`
+  }
+  path += ' Z'
+  return path
+}
+
+function addCustomShape() {
+  timelineStore.addClip({
+    trackType: 'sticker',
+    startTime: timelineStore.currentTime,
+    duration: 3.0,
+    stickerProps: {
+      svg: customShapeSvg.value,
+      width: 1.0,
+      rotation: 0
+    }
+  })
+  uiStore.addToast('Added custom designed vector shape to timeline', 'success', 1500)
+}
+
+function applyCustomAnimation() {
+  if (!selectedClip.value) {
+    uiStore.addToast('Please select a clip on the timeline first', 'warning', 1800)
+    return
+  }
+  
+  const clip = selectedClip.value
+  const duration = Math.min(animDuration.value, clip.duration)
+  const strength = animStrength.value
+  const easing = animEasing.value
+  const kfs = [...(clip.keyframes || [])]
+  
+  let filtered = []
+  if (animType.value === 'drift') {
+    filtered = kfs.filter(k => !['x', 'y'].includes(k.property))
+    filtered.push(
+      { id: crypto.randomUUID(), property: 'x', value: 0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'y', value: 0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'x', value: 50 * strength, time: duration / 2, easing },
+      { id: crypto.randomUUID(), property: 'y', value: -30 * strength, time: duration / 2, easing },
+      { id: crypto.randomUUID(), property: 'x', value: 0, time: duration, easing },
+      { id: crypto.randomUUID(), property: 'y', value: 0, time: duration, easing }
+    )
+  } else if (animType.value === 'pulse') {
+    filtered = kfs.filter(k => !['scaleX', 'scaleY'].includes(k.property))
+    filtered.push(
+      { id: crypto.randomUUID(), property: 'scaleX', value: 1.0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 1.0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'scaleX', value: 1.0 + 0.35 * strength, time: duration / 2, easing },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 1.0 + 0.35 * strength, time: duration / 2, easing },
+      { id: crypto.randomUUID(), property: 'scaleX', value: 1.0, time: duration, easing },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 1.0, time: duration, easing }
+    )
+  } else if (animType.value === 'spin') {
+    filtered = kfs.filter(k => !['rotation'].includes(k.property))
+    filtered.push(
+      { id: crypto.randomUUID(), property: 'rotation', value: 0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'rotation', value: 360 * strength, time: duration, easing }
+    )
+  } else if (animType.value === 'bounce') {
+    filtered = kfs.filter(k => !['scaleX', 'scaleY'].includes(k.property))
+    filtered.push(
+      { id: crypto.randomUUID(), property: 'scaleX', value: 0.0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 0.0, time: 0, easing },
+      { id: crypto.randomUUID(), property: 'scaleX', value: 1.25 * strength, time: duration * 0.4, easing: 'ease-out' },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 1.25 * strength, time: duration * 0.4, easing: 'ease-out' },
+      { id: crypto.randomUUID(), property: 'scaleX', value: 1.0, time: duration, easing: 'ease-in-out' },
+      { id: crypto.randomUUID(), property: 'scaleY', value: 1.0, time: duration, easing: 'ease-in-out' }
+    )
+  }
+  
+  timelineStore.updateClip(clip.id, { keyframes: filtered })
+  uiStore.addToast(`Applied custom ${animType.value} animation`, 'success', 1500)
+}
 </script>
 
 <template>
   <div class="bg-panel border-l border-border flex flex-col overflow-hidden flex-shrink-0">
-    <div v-if="!hasSelection" class="flex-1 flex flex-col items-center justify-center text-text-secondary text-xs gap-2 px-4 text-center">
-      <ChevronRight :size="20" class="opacity-40" />
-      <div>Select a clip on the timeline to inspect it.</div>
-    </div>
-    <div v-else class="flex flex-col h-full">
+    <!-- FUSION CUSTOM WORKSPACE (Active in Design Mode) -->
+    <template v-if="uiStore.activeWorkspace === 'design'">
+      <div class="flex flex-col h-full">
+        <!-- Header -->
+        <div class="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div>
+            <div class="text-[10px] text-text-secondary uppercase tracking-wider font-bold">Creative Studio</div>
+            <div class="text-xs text-text-primary font-bold">Custom Designer</div>
+          </div>
+          <span class="p-1 rounded bg-accent/15 text-accent"><Wand2 :size="12" /></span>
+        </div>
+
+        <!-- Tab Selector -->
+        <div class="grid grid-cols-2 border-b border-border p-1">
+          <button
+            @click="designSubTab = 'shapes'"
+            class="py-1 rounded text-[10px] font-bold transition-all text-center"
+            :class="designSubTab === 'shapes' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          >
+            Custom Shape
+          </button>
+          <button
+            @click="designSubTab = 'animations'"
+            class="py-1 rounded text-[10px] font-bold transition-all text-center"
+            :class="designSubTab === 'animations' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          >
+            Custom Animation
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-3 space-y-4">
+          <!-- 1. CUSTOM SHAPE BUILDER -->
+          <div v-if="designSubTab === 'shapes'" class="space-y-4">
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1">Select Shape Template</label>
+              <select v-model="shapeType" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-[11px] text-text-primary outline-none">
+                <option value="star">Star / Sparkle</option>
+                <option value="polygon">Polygon (Sided)</option>
+                <option value="bubble">Custom Speech Bubble</option>
+              </select>
+            </div>
+
+            <!-- Parameters -->
+            <div class="space-y-3 bg-bg/40 border border-border/40 p-2.5 rounded-lg">
+              <div v-if="shapeType === 'star'">
+                <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+                  <span>Points ({{ starPoints }})</span>
+                </div>
+                <input type="range" min="3" max="15" step="1" v-model.number="starPoints" class="w-full accent-accent" />
+                
+                <div class="flex justify-between text-[10px] text-text-secondary mt-2 mb-1">
+                  <span>Pointiness ({{ starInnerRadius }})</span>
+                </div>
+                <input type="range" min="5" max="40" step="1" v-model.number="starInnerRadius" class="w-full accent-accent" />
+              </div>
+
+              <div v-if="shapeType === 'polygon'">
+                <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+                  <span>Sides ({{ polySides }})</span>
+                </div>
+                <input type="range" min="3" max="12" step="1" v-model.number="polySides" class="w-full accent-accent" />
+              </div>
+
+              <div v-if="shapeType === 'bubble'">
+                <label class="text-[10px] text-text-secondary block mb-1">Tail Position</label>
+                <select v-model="bubbleTailPosition" class="w-full bg-bg border border-border rounded px-2 py-1 text-[10px]">
+                  <option value="bottom-left">Bottom Left</option>
+                  <option value="bottom-right">Bottom Right</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Coloring & Outline -->
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[10px] text-text-secondary block mb-1">Fill Color</label>
+                  <input type="color" v-model="shapeColor" class="w-full h-8 rounded border border-border bg-transparent cursor-pointer" />
+                </div>
+                <div>
+                  <label class="text-[10px] text-text-secondary block mb-1">Stroke Color</label>
+                  <input type="color" v-model="shapeStrokeColor" class="w-full h-8 rounded border border-border bg-transparent cursor-pointer" />
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+                  <span>Stroke Width ({{ shapeStrokeWidth }}px)</span>
+                </div>
+                <input type="range" min="0" max="12" step="1" v-model.number="shapeStrokeWidth" class="w-full accent-accent" />
+              </div>
+            </div>
+
+            <!-- Vector Preview -->
+            <div class="border border-border/60 rounded-xl bg-black/60 flex flex-col items-center justify-center p-3 relative group">
+              <span class="absolute top-1 right-2 text-[8px] text-text-secondary uppercase">Vector Preview</span>
+              <div class="w-20 h-20 flex items-center justify-center mt-2" v-html="customShapeSvg"></div>
+            </div>
+
+            <button
+              @click="addCustomShape"
+              class="w-full py-2 rounded-xl bg-accent text-bg text-xs font-bold hover:bg-accent-hover transition-all flex items-center justify-center gap-1.5 shadow-md shadow-accent/20"
+            >
+              <Plus :size="12" /> Add Custom Shape
+            </button>
+          </div>
+
+          <!-- 2. CUSTOM ANIMATION BUILDER -->
+          <div v-else class="space-y-4">
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1">Animation Style</label>
+              <select v-model="animType" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-[11px] text-text-primary outline-none">
+                <option value="drift">Orbital Drift (Drifting)</option>
+                <option value="pulse">Heartbeat Pulse (Scaling)</option>
+                <option value="spin">Full Spin (Rotation)</option>
+                <option value="bounce">Elastic Bounce (Pop)</option>
+              </select>
+            </div>
+
+            <div class="space-y-3 bg-bg/40 border border-border/40 p-2.5 rounded-lg">
+              <div>
+                <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+                  <span>Duration ({{ animDuration.toFixed(1) }}s)</span>
+                </div>
+                <input type="range" min="0.5" max="8.0" step="0.1" v-model.number="animDuration" class="w-full accent-accent" />
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[10px] text-text-secondary mb-1">
+                  <span>Strength / Speed ({{ animStrength.toFixed(1) }}x)</span>
+                </div>
+                <input type="range" min="0.2" max="2.5" step="0.1" v-model.number="animStrength" class="w-full accent-accent" />
+              </div>
+
+              <div>
+                <label class="text-[10px] text-text-secondary block mb-1">Easing Transition</label>
+                <select v-model="animEasing" class="w-full bg-bg border border-border rounded px-2 py-1 text-[10px]">
+                  <option value="linear">Linear (Constant)</option>
+                  <option value="ease-out">Ease Out (Smooth Stop)</option>
+                  <option value="ease-in-out">Ease In Out (Natural)</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              @click="applyCustomAnimation"
+              class="w-full py-2 rounded-xl border border-dashed border-accent/40 bg-accent/5 hover:bg-accent/15 text-accent text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+            >
+              <Wand2 :size="12" /> Apply Animation to Selection
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- DEFAULT WORKSPACE INSPECTOR -->
+    <template v-else>
+      <div v-if="!hasSelection" class="flex-1 flex flex-col items-center justify-center text-text-secondary text-xs gap-2 px-4 text-center">
+        <ChevronRight :size="20" class="opacity-40" />
+        <div>Select a clip on the timeline to inspect it.</div>
+      </div>
+      <div v-else class="flex flex-col h-full">
       <!-- Header -->
       <div class="px-3 py-2 border-b border-border flex items-center gap-2">
         <div class="flex-1 min-w-0">
@@ -512,5 +801,6 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
       </div>
     </div>
+    </template>
   </div>
 </template>

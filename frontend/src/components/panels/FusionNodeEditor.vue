@@ -177,6 +177,38 @@ function setViewer(node, viewerNum) {
   uiStore.addToast(`Routing output of ${node.label} to Viewer ${viewerNum}`, 'info', 1200)
 }
 
+const pendingConnectionFrom = ref(null)
+
+function startConnectionFrom(nodeId) {
+  pendingConnectionFrom.value = nodeId
+  uiStore.addToast(`Selected output from ${nodeId}. Now click another node's input terminal to connect.`, 'info', 2000)
+}
+
+function connectToInput(toNodeId) {
+  if (!pendingConnectionFrom.value) {
+    uiStore.addToast('Select an output terminal first to connect', 'warning', 1800)
+    return
+  }
+  
+  if (pendingConnectionFrom.value === toNodeId) {
+    uiStore.addToast('Cannot connect a node to itself', 'warning', 1500)
+    pendingConnectionFrom.value = null
+    return
+  }
+
+  // Remove any existing connection going into toNodeId (only 1 input per standard filter node)
+  connections.value = connections.value.filter(c => c.to !== toNodeId)
+
+  // Add new connection
+  connections.value.push({
+    from: pendingConnectionFrom.value,
+    to: toNodeId
+  })
+
+  uiStore.addToast(`Connected ${pendingConnectionFrom.value} -> ${toNodeId}`, 'success', 1200)
+  pendingConnectionFrom.value = null
+}
+
 // Global Keyboard Shortcuts for Fusion Nodes (Shift+Space & Delete)
 function handleGlobalKeys(e) {
   // Ignore if user typing in input fields
@@ -293,14 +325,30 @@ onUnmounted(() => {
           </div>
         </div>
         
-        <!-- Connector Terminals -->
+        <!-- Connector Terminals (Click-to-Connect) -->
         <div class="flex justify-between items-center mt-2.5">
           <!-- Input terminal -->
-          <div v-if="node.type !== 'source'" class="w-2 h-2 rounded bg-zinc-800 border border-zinc-600 -ml-4" />
+          <button 
+            v-if="node.type !== 'source'" 
+            @click.stop="connectToInput(node.id)" 
+            class="w-3 h-3 rounded bg-zinc-800 border border-zinc-500 hover:border-accent hover:bg-accent/40 -ml-[18px] z-20 flex items-center justify-center transition-all"
+            :class="pendingConnectionFrom ? 'ring-2 ring-accent animate-pulse' : ''"
+            title="Click to connect source here"
+          >
+            <div class="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+          </button>
           <div v-else />
           
           <!-- Output terminal -->
-          <div v-if="node.type !== 'output'" class="w-2 h-2 rounded bg-accent border border-white/40 -mr-4" />
+          <button 
+            v-if="node.type !== 'output'" 
+            @click.stop="startConnectionFrom(node.id)" 
+            class="w-3 h-3 rounded bg-accent hover:bg-accent-hover border border-white/40 -mr-[18px] z-20 flex items-center justify-center transition-all"
+            :class="pendingConnectionFrom === node.id ? 'ring-2 ring-white scale-110' : ''"
+            title="Click output to route"
+          >
+            <div class="w-1.5 h-1.5 rounded-full bg-white" />
+          </button>
           <div v-else />
         </div>
       </div>
