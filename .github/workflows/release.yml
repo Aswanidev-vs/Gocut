@@ -145,7 +145,5 @@ jobs:
         with:
           name: Gocut v${{ env.APP_VERSION }}
           tag_name: ${{ github.ref_name }}
-          files: |
-            ${{ env.RELEASE_FILE }}
-            ${{ env.INSTALLER_FILE }}
+          files: ${{ env.INSTALLER_FILE }}
           generate_release_notes: true
