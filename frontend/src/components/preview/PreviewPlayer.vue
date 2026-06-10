@@ -253,8 +253,10 @@ function syncVideoElement() {
     v.preservesPitch = true
   }
 
-  // Tighter sync threshold to prevent drift
-  if (Math.abs(v.currentTime - clipTime) > 0.15) {
+  // Avoid aggressive seeking during active playback (seeking clears buffer and stutters)
+  // We let the browser's native decoder play smoothly at playbackRate.
+  const threshold = playerStore.isPlaying ? 0.5 : 0.05
+  if (Math.abs(v.currentTime - clipTime) > threshold) {
     v.currentTime = clipTime
   }
 }
