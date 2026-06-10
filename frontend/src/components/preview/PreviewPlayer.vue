@@ -165,15 +165,17 @@ function syncAudioElements() {
     }
 
     const speed = clip.speed || 1.0
-    const clipTime = (clip.trimStart || 0) + (t - clip.startTime)
+    // Scale audio playbackRate by both its own speed and the timeline's active playback speed
+    const timelineSpeed = getActivePlaybackSpeed()
+    const targetPlaybackRate = speed * timelineSpeed
+    if (entry.audio.playbackRate !== targetPlaybackRate) {
+      entry.audio.playbackRate = targetPlaybackRate
+    }
+
+    const clipTime = (clip.trimStart || 0) + (t - clip.startTime) * speed
     const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
     const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
     entry.audio.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
-
-    // Set playbackRate; audio element handles speed natively without stutter
-    if (entry.audio.playbackRate !== speed) {
-      entry.audio.playbackRate = speed
-    }
 
     if (playerStore.isPlaying) {
       // Tighter sync threshold: at higher speeds drift accumulates faster
@@ -216,9 +218,10 @@ watch(() => playerStore.isPlaying, (playing) => {
     if (v && videoSrc.value) {
       const clip = currentVisualClip.value
       if (clip) {
-        const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
+        const speed = clip.speed || 1.0
+        const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
         v.currentTime = clipTime
-        v.playbackRate = clip.speed || 1.0
+        v.playbackRate = speed
         v.preservesPitch = true
         const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
         const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
@@ -242,10 +245,10 @@ function syncVideoElement() {
   if (!v) return
   const clip = currentVisualClip.value
   if (!clip) return
-  const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
+  const speed = clip.speed || 1.0
+  const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
   
   // Set speed
-  const speed = clip.speed || 1.0
   if (v.playbackRate !== speed) {
     v.playbackRate = speed
   }
@@ -281,9 +284,10 @@ watch(videoSrc, (newSrc, oldSrc) => {
       if (v) {
         const clip = currentVisualClip.value
         if (clip) {
-          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime)
+          const speed = clip.speed || 1.0
+          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
           v.currentTime = clipTime
-          v.playbackRate = clip.speed || 1.0
+          v.playbackRate = speed
         }
         v.play().catch(() => {})
       }
