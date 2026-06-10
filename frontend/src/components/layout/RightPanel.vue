@@ -126,6 +126,42 @@ function resetColor() {
     chromaKeyBlend: 0.0,
   })
 }
+function resetVolume() {
+  if (!selectedClip.value) return
+  updateClipField('volume', 1.0)
+}
+function resetSpeed() {
+  if (!selectedClip.value) return
+  updateClipField('speed', 1.0)
+}
+function resetOpacity() {
+  if (!selectedClip.value) return
+  updateClipField('opacity', 1.0)
+}
+function resetColorWheels() {
+  if (!selectedClip.value) return
+  timelineStore.updateClipColor(selectedClip.value.id, {
+    liftR: 0, liftG: 0, liftB: 0,
+    gammaR: 0, gammaG: 0, gammaB: 0,
+    gainR: 0, gainG: 0, gainB: 0,
+  })
+}
+function resetFade() {
+  if (!selectedClip.value) return
+  updateClipField('transition', { type: 'none', duration: 0.5 })
+}
+function resetTextStroke() {
+  if (!selectedClip.value) return
+  setTextProp('strokeWidth', 0)
+  setTextProp('strokeColor', '#000000')
+}
+function resetTextShadow() {
+  if (!selectedClip.value) return
+  setTextProp('shadowBlur', 0)
+  setTextProp('shadowOffsetX', 0)
+  setTextProp('shadowOffsetY', 0)
+  setTextProp('shadowColor', '#000000')
+}
 function deleteSelected() { timelineStore.removeSelected() }
 function duplicateSelected() {
   if (!selectedClip.value) return
@@ -234,7 +270,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
           <!-- Quick Color (essentials only) -->
           <div v-if="isVideo || isText">
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Quick Color</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Quick Color</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetColor" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div v-for="k in [['brightness',-100,100],['contrast',-100,100],['saturation',-100,100]]" :key="k[0]">
               <div class="flex justify-between text-[10px] text-text-secondary capitalize"><span>{{ k[0] }}</span><span class="font-mono">{{ selectedClip.color[k[0]] }}</span></div>
               <input type="range" :min="k[1]" :max="k[2]" :value="selectedClip.color[k[0]]" @input="(e) => setColor(k[0], parseInt(e.target.value))" class="w-full accent-accent" />
@@ -245,7 +284,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
           <!-- Quick Audio -->
           <div v-if="isVideo || isAudio">
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Volume</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Volume</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="flex items-center gap-2">
               <input type="range" min="0" max="2" step="0.01" :value="selectedClip.volume" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
               <input type="number" :value="Math.round(selectedClip.volume * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
@@ -256,7 +298,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
           <!-- Speed & Opacity -->
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Speed</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Speed</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetSpeed" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="flex items-center gap-2">
               <input type="range" min="0.1" max="4" step="0.1" :value="selectedClip.speed" @input="(e) => updateClipField('speed', parseFloat(e.target.value))" class="flex-1 accent-accent" />
               <input type="number" :value="selectedClip.speed" :step="0.1" min="0.1" @input="(e) => updateClipField('speed', parseFloat(e.target.value) || 1)" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
@@ -265,7 +310,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
           <div>
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Opacity</h4>
-              <button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('opacity')}" @click="toggleKeyframe('opacity', getPropValue('opacity', 1.0))"><Diamond :size="10" :fill="hasKeyframe('opacity') ? 'currentColor' : 'none'" /></button>
+              <div class="flex items-center gap-1.5">
+                <button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('opacity')}" @click="toggleKeyframe('opacity', getPropValue('opacity', 1.0))"><Diamond :size="10" :fill="hasKeyframe('opacity') ? 'currentColor' : 'none'" /></button>
+                <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetOpacity" title="Reset"><RotateCcw :size="10" /></button>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <input type="range" min="0" max="1" step="0.01" :value="getPropValue('opacity', 1.0)" @input="(e) => updateClipField('opacity', parseFloat(e.target.value))" class="flex-1 accent-accent" />
@@ -298,7 +346,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
           <hr class="border-border" />
 
           <!-- Color Wheels (Lift / Gamma / Gain) -->
-          <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mt-2 mb-2">Color Wheels</h4>
+          <div class="flex items-center justify-between mt-2 mb-2">
+            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Color Wheels</h4>
+            <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetColorWheels" title="Reset"><RotateCcw :size="10" /></button>
+          </div>
           <div v-for="wheel in ['lift', 'gamma', 'gain']" :key="wheel" class="mb-3">
             <div class="text-[10px] text-text-secondary capitalize mb-1">{{ wheel }}</div>
             <div class="grid grid-cols-3 gap-1.5">
@@ -323,7 +374,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
         <!-- ======== AUDIO TAB (Advanced) ======== -->
         <template v-if="activeTab === 'audio'">
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Volume</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Volume</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="flex items-center gap-2">
               <input type="range" min="0" max="2" step="0.01" :value="selectedClip.volume" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
               <input type="number" :value="Math.round(selectedClip.volume * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-16 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
@@ -334,7 +388,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
           <!-- Speed (also relevant for audio) -->
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Playback Speed</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Playback Speed</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetSpeed" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="flex items-center gap-2">
               <input type="range" min="0.1" max="4" step="0.1" :value="selectedClip.speed" @input="(e) => updateClipField('speed', parseFloat(e.target.value))" class="flex-1 accent-accent" />
               <input type="number" :value="selectedClip.speed" :step="0.1" min="0.1" @input="(e) => updateClipField('speed', parseFloat(e.target.value) || 1)" class="w-16 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
@@ -361,7 +418,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
 
           <!-- Fade controls -->
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Fade</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Fade</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetFade" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[10px] text-text-secondary">Fade In (s)</label>
@@ -413,7 +473,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
             </div>
           </div>
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Stroke</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Stroke</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetTextStroke" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="text-[10px] text-text-secondary">Width</label>
@@ -426,7 +489,10 @@ function fileName(p) { if (!p) return ''; return p.split(/[\\/]/).pop() || p }
             </div>
           </div>
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Shadow</h4>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Shadow</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetTextShadow" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
             <div class="grid grid-cols-3 gap-2">
               <div>
                 <label class="text-[10px] text-text-secondary">Blur</label>
