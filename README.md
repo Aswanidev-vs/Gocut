@@ -7,6 +7,8 @@
 A native cross-platform app built with Go + Wails and a Vue 3 frontend.
 Powered by FFmpeg, with zero cloud, zero telemetry, and zero account required.
 
+> ⚠️ **IMPORTANT NOTICE:** The **Design** tab/section is currently under active development. There is no point to visit it yet as features are being actively integrated.
+
 > Latest implementation note: the repo now includes a tag-driven GitHub release workflow for shipping the latest Windows build automatically.
 
 [![Status](https://img.shields.io/badge/status-v0.1.0%20MVP-00D4FF?style=flat-square)](#-roadmap)
@@ -29,6 +31,12 @@ else's server.
 
 -  **Multi-track timeline** — video, audio, text, and stickers on dedicated tracks
 -  **Live preview** — frame-accurate scrubbing via FFmpeg with a low-latency mode during playback
+-  **DaVinci Resolve Fusion-style Node Compositor (Design Section)** — build graphics and animations via an interactive node graph:
+   - Drag wires or click-to-connect nodes with color-coded compatibility cues and port tooltips
+   - Auto-connect nodes inline upon creation when a parent node is selected
+   - Insert nodes in-between connections by hovering and dropping onto the line
+   - Detach nodes and heal/reconnect the remaining path automatically by holding **Left Shift** + dragging
+   - Animate nodes (Text, Rectangles, Ellipses, Stars, Polygons, Gradients) with custom easing curves and keyframes
 -  **Color grading** — brightness, contrast, saturation, hue, sharpness, vignette, grain, and blur
 -  **Text overlays** — full styling (font, size, weight, color, stroke, shadow, background)
 -  **Stickers & overlays** — image-based overlays with transform, rotation, and opacity
@@ -37,7 +45,7 @@ else's server.
 -  **Audio engine** — per-clip volume, muting, and (in-progress) waveform visualization
 -  **Background export** — render MP4 (H.264 + AAC) in a Go goroutine, with progress and cancel
 -  **Portable `.Gocut` projects** — single JSON file you can move, version, or share
-- **Auto-save** — every 60 s, transparent to the user
+-  **Auto-save** — every 60 s, transparent to the user
 
 > Gocut is currently in the **v0.1.0 MVP** milestone. See the [Roadmap](#-roadmap) below.
 

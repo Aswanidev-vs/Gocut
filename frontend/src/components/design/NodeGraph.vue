@@ -205,6 +205,20 @@ function draw() {
                         dragConnectionTarget.value.portType === 'in' && 
                         dragConnectionTarget.value.portName === type.inputs[i]
       
+      const isCompatible = isDraggingConnection.value && 
+                           activeConnectionSource.value && 
+                           activeConnectionSource.value.nodeId !== node.id && 
+                           activeConnectionSource.value.portType === 'out'
+
+      // Glow compatible sockets
+      if (isCompatible) {
+        c2d.strokeStyle = 'rgba(0, 212, 255, 0.4)'
+        c2d.lineWidth = 1.5
+        c2d.beginPath()
+        c2d.arc(socketScreen.x, socketScreen.y, (8 + Math.sin(dashOffset.value * 0.8) * 2) * designStore.zoom, 0, Math.PI * 2)
+        c2d.stroke()
+      }
+
       c2d.fillStyle = isHovered ? '#00D4FF' : '#9CA3AF'
       c2d.strokeStyle = '#1E1E2E'
       c2d.lineWidth = 1.5
@@ -212,6 +226,26 @@ function draw() {
       c2d.arc(socketScreen.x, socketScreen.y, 5 * designStore.zoom, 0, Math.PI * 2)
       c2d.fill()
       c2d.stroke()
+
+      // Show socket label on hover
+      const isCurrentlyHovered = (hoveredSocket.value && 
+                                  hoveredSocket.value.nodeId === node.id && 
+                                  hoveredSocket.value.portType === 'in' && 
+                                  hoveredSocket.value.portName === type.inputs[i]) || isHovered
+      if (isCurrentlyHovered) {
+        c2d.fillStyle = 'rgba(15, 15, 25, 0.9)'
+        c2d.strokeStyle = '#00D4FF'
+        c2d.lineWidth = 1
+        const text = type.inputs[i].toUpperCase()
+        c2d.font = '9px monospace'
+        const tw = c2d.measureText(text).width
+        c2d.beginPath()
+        c2d.roundRect(socketScreen.x - tw - 16, socketScreen.y - 8, tw + 8, 16, 3)
+        c2d.fill()
+        c2d.stroke()
+        c2d.fillStyle = '#E2E8F0'
+        c2d.fillText(text, socketScreen.x - tw - 12, socketScreen.y + 3)
+      }
     }
 
     // Output port dots
@@ -223,6 +257,20 @@ function draw() {
                         dragConnectionTarget.value.nodeId === node.id && 
                         dragConnectionTarget.value.portType === 'out' && 
                         dragConnectionTarget.value.portName === type.outputs[i]
+
+      const isCompatible = isDraggingConnection.value && 
+                           activeConnectionSource.value && 
+                           activeConnectionSource.value.nodeId !== node.id && 
+                           activeConnectionSource.value.portType === 'in'
+
+      // Glow compatible sockets
+      if (isCompatible) {
+        c2d.strokeStyle = 'rgba(0, 212, 255, 0.4)'
+        c2d.lineWidth = 1.5
+        c2d.beginPath()
+        c2d.arc(socketScreen.x, socketScreen.y, (8 + Math.sin(dashOffset.value * 0.8) * 2) * designStore.zoom, 0, Math.PI * 2)
+        c2d.stroke()
+      }
       
       c2d.fillStyle = isHovered ? '#FFFFFF' : '#00D4FF'
       c2d.strokeStyle = '#1E1E2E'
@@ -231,6 +279,26 @@ function draw() {
       c2d.arc(socketScreen.x, socketScreen.y, 5 * designStore.zoom, 0, Math.PI * 2)
       c2d.fill()
       c2d.stroke()
+
+      // Show socket label on hover
+      const isCurrentlyHovered = (hoveredSocket.value && 
+                                  hoveredSocket.value.nodeId === node.id && 
+                                  hoveredSocket.value.portType === 'out' && 
+                                  hoveredSocket.value.portName === type.outputs[i]) || isHovered
+      if (isCurrentlyHovered) {
+        c2d.fillStyle = 'rgba(15, 15, 25, 0.9)'
+        c2d.strokeStyle = '#00D4FF'
+        c2d.lineWidth = 1
+        const text = type.outputs[i].toUpperCase()
+        c2d.font = '9px monospace'
+        const tw = c2d.measureText(text).width
+        c2d.beginPath()
+        c2d.roundRect(socketScreen.x + 8, socketScreen.y - 8, tw + 8, 16, 3)
+        c2d.fill()
+        c2d.stroke()
+        c2d.fillStyle = '#E2E8F0'
+        c2d.fillText(text, socketScreen.x + 12, socketScreen.y + 3)
+      }
     }
 
     // Keyframe indicator
@@ -422,6 +490,13 @@ function onMouseMove(e) {
   } else if (isPanning.value) {
     designStore.panX = (e.clientX - panStart.x) / designStore.zoom
     designStore.panY = (e.clientY - panStart.y) / designStore.zoom
+  }
+
+  // Update hovered socket when not dragging anything
+  if (!isDraggingConnection.value && !isDragging.value && !isPanning.value) {
+    hoveredSocket.value = getSocketAtScreen(mx, my)
+  } else {
+    hoveredSocket.value = null
   }
 }
 
