@@ -535,5 +535,20 @@ function updateClipColor(key, val) {
         </div>
       </div>
     </div>
+
+    <!-- FUSION USER QUICK GUIDE (Low Learning Curve) -->
+    <div class="rounded-xl border border-border bg-accent/5 p-3 space-y-2.5">
+      <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+        <HelpCircle :size="12" />
+        Fusion Quick Guide
+      </div>
+      <ul class="space-y-1.5 text-[10px] text-text-secondary list-disc pl-3">
+        <li><strong>Connect Nodes</strong>: Click output port (colored dot) of Node A, then click input port (dark dot) of Node B.</li>
+        <li><strong>Detach Node</strong>: Hold <kbd class="px-1 py-0.5 rounded bg-zinc-800 text-[8px] font-mono border border-zinc-700">Left Shift</kbd> and drag a node to unplug it and heal the pipeline gap.</li>
+        <li><strong>Add Shapes</strong>: Use the "Shapes" tab or the "Custom SVG" designer in the Right Panel to build manga shape overlays.</li>
+        <li><strong>Animate</strong>: Select `Transform1` node, go to Keyframes tab, set properties (X, Y, Scale) at different times, and click "Add Key".</li>
+        <li><strong>Direct Timeline Use</strong>: Switch back to "Edit" workspace at bottom to see all shapes/animations directly on the timeline!</li>
+      </ul>
+    </div>
   </div>
 </template>

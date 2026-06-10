@@ -55,6 +55,16 @@ function selectNode(id, type) {
 }
 
 function startDrag(e, nodeId) {
+  if (e.shiftKey) {
+    const prevConn = connections.value.find(c => c.to === nodeId)
+    const nextConn = connections.value.find(c => c.from === nodeId)
+    connections.value = connections.value.filter(c => c.from !== nodeId && c.to !== nodeId)
+    if (prevConn && nextConn) {
+      connections.value.push({ from: prevConn.from, to: nextConn.to })
+    }
+    uiStore.addToast(`Detached node ${nodeId} using Shift-Drag`, 'info', 1200)
+  }
+
   draggingNodeId.value = nodeId
   const node = nodes.value.find(n => n.id === nodeId)
   if (node) {

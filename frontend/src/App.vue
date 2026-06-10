@@ -17,6 +17,7 @@ import ExportDialog from './components/export/ExportDialog.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
 import DesignPanel from './components/panels/DesignPanel.vue'
 import FusionNodeEditor from './components/panels/FusionNodeEditor.vue'
+import FusionViewer from './components/panels/FusionViewer.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
@@ -225,9 +226,9 @@ function stopDrag() {
                 <DesignPanel />
               </div>
 
-              <!-- Real-time Preview Player -->
+              <!-- Real-time Preview Player (Fusion Viewers) -->
               <div class="flex-1 flex flex-col min-w-0 bg-bg">
-                <PreviewPlayer class="flex-1" />
+                <FusionViewer :nodes="[]" class="flex-1" />
               </div>
             </div>
 
