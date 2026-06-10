@@ -213,14 +213,26 @@ function stopDrag() {
 
         <div class="flex-1 flex flex-col overflow-hidden bg-bg">
           <template v-if="uiStore.activeWorkspace === 'design'">
-            <div class="border-b border-border bg-panel/95 px-4 py-3">
-              <div class="text-[11px] uppercase tracking-[0.22em] text-text-secondary">Design / Animation</div>
-              <div class="mt-1 text-sm text-text-primary font-semibold">Lite Resolve-style creative workspace</div>
-              <p class="text-[11px] text-text-secondary">Build motion, text FX, and composite layers from one dedicated panel.</p>
+            <div class="flex-1 flex min-h-0">
+              <!-- Design Controls Panel -->
+              <div class="w-[380px] border-r border-border flex flex-col bg-panel overflow-y-auto">
+                <div class="border-b border-border bg-panel/95 px-4 py-3">
+                  <div class="text-[11px] uppercase tracking-[0.22em] text-text-secondary">Design / Animation</div>
+                  <div class="mt-1 text-sm text-text-primary font-semibold">Lite Resolve-style creative workspace</div>
+                  <p class="text-[11px] text-text-secondary">Build motion, text FX, and composite layers from one dedicated panel.</p>
+                </div>
+                <DesignPanel />
+              </div>
+
+              <!-- Real-time Preview Player -->
+              <div class="flex-1 flex flex-col min-w-0 bg-bg">
+                <PreviewPlayer class="flex-1" />
+              </div>
             </div>
-            <div class="flex-1 overflow-y-auto">
-              <DesignPanel />
-            </div>
+
+            <!-- Resize handle & Timeline at bottom -->
+            <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
+            <TimelinePanel :style="{ height: bottomHeight + 'px' }" />
           </template>
           <template v-else>
             <PreviewPlayer class="flex-1" />
