@@ -151,7 +151,23 @@ export const useDesignStore = defineStore('design', () => {
       visible: true, locked: false,
       label: opts.label ?? NODE_TYPES[type].label,
     }
+    
+    // Auto-connect with selected node
+    const prevId = selectedNodeId.value
     nodes.value.push(node)
+    
+    if (prevId) {
+      const prev = nodes.value.find(n => n.id === prevId)
+      if (prev) {
+        const prevType = getNodeType(prev.type)
+        const newType = getNodeType(type)
+        if (prevType && newType && prevType.outputs.length > 0 && newType.inputs.length > 0) {
+          // Add connection from first output of previous to first input of new
+          addConnection(prev.id, prevType.outputs[0], node.id, newType.inputs[0])
+        }
+      }
+    }
+    
     selectedNodeId.value = node.id
     return node
   }
@@ -180,7 +196,12 @@ export const useDesignStore = defineStore('design', () => {
   }
 
   function addConnection(fromNode, fromPort, toNode, toPort) {
+    connections.value = connections.value.filter(c => !(c.toNode === toNode && c.toPort === toPort))
     connections.value.push({ id: generateId(), fromNode, fromPort, toNode, toPort })
+  }
+
+  function removeConnection(id) {
+    connections.value = connections.value.filter(c => c.id !== id)
   }
 
   function addKeyframe(nodeId, paramId, time, value, easing = 'linear') {
@@ -251,7 +272,7 @@ export const useDesignStore = defineStore('design', () => {
   return {
     composition, nodes, connections, selectedNodeId, selectedConnectionId, zoom, panX, panY, snapEnabled, presets,
     selectedNode, outputNode,
-    addNode, removeNode, removeSelectedNode, duplicateSelectedNode, addConnection,
+    addNode, removeNode, removeSelectedNode, duplicateSelectedNode, addConnection, removeConnection,
     addKeyframe, removeKeyframe, getParamValue,
     zoomIn, zoomOut, zoomFit, saveAsPreset, loadPreset, insertTemplate,
     updateNodeParam, updateNodePosition,
