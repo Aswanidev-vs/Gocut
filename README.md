@@ -44,8 +44,10 @@ else's server.
 -  **Visual clip indicators** — timeline clips show icons when transitions (↔) or color effects (🎨) are applied
 -  **Audio engine** — per-clip volume, muting, and (in-progress) waveform visualization
 -  **Background export** — render MP4 (H.264 + AAC) in a Go goroutine, with progress and cancel
--  **Portable `.Gocut` projects** — single JSON file you can move, version, or share
--  **Auto-save** — every 60 s, transparent to the user
+-  **Portable `.Gocut` projects** — save, load, and share your project as a single JSON file directly from the editor
+-  **Auto-assign FilePath** — auto-configures project file location to the first imported media asset's directory for seamless background autosaves
+-  **Auto-save** — transparently saves draft history to SQLite every 60 s, writing directly to the `.gocut` file once it is defined on disk
+-  **Manage Recents** — clean recent projects list on the Home screen showing readable file paths, with options to remove individual items or clear all projects from history
 
 > Gocut is currently in the **v0.1.0 MVP** milestone. See the [Roadmap](#-roadmap) below.
 
