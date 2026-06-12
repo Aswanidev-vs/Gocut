@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	_ "github.com/ncruces/go-sqlite3"
+	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
 type Store struct {
@@ -19,7 +19,7 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}

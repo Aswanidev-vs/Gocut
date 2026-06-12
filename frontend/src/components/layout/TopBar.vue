@@ -4,6 +4,7 @@ import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
 import { Undo2, Redo2, Download, Save, FolderOpen, FilePlus, Settings as SettingsIcon, Loader2, CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import SettingsDialog from '../settings/SettingsDialog.vue'
+import { OpenFilePicker } from '../../lib/wails'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
@@ -63,9 +64,25 @@ async function onSave() {
     await projectStore.saveProject()
     uiStore.addToast('Project saved', 'success', 2000)
   } catch (e) {
-    uiStore.addToast('Failed to save: ' + (e?.message || e), 'error')
+    if (e?.message !== 'Save cancelled') {
+      uiStore.addToast('Failed to save: ' + (e?.message || e), 'error')
+    }
   }
+}
 
+function onNewProject() {
+  uiStore.isNewProjectDialogOpen = true
+}
+
+async function onOpenProject() {
+  try {
+    const paths = await OpenFilePicker([{ name: 'Gocut Project', extensions: ['gocut', 'json'] }])
+    if (!Array.isArray(paths) || paths.length === 0) return
+    await projectStore.loadProject(paths[0])
+    uiStore.addToast('Project loaded', 'success', 1500)
+  } catch (e) {
+    uiStore.addToast('Failed to open: ' + (e?.message || e), 'error')
+  }
 }
 
 function openExport() {
@@ -87,6 +104,30 @@ function openSettings() {
     >
       <!-- <div class="w-5 h-5 rounded bg-accent text-bg font-bold text-[11px] flex items-center justify-center">G</div> -->
       <img src="../../assets/images/logo-universal.png" alt="Gocut Logo" class="w-5 h-5 rounded" />
+    </button>
+
+    <button
+      class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+      @click="onNewProject"
+      title="New Project"
+    >
+      <FilePlus :size="14" />
+    </button>
+
+    <button
+      class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+      @click="onOpenProject"
+      title="Open Project"
+    >
+      <FolderOpen :size="14" />
+    </button>
+
+    <button
+      class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+      @click="onSave"
+      title="Save Project (Ctrl+S)"
+    >
+      <Save :size="14" />
     </button>
 
     <div class="h-5 w-px bg-border mx-1" />

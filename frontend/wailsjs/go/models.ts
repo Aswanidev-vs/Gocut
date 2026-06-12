@@ -499,6 +499,7 @@ export namespace project {
 	    timeline: Timeline;
 	    assets: Asset[];
 	    settings: ProjectSettings;
+	    filePath?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Project(source);
@@ -517,6 +518,7 @@ export namespace project {
 	        this.timeline = this.convertValues(source["timeline"], Timeline);
 	        this.assets = this.convertValues(source["assets"], Asset);
 	        this.settings = this.convertValues(source["settings"], ProjectSettings);
+	        this.filePath = source["filePath"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

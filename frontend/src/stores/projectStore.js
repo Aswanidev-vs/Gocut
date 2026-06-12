@@ -9,6 +9,7 @@ import {
   ExtractThumbnail,
   ExtractWaveform,
   CheckFFmpegInstalled,
+  SaveFilePicker,
 } from '../lib/wails'
 
 // IMPORTANT: useTimelineStore is NOT imported here. Doing so creates a
@@ -105,6 +106,15 @@ export const useProjectStore = defineStore('project', () => {
     if (!project.value) return
     isLoading.value = true
     try {
+      if (!project.value.filePath) {
+        const defaultName = (project.value.name || 'Untitled') + '.gocut'
+        const path = await SaveFilePicker(defaultName, [{ name: 'Gocut Project', extensions: ['gocut'] }])
+        if (!path) {
+          throw new Error('Save cancelled')
+        }
+        project.value.filePath = path
+      }
+
       const ts = getTimelineStoreSafely()
       if (ts) {
         project.value.timeline = {

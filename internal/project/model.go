@@ -44,6 +44,7 @@ type Project struct {
 	Timeline    Timeline        `json:"timeline"`
 	Assets      []Asset         `json:"assets"`
 	Settings    ProjectSettings `json:"settings"`
+	FilePath    string          `json:"filePath,omitempty"`
 }
 
 type Timeline struct {

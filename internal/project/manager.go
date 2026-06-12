@@ -77,6 +77,28 @@ func (m *Manager) SaveProject(p Project) error {
 		return fmt.Errorf("project store is not initialized")
 	}
 	p.UpdatedAt = time.Now()
+
+	if p.FilePath != "" {
+		projDir := filepath.Dir(p.FilePath)
+		// Make a shallow copy of the project to serialize relative paths to disk
+		fileProj := p
+		fileProj.Assets = make([]Asset, len(p.Assets))
+		for i, asset := range p.Assets {
+			fileProj.Assets[i] = asset
+			if filepath.IsAbs(asset.Path) {
+				relPath, err := filepath.Rel(projDir, asset.Path)
+				if err == nil {
+					fileProj.Assets[i].Path = relPath
+				}
+			}
+		}
+
+		data, err := json.MarshalIndent(fileProj, "", "  ")
+		if err == nil {
+			_ = os.WriteFile(p.FilePath, data, 0644)
+		}
+	}
+
 	return m.store.SaveProject(p)
 }
 
@@ -97,6 +119,15 @@ func (m *Manager) LoadProject(id string) (*Project, error) {
 			if err := json.Unmarshal(data, &p); err != nil {
 				return nil, err
 			}
+			p.FilePath = id
+
+			projDir := filepath.Dir(id)
+			for i, asset := range p.Assets {
+				if !filepath.IsAbs(asset.Path) {
+					p.Assets[i].Path = filepath.Clean(filepath.Join(projDir, asset.Path))
+				}
+			}
+
 			return &p, nil
 		}
 	}
