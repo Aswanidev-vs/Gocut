@@ -33,9 +33,11 @@ function onUp() {
 function seekFromEvent(e) {
   const target = e.currentTarget?.parentElement || e.target
   // We measure relative to the timeline content area
-  const rect = (document.querySelector('.timeline-content'))?.getBoundingClientRect()
+  const container = document.querySelector('.timeline-content')
+  const rect = container?.getBoundingClientRect()
   if (!rect) return
-  const x = e.clientX - rect.left + (document.querySelector('.timeline-content'))?.scrollLeft || 0
+  const scrollLeft = container?.scrollLeft ?? 0
+  const x = e.clientX - rect.left + scrollLeft
   const t = Math.max(0, x / timelineStore.zoom)
   timelineStore.setCurrentTime(t)
 }

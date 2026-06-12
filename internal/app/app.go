@@ -351,35 +351,53 @@ func (a *App) ClearPreviewCache() error {
 }
 
 func (a *App) assetAtTime(p project.Project, t float64) (*project.Asset, float64) {
-	for i := range p.Timeline.Tracks {
-		track := &p.Timeline.Tracks[i]
-		if track.Type != project.TrackVideo {
-			continue
-		}
-		for j := range track.Clips {
-			c := &track.Clips[j]
-			if t >= c.StartTime && t < c.StartTime+c.Duration {
-				for k := range p.Assets {
-					if p.Assets[k].ID == c.AssetID {
-						asset := &p.Assets[k]
-						// Still images have no timeline; always seek to 0 so
-						// ffmpeg's image2 demuxer can produce a frame.
-						if asset.Type == project.AssetImage {
-							return asset, 0
+	// Priority list of visual tracks to check first
+	visualTypes := []project.TrackType{project.TrackVideo, project.TrackImage, project.TrackPIP}
+	for _, trackType := range visualTypes {
+		for i := range p.Timeline.Tracks {
+			track := &p.Timeline.Tracks[i]
+			if track.Type != trackType {
+				continue
+			}
+			for j := range track.Clips {
+				c := &track.Clips[j]
+				if t >= c.StartTime && t < c.StartTime+c.Duration {
+					for k := range p.Assets {
+						if p.Assets[k].ID == c.AssetID {
+							asset := &p.Assets[k]
+							// Still images have no timeline; always seek to 0 so
+							// ffmpeg's image2 demuxer can produce a frame.
+							if asset.Type == project.AssetImage {
+								return asset, 0
+							}
+							src := c.TrimStart + (t - c.StartTime)
+							return asset, src
 						}
-						src := c.TrimStart + (t - c.StartTime)
-						return asset, src
 					}
 				}
 			}
 		}
 	}
-	for i := range p.Assets {
-		if p.Assets[i].Type == project.AssetVideo {
-			if p.Assets[i].Duration > 0 && t >= p.Assets[i].Duration {
-				t = p.Assets[i].Duration - 0.001
+
+	// Fallback to first video asset ONLY if timeline has no visual clips at all
+	hasAnyVisualClip := false
+	for i := range p.Timeline.Tracks {
+		track := &p.Timeline.Tracks[i]
+		if track.Type == project.TrackVideo || track.Type == project.TrackImage || track.Type == project.TrackPIP {
+			if len(track.Clips) > 0 {
+				hasAnyVisualClip = true
+				break
 			}
-			return &p.Assets[i], t
+		}
+	}
+	if !hasAnyVisualClip {
+		for i := range p.Assets {
+			if p.Assets[i].Type == project.AssetVideo {
+				if p.Assets[i].Duration > 0 && t >= p.Assets[i].Duration {
+					t = p.Assets[i].Duration - 0.001
+				}
+				return &p.Assets[i], t
+			}
 		}
 	}
 	return nil, 0

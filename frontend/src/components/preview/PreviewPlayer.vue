@@ -14,6 +14,7 @@ const isFullscreen = ref(false)
 const playInterval = ref(null)
 const videoRef = ref(null)
 const useVideoElement = ref(false)  // true when <video> is active (during play)
+const isTickerUpdating = ref(false)
 
 // ---- Fetch media server port on mount ----
 onMounted(() => {
@@ -34,34 +35,51 @@ function onFullscreenChange() {
 }
 
 // ---- Playback ticker: advance currentTime every animation frame ----
-// The ticker multiplies wall-clock delta by the active clip's speed so
-// the playhead advances at the correct rate for sped-up / slowed-down clips.
+// Uses wall-clock delta for smooth advancement. The video element plays
+// independently at native speed; we only correct drift when it exceeds
+// a threshold. This avoids the feedback loop of reading video.currentTime
+// every frame → triggering Vue watchers → causing stutter.
 function getActivePlaybackSpeed() {
   const clip = currentVisualClip.value
   return (clip && clip.speed) ? clip.speed : 1.0
 }
 
+let lastAudioSyncTime = 0
+
 function startTicker() {
   stopTicker()
   let last = performance.now()
   const tick = (now) => {
-    const wallDt = (now - last) / 1000
-    last = now
-    if (playerStore.isPlaying) {
-      const speed = getActivePlaybackSpeed()
-      const dt = wallDt * speed
-      const next = timelineStore.currentTime + dt
-      if (next >= Math.max(timelineStore.duration, 0.5)) {
-        if (playerStore.loop) {
-          timelineStore.setCurrentTime(0)
+    try {
+      const wallDt = (now - last) / 1000
+      last = now
+      if (playerStore.isPlaying) {
+        const speed = getActivePlaybackSpeed()
+        const dt = wallDt * speed
+        const next = timelineStore.currentTime + dt
+        if (next >= Math.max(timelineStore.duration, 0.5)) {
+          if (playerStore.loop) {
+            isTickerUpdating.value = true
+            timelineStore.setCurrentTime(0)
+            isTickerUpdating.value = false
+          } else {
+            playerStore.pause()
+          }
         } else {
-          playerStore.pause()
-          return
+          isTickerUpdating.value = true
+          timelineStore.setCurrentTime(next)
+          isTickerUpdating.value = false
         }
-      } else {
-        timelineStore.setCurrentTime(next)
+        // Throttled audio sync inside ticker (every ~100ms)
+        if (now - lastAudioSyncTime > 100) {
+          lastAudioSyncTime = now
+          syncAudioElements()
+        }
       }
+    } catch (err) {
+      console.error('Ticker error:', err)
     }
+    // Always schedule next frame — never let the loop die
     playInterval.value = requestAnimationFrame(tick)
   }
   playInterval.value = requestAnimationFrame(tick)
@@ -133,77 +151,83 @@ const currentAudioClips = computed(() => {
 let audioElements = new Map() // clipId -> { audio, assetPath }
 
 function syncAudioElements() {
-  const t = timelineStore.currentTime
-  const activeClipIds = new Set()
+  try {
+    const t = timelineStore.currentTime
+    const activeClipIds = new Set()
 
-  for (const clip of currentAudioClips.value) {
-    activeClipIds.add(clip.id)
-    const asset = projectStore.getAsset(clip.assetId)
-    if (!asset) continue
+    for (const clip of currentAudioClips.value) {
+      activeClipIds.add(clip.id)
+      const asset = projectStore.getAsset(clip.assetId)
+      if (!asset) continue
 
-    const proxyUrl = playerStore.getMediaUrl(asset.path, true) // /audio proxy -> mp3
-    if (!proxyUrl) continue
+      const proxyUrl = playerStore.getMediaUrl(asset.path, true) // /audio proxy -> mp3
+      if (!proxyUrl) continue
 
-    let entry = audioElements.get(clip.id)
-    if (!entry || entry.assetPath !== asset.path) {
-      // Create or recreate audio element
-      if (entry) { entry.audio.pause(); entry.audio.src = '' }
-      const audio = new Audio(proxyUrl)
-      audio.preload = 'auto'
-      // Preserve pitch when changing playback rate to avoid chipmunk effect
-      audio.preservesPitch = true
-      // Fallback: if proxy fails (no audio track, ffmpeg error), try raw media
-      audio.addEventListener('error', () => {
-        const rawUrl = playerStore.getMediaUrl(asset.path, false)
-        if (rawUrl && audio.src !== rawUrl) {
-          audio.src = rawUrl
-          audio.load()
+      let entry = audioElements.get(clip.id)
+      if (!entry || entry.assetPath !== asset.path) {
+        // Create or recreate audio element
+        if (entry) { entry.audio.pause(); entry.audio.src = '' }
+        const audio = new Audio(proxyUrl)
+        audio.preload = 'auto'
+        // Preserve pitch when changing playback rate to avoid chipmunk effect
+        audio.preservesPitch = true
+        // Fallback: if proxy fails (no audio track, ffmpeg error), try raw media
+        audio.addEventListener('error', () => {
+          const rawUrl = playerStore.getMediaUrl(asset.path, false)
+          if (rawUrl && audio.src !== rawUrl) {
+            audio.src = rawUrl
+            audio.load()
+          }
+        }, { once: true })
+        entry = { audio, assetPath: asset.path }
+        audioElements.set(clip.id, entry)
+      }
+
+      const speed = clip.speed || 1.0
+      // Scale audio playbackRate by both its own speed and the timeline's active playback speed
+      const timelineSpeed = getActivePlaybackSpeed()
+      const targetPlaybackRate = speed * timelineSpeed
+      if (entry.audio.playbackRate !== targetPlaybackRate) {
+        entry.audio.playbackRate = targetPlaybackRate
+      }
+
+      const clipTime = (clip.trimStart || 0) + (t - clip.startTime) * speed
+      const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
+      const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
+      entry.audio.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+
+      if (playerStore.isPlaying) {
+        // Tighter sync threshold: at higher speeds drift accumulates faster
+        const syncThreshold = 0.15
+        if (Math.abs(entry.audio.currentTime - clipTime) > syncThreshold) {
+          entry.audio.currentTime = clipTime
         }
-      }, { once: true })
-      entry = { audio, assetPath: asset.path }
-      audioElements.set(clip.id, entry)
-    }
-
-    const speed = clip.speed || 1.0
-    // Scale audio playbackRate by both its own speed and the timeline's active playback speed
-    const timelineSpeed = getActivePlaybackSpeed()
-    const targetPlaybackRate = speed * timelineSpeed
-    if (entry.audio.playbackRate !== targetPlaybackRate) {
-      entry.audio.playbackRate = targetPlaybackRate
-    }
-
-    const clipTime = (clip.trimStart || 0) + (t - clip.startTime) * speed
-    const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
-    const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
-    entry.audio.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
-
-    if (playerStore.isPlaying) {
-      // Tighter sync threshold: at higher speeds drift accumulates faster
-      const syncThreshold = 0.15
-      if (Math.abs(entry.audio.currentTime - clipTime) > syncThreshold) {
+        if (entry.audio.paused) entry.audio.play().catch(() => {})
+      } else {
+        entry.audio.pause()
         entry.audio.currentTime = clipTime
       }
-      if (entry.audio.paused) entry.audio.play().catch(() => {})
-    } else {
-      entry.audio.pause()
-      entry.audio.currentTime = clipTime
     }
-  }
 
-  // Remove audio elements for clips no longer active
-  for (const [clipId, entry] of audioElements) {
-    if (!activeClipIds.has(clipId)) {
-      entry.audio.pause()
-      entry.audio.src = ''
-      audioElements.delete(clipId)
+    // Remove audio elements for clips no longer active
+    for (const [clipId, entry] of audioElements) {
+      if (!activeClipIds.has(clipId)) {
+        entry.audio.pause()
+        entry.audio.src = ''
+        audioElements.delete(clipId)
+      }
     }
+  } catch (err) {
+    console.error('Error syncing audio elements:', err)
   }
 }
 
 function destroyAudioElements() {
   for (const [, entry] of audioElements) {
-    entry.audio.pause()
-    entry.audio.src = ''
+    try {
+      entry.audio.pause()
+      entry.audio.src = ''
+    } catch (_) {}
   }
   audioElements.clear()
 }
@@ -212,55 +236,63 @@ function destroyAudioElements() {
 
 // When play/pause changes, control the video element
 watch(() => playerStore.isPlaying, (playing) => {
-  if (playing) {
-    useVideoElement.value = !!videoSrc.value
-    const v = videoRef.value
-    if (v && videoSrc.value) {
-      const clip = currentVisualClip.value
-      if (clip) {
-        const speed = clip.speed || 1.0
-        const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
-        v.currentTime = clipTime
-        v.playbackRate = speed
-        v.preservesPitch = true
-        const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
-        const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
-        v.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+  try {
+    if (playing) {
+      useVideoElement.value = !!videoSrc.value
+      const v = videoRef.value
+      if (v && videoSrc.value) {
+        const clip = currentVisualClip.value
+        if (clip) {
+          const speed = clip.speed || 1.0
+          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
+          v.currentTime = clipTime
+          v.playbackRate = speed
+          v.preservesPitch = true
+          const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
+          const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
+          v.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
+        }
+        v.play().catch(() => {})
       }
-      v.play().catch(() => {})
+      syncAudioElements()
+    } else {
+      const v = videoRef.value
+      if (v) v.pause()
+      // Switch back to ffmpeg frame after short delay so we show precise frame
+      playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
+      setTimeout(() => { useVideoElement.value = false }, 50)
+      syncAudioElements()
     }
-    syncAudioElements()
-  } else {
-    const v = videoRef.value
-    if (v) v.pause()
-    // Switch back to ffmpeg frame after short delay so we show precise frame
-    playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
-    setTimeout(() => { useVideoElement.value = false }, 50)
-    syncAudioElements()
+  } catch (err) {
+    console.error('Error on isPlaying change:', err)
   }
 })
 
-function syncVideoElement() {
-  const v = videoRef.value
-  if (!v) return
-  const clip = currentVisualClip.value
-  if (!clip) return
-  const speed = clip.speed || 1.0
-  const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
-  
-  // Set speed
-  if (v.playbackRate !== speed) {
-    v.playbackRate = speed
-  }
-  if (v.preservesPitch !== true) {
-    v.preservesPitch = true
-  }
+function syncVideoElement(force = false) {
+  try {
+    const v = videoRef.value
+    if (!v) return
+    const clip = currentVisualClip.value
+    if (!clip) return
+    const speed = clip.speed || 1.0
+    const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
+    
+    // Set speed
+    if (v.playbackRate !== speed) {
+      v.playbackRate = speed
+    }
+    if (v.preservesPitch !== true) {
+      v.preservesPitch = true
+    }
 
-  // Avoid aggressive seeking during active playback (seeking clears buffer and stutters)
-  // We let the browser's native decoder play smoothly at playbackRate.
-  const threshold = playerStore.isPlaying ? 0.5 : 0.05
-  if (Math.abs(v.currentTime - clipTime) > threshold) {
-    v.currentTime = clipTime
+    // Avoid aggressive seeking during active playback (seeking clears buffer and stutters)
+    // We let the browser's native decoder play smoothly at playbackRate.
+    const threshold = force ? 0.0 : (playerStore.isPlaying ? 0.5 : 0.05)
+    if (force || Math.abs(v.currentTime - clipTime) > threshold) {
+      v.currentTime = clipTime
+    }
+  } catch (err) {
+    console.error('Error syncing video element:', err)
   }
 }
 
@@ -279,6 +311,7 @@ watch(() => playerStore.volume, () => {
 // When current video clip changes during playback (e.g. clip boundary), reload video
 watch(videoSrc, (newSrc, oldSrc) => {
   if (playerStore.isPlaying && newSrc && newSrc !== oldSrc) {
+    useVideoElement.value = true
     nextTick(() => {
       const v = videoRef.value
       if (v) {
@@ -292,6 +325,8 @@ watch(videoSrc, (newSrc, oldSrc) => {
         v.play().catch(() => {})
       }
     })
+  } else if (!newSrc) {
+    useVideoElement.value = false
   }
 })
 
@@ -303,40 +338,59 @@ let lastRefreshTime = 0
 let pendingRefreshRAF = null
 
 watch(() => timelineStore.currentTime, (t) => {
-  // Sync audio elements on every time change
-  if (playerStore.isPlaying) syncAudioElements()
+  try {
+    // If the ticker is updating, we skip audio sync (handled by ticker itself)
+    // but we still need to sync the video element or refresh the preview.
+    if (!isTickerUpdating.value) {
+      // User-initiated seek: sync audio immediately
+      syncAudioElements()
+    }
 
-  // During playback with active video element, keep video in sync
-  if (playerStore.isPlaying && useVideoElement.value && videoSrc.value) {
-    syncVideoElement()
-    return
+    if (useVideoElement.value && videoSrc.value) {
+      // Keep video in sync with playhead.
+      // During ticker update, allow native playback to flow (drift check).
+      // During manual seek (!isTickerUpdating), force-seek immediately.
+      syncVideoElement(!isTickerUpdating.value)
+      return
+    }
+
+    // Refresh backend/ffmpeg preview frame (e.g., for images, gaps, overlays)
+    const now = performance.now()
+    const interval = playerStore.isPlaying ? 100 : 50  // ms between refreshes
+
+    if (now - lastRefreshTime >= interval) {
+      lastRefreshTime = now
+      playerStore.refreshPreview(false, t).catch(() => {})
+    } else if (!pendingRefreshRAF) {
+      // Schedule one more refresh after the throttle window
+      const remaining = interval - (now - lastRefreshTime)
+      pendingRefreshRAF = setTimeout(() => {
+        pendingRefreshRAF = null
+        lastRefreshTime = performance.now()
+        playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {})
+      }, remaining)
+    }
+  } catch (err) {
+    console.error('Error in currentTime watch:', err)
   }
-
-  const now = performance.now()
-  const interval = playerStore.isPlaying ? 100 : 50  // ms between refreshes
-
-  if (now - lastRefreshTime >= interval) {
-    lastRefreshTime = now
-    playerStore.refreshPreview(false, t).catch(() => {})
-  } else if (!pendingRefreshRAF) {
-    // Schedule one more refresh after the throttle window
-    const remaining = interval - (now - lastRefreshTime)
-    pendingRefreshRAF = setTimeout(() => {
-      pendingRefreshRAF = null
-      lastRefreshTime = performance.now()
-      playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {})
-    }, remaining)
-  }
-})
+}, { flush: 'sync' })
 
 // Sync immediately when clip properties (like speed, volume, etc.) change
 watch(() => timelineStore.clips, () => {
-  syncAudioElements()
-  syncVideoElement()
+  try {
+    syncAudioElements()
+    syncVideoElement()
+  } catch (err) {
+    console.error('Error syncing clips on change:', err)
+  }
 }, { deep: true })
 
 watch(() => projectStore.project?.id, () => {
-  setTimeout(() => playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {}), 100)
+  try {
+    setTimeout(() => playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {}), 100)
+  } catch (err) {
+    console.error('Error on project ID change:', err)
+  }
 })
 
 const aspectStyle = computed(() => {
