@@ -93,6 +93,7 @@ jobs:
           AppVerName=Gocut $version
           AppPublisher=Gocut
           DefaultDirName={autopf}\Gocut
+          AppendDefaultDirName=yes
           DefaultGroupName=Gocut
           DisableProgramGroupPage=yes
           OutputDir=$outputDir
