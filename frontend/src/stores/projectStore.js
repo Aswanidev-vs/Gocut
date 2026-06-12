@@ -10,6 +10,8 @@ import {
   ExtractWaveform,
   CheckFFmpegInstalled,
   SaveFilePicker,
+  DeleteProject,
+  ClearRecentProjects,
 } from '../lib/wails'
 
 // IMPORTANT: useTimelineStore is NOT imported here. Doing so creates a
@@ -201,6 +203,16 @@ export const useProjectStore = defineStore('project', () => {
       }))
 
       activeProject.assets.push(...enriched)
+
+      if (!activeProject.filePath && enriched.length > 0) {
+        const firstPath = enriched[0].path
+        const lastSlash = Math.max(firstPath.lastIndexOf('/'), firstPath.lastIndexOf('\\'))
+        if (lastSlash !== -1) {
+          const dir = firstPath.substring(0, lastSlash)
+          activeProject.filePath = `${dir}/${activeProject.name || 'Untitled'}.gocut`
+        }
+      }
+
       markDirty()
 
       for (const asset of enriched) {
@@ -260,6 +272,26 @@ export const useProjectStore = defineStore('project', () => {
     if (ts) ts.clearAll()
   }
 
+  async function deleteRecentProject(id) {
+    try {
+      await DeleteProject(id)
+      await fetchRecentProjects()
+    } catch (e) {
+      error.value = e
+      throw e
+    }
+  }
+
+  async function clearRecentProjects() {
+    try {
+      await ClearRecentProjects()
+      recentProjects.value = []
+    } catch (e) {
+      error.value = e
+      throw e
+    }
+  }
+
   return {
     project,
     isDirty,
@@ -286,5 +318,7 @@ export const useProjectStore = defineStore('project', () => {
     markDirty,
     clearDirty,
     setProject,
+    deleteRecentProject,
+    clearRecentProjects,
   }
 })

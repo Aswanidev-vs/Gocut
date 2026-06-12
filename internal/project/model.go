@@ -231,6 +231,7 @@ type RenderProgress struct {
 }
 
 type RecentProject struct {
+	ID        string    `json:"id"`
 	Path      string    `json:"path"`
 	Name      string    `json:"name"`
 	UpdatedAt time.Time `json:"updatedAt"`

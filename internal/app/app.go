@@ -126,6 +126,20 @@ func (a *App) GetRecentProjects() ([]project.RecentProject, error) {
 	return a.projectMgr.GetRecentProjects(10)
 }
 
+func (a *App) DeleteProject(id string) error {
+	if a.projectMgr == nil {
+		return nil
+	}
+	return a.projectMgr.DeleteProject(id)
+}
+
+func (a *App) ClearRecentProjects() error {
+	if a.projectMgr == nil {
+		return nil
+	}
+	return a.projectMgr.ClearRecent()
+}
+
 func (a *App) ExportProjectFile(p project.Project) (string, error) {
 	return a.projectMgr.ExportProjectFile(p)
 }

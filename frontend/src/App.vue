@@ -4,7 +4,7 @@ import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { useTimelineStore } from './stores/timelineStore'
 import { OpenFilePicker } from './lib/wails'
-import { Film, FolderOpen, FilePlus, Sparkles, Github, Scissors, Palette, Headphones } from 'lucide-vue-next'
+import { Film, FolderOpen, FilePlus, Sparkles, Github, Scissors, Palette, Headphones, X } from 'lucide-vue-next'
 import { useHotkeys } from './composables/useHotkeys'
 
 import TopBar from './components/layout/TopBar.vue'
@@ -89,6 +89,24 @@ async function openProject(selectedPath) {
     uiStore.addToast('Project loaded', 'success', 1500)
   } catch (error) {
     uiStore.addToast('Failed to open: ' + (error?.message || error), 'error')
+  }
+}
+
+async function deleteRecent(id) {
+  try {
+    await projectStore.deleteRecentProject(id)
+    uiStore.addToast('Removed from recents', 'success', 1500)
+  } catch (err) {
+    uiStore.addToast('Failed to remove: ' + (err?.message || err), 'error')
+  }
+}
+
+async function clearRecent() {
+  try {
+    await projectStore.clearRecentProjects()
+    uiStore.addToast('Recent projects cleared', 'success', 1500)
+  } catch (err) {
+    uiStore.addToast('Failed to clear: ' + (err?.message || err), 'error')
   }
 }
 
@@ -181,25 +199,40 @@ function stopDrag() {
         </div>
 
         <div v-if="projectStore.recentProjects.length" class="mt-10 w-full max-w-2xl">
-          <div class="flex items-center gap-2 mb-3 text-[11px] text-text-secondary uppercase tracking-wider">
-            <Film :size="12" />
-            Recent
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2 text-[11px] text-text-secondary uppercase tracking-wider">
+              <Film :size="12" />
+              Recent
+            </div>
+            <button
+              class="text-[10px] text-text-secondary hover:text-red-400 transition-colors uppercase tracking-wider font-semibold"
+              @click="clearRecent"
+            >
+              Clear All
+            </button>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <button
+            <div
               v-for="rp in projectStore.recentProjects.slice(0, 6)"
-              :key="rp.path"
-              class="flex items-center gap-3 px-3 py-3 rounded bg-panel border border-border hover:border-accent/50 hover:bg-panel/80 transition-colors text-left"
+              :key="rp.id || rp.path"
+              class="group relative flex items-center gap-3 px-3 py-3 rounded bg-panel border border-border hover:border-accent/50 hover:bg-panel/80 transition-colors text-left cursor-pointer"
               @click="openProject(rp.path)"
             >
-              <div class="w-10 h-10 rounded bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center">
+              <div class="w-10 h-10 rounded bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center flex-shrink-0">
                 <Film :size="16" class="text-accent" />
               </div>
-              <div class="flex-1 min-w-0">
+              <div class="flex-1 min-w-0 pr-4">
                 <div class="text-sm text-text-primary truncate">{{ rp.name }}</div>
-                <div class="text-[10px] text-text-secondary truncate">{{ rp.path }}</div>
+                <div class="text-[10px] text-text-secondary truncate" :title="rp.path">{{ rp.path }}</div>
               </div>
-            </button>
+              <button
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-red-500/20 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all z-10"
+                @click.stop="deleteRecent(rp.id || rp.path)"
+                title="Remove from recents"
+              >
+                <X :size="12" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

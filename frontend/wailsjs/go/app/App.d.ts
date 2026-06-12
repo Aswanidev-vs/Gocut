@@ -8,7 +8,11 @@ export function CheckFFmpegInstalled():Promise<string>;
 
 export function ClearPreviewCache():Promise<void>;
 
+export function ClearRecentProjects():Promise<void>;
+
 export function Close():Promise<void>;
+
+export function DeleteProject(arg1:string):Promise<void>;
 
 export function ExportProjectFile(arg1:project.Project):Promise<string>;
 

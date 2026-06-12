@@ -22,5 +22,7 @@ export {
   SaveFilePicker,
   GetAppVersion,
   GetMediaServerPort,
+  DeleteProject,
+  ClearRecentProjects,
 } from '../../wailsjs/go/app/App.js'
 

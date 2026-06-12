@@ -102,7 +102,7 @@ func (s *Store) LoadProject(id string) (*Project, error) {
 
 func (s *Store) ListRecent(limit int) ([]RecentProject, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, updated_at FROM projects
+		SELECT id, name, updated_at, data FROM projects
 		ORDER BY updated_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -113,13 +113,33 @@ func (s *Store) ListRecent(limit int) ([]RecentProject, error) {
 	for rows.Next() {
 		var r RecentProject
 		var updated string
-		if err := rows.Scan(&r.Path, &r.Name, &updated); err != nil {
+		var data string
+		var dbID string
+		if err := rows.Scan(&dbID, &r.Name, &updated, &data); err != nil {
 			continue
 		}
+		r.ID = dbID
+		r.Path = dbID
 		r.UpdatedAt, _ = time.Parse(time.RFC3339, updated)
+
+		var proj Project
+		if err := json.Unmarshal([]byte(data), &proj); err == nil && proj.FilePath != "" {
+			r.Path = proj.FilePath
+		}
+
 		list = append(list, r)
 	}
 	return list, nil
+}
+
+func (s *Store) DeleteProject(id string) error {
+	_, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id)
+	return err
+}
+
+func (s *Store) ClearRecent() error {
+	_, err := s.db.Exec(`DELETE FROM projects`)
+	return err
 }
 
 func (s *Store) Close() error {

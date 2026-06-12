@@ -142,6 +142,20 @@ func (m *Manager) GetRecentProjects(limit int) ([]RecentProject, error) {
 	return m.store.ListRecent(limit)
 }
 
+func (m *Manager) DeleteProject(id string) error {
+	if m == nil || m.store == nil {
+		return fmt.Errorf("project store is not initialized")
+	}
+	return m.store.DeleteProject(id)
+}
+
+func (m *Manager) ClearRecent() error {
+	if m == nil || m.store == nil {
+		return fmt.Errorf("project store is not initialized")
+	}
+	return m.store.ClearRecent()
+}
+
 func (m *Manager) ExportProjectFile(p Project) (string, error) {
 	filename := p.Name + ".Gocut"
 	if filename == ".Gocut" {

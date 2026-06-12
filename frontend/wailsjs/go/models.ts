@@ -541,6 +541,7 @@ export namespace project {
 	}
 	
 	export class RecentProject {
+	    id: string;
 	    path: string;
 	    name: string;
 	    // Go type: time
@@ -553,6 +554,7 @@ export namespace project {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.path = source["path"];
 	        this.name = source["name"];
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);

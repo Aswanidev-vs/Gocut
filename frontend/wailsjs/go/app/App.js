@@ -14,8 +14,16 @@ export function ClearPreviewCache() {
   return window['go']['app']['App']['ClearPreviewCache']();
 }
 
+export function ClearRecentProjects() {
+  return window['go']['app']['App']['ClearRecentProjects']();
+}
+
 export function Close() {
   return window['go']['app']['App']['Close']();
+}
+
+export function DeleteProject(arg1) {
+  return window['go']['app']['App']['DeleteProject'](arg1);
 }
 
 export function ExportProjectFile(arg1) {
