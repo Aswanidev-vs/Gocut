@@ -106,6 +106,11 @@ func (a *App) NewProject(settings project.ProjectSettings) (*project.Project, er
 }
 
 func (a *App) SaveProject(p project.Project) error {
+	if a.currentProject != nil && a.currentProject.FilePath != "" && a.currentProject.FilePath != p.FilePath {
+		if fileExists(a.currentProject.FilePath) {
+			_ = os.Rename(a.currentProject.FilePath, p.FilePath)
+		}
+	}
 	a.currentProject = &p
 	return a.projectMgr.SaveProject(p)
 }

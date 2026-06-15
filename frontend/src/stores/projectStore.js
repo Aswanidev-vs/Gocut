@@ -169,6 +169,15 @@ export const useProjectStore = defineStore('project', () => {
   async function updateProjectName(name) {
     if (!project.value) return
     project.value.name = name
+    if (project.value.filePath) {
+      const lastSlash = Math.max(project.value.filePath.lastIndexOf('/'), project.value.filePath.lastIndexOf('\\'))
+      if (lastSlash !== -1) {
+        const dir = project.value.filePath.substring(0, lastSlash)
+        project.value.filePath = `${dir}/${name}.gocut`
+      } else {
+        project.value.filePath = `${name}.gocut`
+      }
+    }
     markDirty()
   }
 
