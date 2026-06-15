@@ -461,6 +461,44 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(aFilters, ","), aLabel))
 				audioLabels = append(audioLabels, aLabel)
 
+			} else if track.Type == project.TrackImage || track.Type == project.TrackPIP {
+				label := fmt.Sprintf("[v%d]", inputIdx)
+				var clipFilters []string
+
+				clipFilters = append(clipFilters, "format=yuva420p")
+				clipFilters = append(clipFilters, "scale=1280:720:force_original_aspect_ratio=decrease")
+				clipFilters = append(clipFilters, "pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+				clipFilters = append(clipFilters, "setsar=1")
+
+				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
+					clipFilters = append(clipFilters, cf)
+				}
+				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
+					clipFilters = append(clipFilters, tf)
+				}
+				if clip.Opacity > 0 && clip.Opacity < 1.0 {
+					clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
+				}
+				if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
+					trans := clip.Transition
+					D := trans.Duration
+					switch trans.Type {
+					case "fade", "dissolve":
+						clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", D))
+					case "blur":
+						clipFilters = append(clipFilters, fmt.Sprintf("boxblur=luma_radius='if(lt(t\\,%g)\\,20*(1-t/%g)\\,0)'", D, D))
+					}
+				}
+
+				ptsExpr := "PTS-STARTPTS"
+				if clip.Speed > 0 && clip.Speed != 1.0 {
+					ptsExpr = fmt.Sprintf("(PTS-STARTPTS)/%g", clip.Speed)
+				}
+				clipFilters = append(clipFilters, fmt.Sprintf("setpts=%s+%.3f/TB", ptsExpr, clip.StartTime))
+
+				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
+				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
+
 			} else if track.Type == project.TrackAudio {
 				label := fmt.Sprintf("[a%d]", inputIdx)
 				var clipFilters []string

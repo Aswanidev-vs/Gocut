@@ -13,7 +13,7 @@ const trackTypeMeta = computed(() => {
   // Order matches TimelinePanel.vue: video / image / audio / pip /
   // text / sticker / fx. The image track hosts still assets, the
   // pip track is for overlay/PIP compositing.
-  const types = ['video', 'image', 'audio', 'pip', 'text', 'sticker', 'fx']
+  const types = ['image', 'video', 'audio', 'pip', 'text', 'sticker', 'fx']
   return types.map(type => ({
     type,
     ...timelineStore.TRACK_TYPES[type],

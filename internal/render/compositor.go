@@ -32,8 +32,8 @@ func (c *Compositor) BuildCommand(p project.Project, settings project.RenderSett
 	// `-loop 1` so ffmpeg's image2 demuxer treats the file as a
 	// frame-looped video stream that can be trimmed.
 	assetToInput := make(map[string]int, len(p.Assets))
-	for _, asset := range p.Assets {
-		assetToInput[asset.ID] = len(args)
+	for idx, asset := range p.Assets {
+		assetToInput[asset.ID] = idx
 		if asset.Type == project.AssetImage {
 			args = append(args, "-loop", "1")
 		}
