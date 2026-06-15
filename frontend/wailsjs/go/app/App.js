@@ -90,6 +90,10 @@ export function NewProject(arg1) {
   return window['go']['app']['App']['NewProject'](arg1);
 }
 
+export function OpenDirectoryPicker() {
+  return window['go']['app']['App']['OpenDirectoryPicker']();
+}
+
 export function OpenFilePicker(arg1) {
   return window['go']['app']['App']['OpenFilePicker'](arg1);
 }

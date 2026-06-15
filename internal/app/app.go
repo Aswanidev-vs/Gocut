@@ -442,6 +442,18 @@ func (a *App) CheckFFmpegInstalled() (string, error) {
 	return "ffmpeg", nil
 }
 
+// OpenDirectoryPicker uses Wails OpenDirectoryDialog to select a folder.
+func (a *App) OpenDirectoryPicker() (string, error) {
+	options := runtime.OpenDialogOptions{
+		Title: "Select Save Folder",
+	}
+	path, err := runtime.OpenDirectoryDialog(a.ctx, options)
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // OpenFilePicker uses the Wails multi-file dialog so the JS side can rely
 // on receiving a []string (instead of having to special-case a single path
 // or an empty string). The previous implementation returned at most one

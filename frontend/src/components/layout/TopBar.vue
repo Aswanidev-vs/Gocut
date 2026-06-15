@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { Undo2, Redo2, Download, Save, FolderOpen, FilePlus, Settings as SettingsIcon, Loader2, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { Undo2, Redo2, Download, Save, FolderOpen, FilePlus, Settings as SettingsIcon, Loader2, CheckCircle2, AlertCircle, FolderSymlink } from 'lucide-vue-next'
 import SettingsDialog from '../settings/SettingsDialog.vue'
 import { OpenFilePicker } from '../../lib/wails'
 
@@ -70,6 +70,15 @@ async function onSave() {
   }
 }
 
+async function onSelectSaveFolder() {
+  try {
+    await projectStore.selectSaveDirectory()
+    uiStore.addToast('Save directory updated', 'success', 2000)
+  } catch (e) {
+    uiStore.addToast('Failed to select folder: ' + (e?.message || e), 'error')
+  }
+}
+
 function onNewProject() {
   uiStore.isNewProjectDialogOpen = true
 }
@@ -120,6 +129,15 @@ function openSettings() {
       title="Open Project"
     >
       <FolderOpen :size="14" />
+    </button>
+
+    <button
+      v-if="projectStore.hasProject"
+      class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
+      @click="onSelectSaveFolder"
+      :title="projectStore.project?.customSaveDirectory ? 'Save folder: ' + projectStore.project.customSaveDirectory : 'Select Save Folder'"
+    >
+      <FolderSymlink :size="14" />
     </button>
 
     <button

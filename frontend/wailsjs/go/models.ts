@@ -500,6 +500,7 @@ export namespace project {
 	    assets: Asset[];
 	    settings: ProjectSettings;
 	    filePath?: string;
+	    customSaveDirectory?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Project(source);
@@ -519,6 +520,7 @@ export namespace project {
 	        this.assets = this.convertValues(source["assets"], Asset);
 	        this.settings = this.convertValues(source["settings"], ProjectSettings);
 	        this.filePath = source["filePath"];
+	        this.customSaveDirectory = source["customSaveDirectory"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

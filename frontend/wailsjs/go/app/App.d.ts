@@ -46,6 +46,8 @@ export function Minimise():Promise<void>;
 
 export function NewProject(arg1:project.ProjectSettings):Promise<project.Project>;
 
+export function OpenDirectoryPicker():Promise<string>;
+
 export function OpenFilePicker(arg1:Array<project.FileFilter>):Promise<Array<string>>;
 
 export function OpenOutputFolder(arg1:string):Promise<void>;

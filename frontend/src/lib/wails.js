@@ -19,6 +19,7 @@ export {
   ClearPreviewCache,
   CheckFFmpegInstalled,
   OpenFilePicker,
+  OpenDirectoryPicker,
   SaveFilePicker,
   GetAppVersion,
   GetMediaServerPort,

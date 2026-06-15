@@ -9,6 +9,8 @@ import {
   ExtractThumbnail,
   ExtractWaveform,
   CheckFFmpegInstalled,
+  OpenFilePicker,
+  OpenDirectoryPicker,
   SaveFilePicker,
   DeleteProject,
   ClearRecentProjects,
@@ -265,6 +267,21 @@ export const useProjectStore = defineStore('project', () => {
     markDirty()
   }
 
+  async function selectSaveDirectory() {
+    if (!project.value) return
+    try {
+      const dir = await OpenDirectoryPicker()
+      if (dir) {
+        project.value.customSaveDirectory = dir
+        project.value.filePath = `${dir}/${project.value.name || 'Untitled'}.gocut`
+        markDirty()
+      }
+    } catch (e) {
+      error.value = e
+      throw e
+    }
+  }
+
   function closeProject() {
     project.value = null
     isDirty.value = false
@@ -315,6 +332,7 @@ export const useProjectStore = defineStore('project', () => {
     getAsset,
     updateLocalProject,
     closeProject,
+    selectSaveDirectory,
     markDirty,
     clearDirty,
     setProject,
