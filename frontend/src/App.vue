@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { useTimelineStore } from './stores/timelineStore'
+import { useHistoryStore } from './stores/historyStore'
 import { OpenFilePicker } from './lib/wails'
 import { Film, FolderOpen, FilePlus, Sparkles, Github, Scissors, Palette, Headphones, X } from 'lucide-vue-next'
 import { useHotkeys } from './composables/useHotkeys'
@@ -22,6 +23,7 @@ import FusionViewer from './components/panels/FusionViewer.vue'
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
 const timelineStore = useTimelineStore()
+const historyStore = useHistoryStore()
 
 useHotkeys()
 
@@ -33,11 +35,26 @@ onMounted(() => {
 
   // Global keyboard shortcuts.
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('beforeunload', onBeforeUnload)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
 })
+
+watch(() => projectStore.project?.id, () => {
+  historyStore.clearHistory()
+  if (projectStore.hasProject) {
+    historyStore.pushSnapshot()
+  }
+}, { immediate: true })
+
+function onBeforeUnload() {
+  if (projectStore.hasProject && projectStore.isDirty) {
+    projectStore.flushAutosave().catch(() => {})
+  }
+}
 
 function onKeyDown(e) {
   if (!projectStore.hasProject) return

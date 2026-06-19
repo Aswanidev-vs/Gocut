@@ -58,6 +58,7 @@ export const useProjectStore = defineStore('project', () => {
   const ffmpegVersion = ref(null)
   const ffmpegStatus = ref('unknown')
   const ffmpegError = ref('')
+  let autosaveTimer = null
 
   const hasProject = computed(() => project.value !== null)
   const projectName = computed(() => project.value?.name ?? 'Untitled')
@@ -65,6 +66,7 @@ export const useProjectStore = defineStore('project', () => {
   function markDirty() {
     if (project.value) {
       isDirty.value = true
+      scheduleAutosave()
     }
   }
 
@@ -72,9 +74,57 @@ export const useProjectStore = defineStore('project', () => {
     isDirty.value = false
   }
 
+  function buildProjectPayload() {
+    if (!project.value) return null
+
+    const payload = JSON.parse(JSON.stringify(project.value))
+    const ts = getTimelineStoreSafely()
+    if (ts) {
+      payload.timeline = {
+        tracks: ts.tracks.map(t => ({
+          ...t,
+          clips: ts.clips
+            .filter(c => c.trackId === t.id)
+            .map(c => ({ ...c })),
+        })),
+        duration: ts.duration,
+      }
+    }
+    payload.assets = payload.assets || []
+    return payload
+  }
+
+  async function persistProjectSnapshot({ clearDirtyOnSuccess = false } = {}) {
+    const payload = buildProjectPayload()
+    if (!payload) return
+    await SaveProject(payload)
+    if (clearDirtyOnSuccess) {
+      clearDirty()
+    }
+  }
+
+  function scheduleAutosave() {
+    if (!project.value || !isDirty.value) return
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer)
+    }
+    autosaveTimer = setTimeout(async () => {
+      autosaveTimer = null
+      try {
+        await persistProjectSnapshot()
+      } catch (_) {
+        // Best-effort autosave: explicit saves still surface errors.
+      }
+    }, 1200)
+  }
+
   function setProject(p) {
     project.value = p
     isDirty.value = false
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer)
+      autosaveTimer = null
+    }
     hydrateTimelineAsync(p)
   }
 
@@ -118,22 +168,7 @@ export const useProjectStore = defineStore('project', () => {
         }
         project.value.filePath = path
       }
-
-      const ts = getTimelineStoreSafely()
-      if (ts) {
-        project.value.timeline = {
-          tracks: ts.tracks.map(t => ({
-            ...t,
-            clips: ts.clips
-              .filter(c => c.trackId === t.id)
-              .map(c => ({ ...c })),
-          })),
-          duration: ts.duration,
-        }
-      }
-      project.value.assets = project.value.assets || []
-      await SaveProject(JSON.parse(JSON.stringify(project.value)))
-      clearDirty()
+      await persistProjectSnapshot({ clearDirtyOnSuccess: true })
     } catch (e) {
       error.value = e
       throw e
@@ -292,10 +327,22 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   function closeProject() {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer)
+      autosaveTimer = null
+    }
     project.value = null
     isDirty.value = false
     const ts = getTimelineStoreSafely()
     if (ts) ts.clearAll()
+  }
+
+  function flushAutosave() {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer)
+      autosaveTimer = null
+    }
+    return persistProjectSnapshot()
   }
 
   async function deleteRecentProject(id) {
@@ -345,6 +392,7 @@ export const useProjectStore = defineStore('project', () => {
     markDirty,
     clearDirty,
     setProject,
+    flushAutosave,
     deleteRecentProject,
     clearRecentProjects,
   }

@@ -297,14 +297,6 @@ func (a *App) resolveVisualAsset(p project.Project, t float64) (*project.Asset, 
 	if asset, src := a.assetAtTime(p, t); asset != nil {
 		return asset, src
 	}
-	// Fallback: if a still image exists in the project but no clip
-	// happens to cover t, return the first image so the preview is at
-	// least a meaningful placeholder rather than a black frame.
-	for i := range p.Assets {
-		if p.Assets[i].Type == project.AssetImage {
-			return &p.Assets[i], 0
-		}
-	}
 	return nil, 0
 }
 
