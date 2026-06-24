@@ -456,6 +456,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if track.Muted {
 					aFilters = append(aFilters, "volume=0")
 				}
+				if clip.Normalize {
+					aFilters = append(aFilters, filters.BuildLoudNormFilter())
+				}
 				delayMs := int(clip.StartTime * 1000)
 				aFilters = append(aFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
 				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(aFilters, ","), aLabel))
@@ -516,6 +519,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				}
 				if af := ffmpeg.BuildAudioFilters(clip.Volume, fadeIn, false, fadeDur, clip.Duration); af != "" {
 					clipFilters = append(clipFilters, af)
+				}
+				if clip.Normalize {
+					clipFilters = append(clipFilters, filters.BuildLoudNormFilter())
 				}
 
 				delayMs := int(clip.StartTime * 1000)

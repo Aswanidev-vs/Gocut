@@ -25,3 +25,7 @@ func BuildAudioFilterChain(volume float64, fadeIn, fadeOut bool, fadeDuration, e
 	}
 	return strings.Join(parts, ",")
 }
+
+func BuildLoudNormFilter() string {
+	return "loudnorm=I=-16:TP=-1.5:LRA=11"
+}

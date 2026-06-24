@@ -166,6 +166,7 @@ type Clip struct {
 	Color        ColorGrade    `json:"color"`
 	Keyframes    []Keyframe    `json:"keyframes"`
 	Transition   *Transition   `json:"transition,omitempty"`
+	Normalize    bool          `json:"normalize"`
 	TextProps    *TextProps    `json:"textProps,omitempty"`
 	StickerProps *StickerProps `json:"stickerProps,omitempty"`
 }

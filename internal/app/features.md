@@ -155,7 +155,7 @@ These features from the PRD have been fully or substantially implemented.
 | Audio keyframes / volume envelope | ❌ | Not implemented |
 | BGM duck (sidechain) | ❌ | Not implemented |
 | Noise reduction (`afftdn`) | ❌ | Not implemented |
-| Audio normalization (`loudnorm`) | ❌ | Not implemented |
+| Audio normalization (`loudnorm`) | ✅ | implemented |
 
 ### Transitions
 
@@ -245,7 +245,7 @@ All MVP features from the PRD have been implemented.
 | 7 | **Audio Keyframes / Volume Envelope** | 8.8 | Medium | Volume envelope drawn over waveform. FFmpeg `volume=enable='between(t,...)'` filter. |
 | 8 | **Audio Fade Handles (UI)** | 8.8 | Medium | Drag-to-fade on edges of audio regions in timeline. |
 | 9 | **Noise Reduction Toggle** | 8.8 | Medium | Apply `afftdn=nf=-25` non-destructively during render. |
-| 10 | **Audio Normalization** | 8.8 | Low | `loudnorm=I=-16:TP=-1.5:LRA=11` per-track toggle. |
+| 10 | **Audio Normalization** | 8.8 | Done | `loudnorm=I=-16:TP=-1.5:LRA=11` per-clip toggle. |
 | 11 | **BGM Duck (Sidechain)** | 8.8 | Low | Automatically reduce BGM volume when main audio is present. |
 | 12 | **Right-click Context Menu** | 8.3 | Medium | Context menu: Split at Playhead, Duplicate, Delete, Detach Audio, Speed. |
 | 13 | **Zoom-to-Fit Button** | 8.3 | Low | Timeline toolbar button to fit all clips in view. |

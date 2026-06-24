@@ -695,6 +695,25 @@ function applyCustomAnimation() {
 
           <hr class="border-border" />
 
+          <!-- Normalize (Loudness) -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Normalize (Loudnorm)</h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="flex-1 px-3 py-1.5 rounded text-xs font-medium border transition-all"
+                :class="selectedClip.normalize ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary hover:border-accent/40'"
+                @click="updateClipField('normalize', !selectedClip.normalize)"
+              >
+                {{ selectedClip.normalize ? 'Enabled' : 'Disabled' }}
+              </button>
+            </div>
+            <div class="text-[9px] text-text-secondary mt-1.5">EBU R128 loudness normalization (I=-16, TP=-1.5, LRA=11)</div>
+          </div>
+
+          <hr class="border-border" />
+
           <!-- Waveform -->
           <div v-if="asset && asset.waveform && asset.waveform.length">
             <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Waveform</h4>
