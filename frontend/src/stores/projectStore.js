@@ -59,12 +59,14 @@ export const useProjectStore = defineStore('project', () => {
   const ffmpegStatus = ref('unknown')
   const ffmpegError = ref('')
   let autosaveTimer = null
+  let dirtyRevision = 0
 
   const hasProject = computed(() => project.value !== null)
   const projectName = computed(() => project.value?.name ?? 'Untitled')
 
   function markDirty() {
     if (project.value) {
+      dirtyRevision += 1
       isDirty.value = true
       scheduleAutosave()
     }
@@ -97,8 +99,9 @@ export const useProjectStore = defineStore('project', () => {
   async function persistProjectSnapshot({ clearDirtyOnSuccess = false } = {}) {
     const payload = buildProjectPayload()
     if (!payload) return
+    const revisionAtStart = dirtyRevision
     await SaveProject(payload)
-    if (clearDirtyOnSuccess) {
+    if (clearDirtyOnSuccess && revisionAtStart === dirtyRevision) {
       clearDirty()
     }
   }
@@ -111,7 +114,7 @@ export const useProjectStore = defineStore('project', () => {
     autosaveTimer = setTimeout(async () => {
       autosaveTimer = null
       try {
-        await persistProjectSnapshot()
+        await persistProjectSnapshot({ clearDirtyOnSuccess: true })
       } catch (_) {
         // Best-effort autosave: explicit saves still surface errors.
       }
@@ -342,7 +345,7 @@ export const useProjectStore = defineStore('project', () => {
       clearTimeout(autosaveTimer)
       autosaveTimer = null
     }
-    return persistProjectSnapshot()
+    return persistProjectSnapshot({ clearDirtyOnSuccess: true })
   }
 
   async function deleteRecentProject(id) {

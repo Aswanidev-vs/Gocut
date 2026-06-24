@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
 import { Undo2, Redo2, Download, Save, FolderOpen, FilePlus, Settings as SettingsIcon, Loader2, CheckCircle2, AlertCircle, FolderSymlink } from 'lucide-vue-next'
@@ -11,18 +11,39 @@ const uiStore = useUiStore()
 
 const isEditingName = ref(false)
 const nameInput = ref(projectStore.projectName)
+const renameInput = ref(null)
 
-function startRename() {
+async function startRename() {
   nameInput.value = projectStore.projectName
   isEditingName.value = true
+  await nextTick()
+  renameInput.value?.focus()
+  renameInput.value?.select()
 }
-function commitRename() {
-  if (nameInput.value.trim()) {
-    projectStore.updateProjectName(nameInput.value.trim())
+async function commitRename() {
+  const trimmed = nameInput.value.trim()
+  if (!trimmed) {
+    nameInput.value = projectStore.projectName
+    isEditingName.value = false
+    return
   }
-  isEditingName.value = false
+
+  const changed = trimmed !== projectStore.projectName
+  try {
+    await projectStore.updateProjectName(trimmed)
+    if (changed) {
+      await projectStore.flushAutosave()
+      uiStore.addToast('Project name updated', 'success', 1500)
+    }
+  } catch (e) {
+    uiStore.addToast('Failed to rename: ' + (e?.message || e), 'error')
+    nameInput.value = projectStore.projectName
+  } finally {
+    isEditingName.value = false
+  }
 }
 function cancelRename() {
+  nameInput.value = projectStore.projectName
   isEditingName.value = false
 }
 
@@ -154,12 +175,12 @@ function openSettings() {
     <div class="flex items-center min-w-0 max-w-[280px]">
       <template v-if="isEditingName">
         <input
+          ref="renameInput"
           v-model="nameInput"
           class="bg-bg border border-accent rounded px-2 py-1 text-sm text-text-primary outline-none w-full"
-          @keyup.enter="commitRename"
+          @keydown.enter.prevent.stop="commitRename"
           @keyup.esc="cancelRename"
           @blur="commitRename"
-          autofocus
         />
       </template>
       <button
