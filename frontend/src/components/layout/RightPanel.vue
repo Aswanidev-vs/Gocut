@@ -714,6 +714,25 @@ function applyCustomAnimation() {
 
           <hr class="border-border" />
 
+          <!-- Noise Reduction -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Noise Reduction</h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="flex-1 px-3 py-1.5 rounded text-xs font-medium border transition-all"
+                :class="selectedClip.noiseReduction ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary hover:border-accent/40'"
+                @click="updateClipField('noiseReduction', !selectedClip.noiseReduction)"
+              >
+                {{ selectedClip.noiseReduction ? 'Enabled' : 'Disabled' }}
+              </button>
+            </div>
+            <div class="text-[9px] text-text-secondary mt-1.5">FFT-based noise reduction (afftdn, nf=-25)</div>
+          </div>
+
+          <hr class="border-border" />
+
           <!-- Waveform -->
           <div v-if="asset && asset.waveform && asset.waveform.length">
             <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Waveform</h4>

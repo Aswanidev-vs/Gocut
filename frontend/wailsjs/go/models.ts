@@ -269,6 +269,8 @@ export namespace project {
 	    color: ColorGrade;
 	    keyframes: Keyframe[];
 	    transition?: Transition;
+	    normalize: boolean;
+	    noiseReduction: boolean;
 	    textProps?: TextProps;
 	    stickerProps?: StickerProps;
 	
@@ -293,6 +295,8 @@ export namespace project {
 	        this.color = this.convertValues(source["color"], ColorGrade);
 	        this.keyframes = this.convertValues(source["keyframes"], Keyframe);
 	        this.transition = this.convertValues(source["transition"], Transition);
+	        this.normalize = source["normalize"];
+	        this.noiseReduction = source["noiseReduction"];
 	        this.textProps = this.convertValues(source["textProps"], TextProps);
 	        this.stickerProps = this.convertValues(source["stickerProps"], StickerProps);
 	    }

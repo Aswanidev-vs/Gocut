@@ -167,6 +167,7 @@ type Clip struct {
 	Keyframes    []Keyframe    `json:"keyframes"`
 	Transition   *Transition   `json:"transition,omitempty"`
 	Normalize    bool          `json:"normalize"`
+	NoiseReduction bool        `json:"noiseReduction"`
 	TextProps    *TextProps    `json:"textProps,omitempty"`
 	StickerProps *StickerProps `json:"stickerProps,omitempty"`
 }
