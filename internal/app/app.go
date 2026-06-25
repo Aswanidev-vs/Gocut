@@ -599,8 +599,8 @@ func ensureAppDataSubdir(name string) (string, error) {
 func (a *App) startMediaServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/media", func(w http.ResponseWriter, r *http.Request) {
-		assetPath := r.URL.Query().Get("path")
-		if assetPath == "" {
+		assetPath := filepath.Clean(r.URL.Query().Get("path"))
+		if assetPath == "" || assetPath == "." {
 			http.Error(w, "missing path", http.StatusBadRequest)
 			return
 		}
@@ -627,8 +627,8 @@ func (a *App) startMediaServer() {
 	})
 
 	mux.HandleFunc("/audio", func(w http.ResponseWriter, r *http.Request) {
-		assetPath := r.URL.Query().Get("path")
-		if assetPath == "" {
+		assetPath := filepath.Clean(r.URL.Query().Get("path"))
+		if assetPath == "" || assetPath == "." {
 			http.Error(w, "missing path", http.StatusBadRequest)
 			return
 		}
