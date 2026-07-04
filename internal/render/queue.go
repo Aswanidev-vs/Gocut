@@ -348,10 +348,36 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		duration = 10 // Fallback
 	}
 
+	// Resolve render settings with defaults
+	w := settings.Width
+	if w <= 0 {
+		w = 1280
+	}
+	h := settings.Height
+	if h <= 0 {
+		h = 720
+	}
+	fps := settings.FPS
+	if fps <= 0 {
+		fps = 30
+	}
+	videoCodec := settings.Codec
+	if videoCodec == "" {
+		videoCodec = "libx264"
+	}
+	preset := settings.Preset
+	if preset == "" {
+		preset = "fast"
+	}
+	crf := settings.CRF
+	if crf <= 0 {
+		crf = 23
+	}
+
 	filterParts := []string{}
 	
 	// Create base video and base audio
-	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=1280x720:r=30:d=%.3f[basev]", duration))
+	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=%.3f[basev]", w, h, fps, duration))
 	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
 	// than the 'd' parameter which some builds don't recognise on anullsrc.
 	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo,atrim=duration=%.3f[basea]", duration))
@@ -409,8 +435,8 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				var clipFilters []string
 
 				clipFilters = append(clipFilters, "format=yuva420p")
-				clipFilters = append(clipFilters, "scale=1280:720:force_original_aspect_ratio=decrease")
-				clipFilters = append(clipFilters, "pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+				clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
+				clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
 				clipFilters = append(clipFilters, "setsar=1")
 
 				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
@@ -472,8 +498,8 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				var clipFilters []string
 
 				clipFilters = append(clipFilters, "format=yuva420p")
-				clipFilters = append(clipFilters, "scale=1280:720:force_original_aspect_ratio=decrease")
-				clipFilters = append(clipFilters, "pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+				clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
+				clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
 				clipFilters = append(clipFilters, "setsar=1")
 
 				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
@@ -638,9 +664,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		"-filter_complex", strings.Join(filterParts, ";"),
 		"-map", lastV,
 		"-map", lastA,
-		"-c:v", "libx264",
-		"-preset", "fast",
-		"-crf", "23",
+		"-c:v", videoCodec,
+		"-preset", preset,
+		"-crf", strconv.Itoa(crf),
 		"-pix_fmt", "yuv420p",
 	)
 	
@@ -648,8 +674,18 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	if audioBitrate == "" {
 		audioBitrate = "192k"
 	}
-	args = append(args, "-c:a", "aac", "-b:a", audioBitrate)
-	
+
+	// Set audio codec based on format or default to aac
+	audioCodec := "aac"
+	if settings.Format == "webm" {
+		audioCodec = "libopus"
+	}
+	args = append(args, "-c:a", audioCodec, "-b:a", audioBitrate)
+
+	if settings.Format != "" {
+		args = append(args, "-f", settings.Format)
+	}
+
 	args = append(args, outputPath)
 	return args
 }
