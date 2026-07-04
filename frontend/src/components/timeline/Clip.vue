@@ -29,18 +29,45 @@ const fileName = computed(() => {
 const hasTransition = computed(() => {
   return props.clip.transition && props.clip.transition.type !== 'none' && props.clip.transition.duration > 0
 })
-
 const hasEffects = computed(() => {
-  const c = props.clip.color || {}
-  const t = props.clip.transform || {}
-  const op = props.clip.opacity
-  return !!(
-    c.brightness || c.contrast || c.saturation || c.hue || c.blur || c.sharpness || c.vignette || c.grain ||
-    (t.scaleX !== undefined && t.scaleX !== 1) || (t.scaleY !== undefined && t.scaleY !== 1) ||
-    t.rotation || t.flipH || t.flipV ||
-    (op !== undefined && op < 1)
-  )
+  const c = props.clip.color
+  return c && (c.brightness || c.contrast || c.saturation || c.hue || c.sharpness ||
+               c.vignette || c.grain || c.blur || c.chromaKeyColor)
 })
+
+const showMenu = ref(false)
+const menuX = ref(0)
+const menuY = ref(0)
+
+function onContextMenu(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  timelineStore.selectClip(props.clip.id, false)
+  menuX.value = e.clientX
+  menuY.value = e.clientY
+  showMenu.value = true
+  window.addEventListener('click', closeMenu, { once: true })
+}
+function closeMenu() {
+  showMenu.value = false
+}
+function splitClip() {
+  timelineStore.splitClipAt(props.clip.id, props.clip.startTime + props.clip.duration / 2)
+  closeMenu()
+}
+function duplicateClip() {
+  const dup = { ...props.clip, id: undefined, startTime: props.clip.startTime + props.clip.duration + 0.1 }
+  timelineStore.addClipToTrack(props.clip._trackIndex, dup)
+  closeMenu()
+}
+function deleteClip() {
+  timelineStore.removeClip(props.clip.id)
+  closeMenu()
+}
+function setSpeed(s) {
+  timelineStore.updateClip(props.clip.id, { speed: s })
+  closeMenu()
+}
 
 // ---- drag to move ----
 const dragState = ref(null)
@@ -122,6 +149,7 @@ function onKeyframeMouseDown(e, kf) {
     :class="{ 'ring-2 ring-accent z-10': selected }"
     @mousedown="(e) => onMouseDown(e, 'move')"
     @dblclick.stop="timelineStore.selectClip(clip.id)"
+    @contextmenu.prevent="onContextMenu"
   >
     <div
       class="px-1.5 py-0.5 truncate text-[10px] font-medium pointer-events-none flex items-center gap-1"
@@ -176,5 +204,23 @@ function onKeyframeMouseDown(e, kf) {
       class="absolute top-0 bottom-0 right-0 w-1.5 cursor-ew-resize hover:bg-white/30"
       @mousedown.stop="(e) => onMouseDown(e, 'right')"
     />
+
+    <!-- Right-click context menu -->
+    <Teleport to="body">
+      <div
+        v-if="showMenu"
+        class="fixed z-50 min-w-36 bg-bg border border-border rounded-lg shadow-xl py-1 text-xs"
+        :style="{ left: menuX + 'px', top: menuY + 'px' }"
+        @click.stop
+      >
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="splitClip">Split at Playhead</button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="duplicateClip">Duplicate</button>
+        <div class="h-px bg-border my-1" />
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="setSpeed(0.5)">Half Speed</button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="setSpeed(2)">Double Speed</button>
+        <div class="h-px bg-border my-1" />
+        <button class="w-full text-left px-3 py-1.5 hover:bg-red-500/10 text-red-400" @click="deleteClip">Delete</button>
+      </div>
+    </Teleport>
   </div>
 </template>

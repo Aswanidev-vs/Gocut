@@ -50,9 +50,11 @@ watch(() => projectStore.project?.id, () => {
   }
 }, { immediate: true })
 
-function onBeforeUnload() {
+function onBeforeUnload(e) {
   if (projectStore.hasProject && projectStore.isDirty) {
     projectStore.flushAutosave().catch(() => {})
+    e.preventDefault()
+    e.returnValue = ''
   }
 }
 

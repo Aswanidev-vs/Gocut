@@ -103,10 +103,12 @@ async function onSelectSaveFolder() {
 }
 
 function onNewProject() {
+  if (projectStore.hasProject && projectStore.isDirty && !confirm('You have unsaved changes. Create a new project anyway?')) return
   uiStore.isNewProjectDialogOpen = true
 }
 
 async function onOpenProject() {
+  if (projectStore.hasProject && projectStore.isDirty && !confirm('You have unsaved changes. Open another project anyway?')) return
   try {
     const paths = await OpenFilePicker([{ name: 'Gocut Project', extensions: ['gocut', 'json'] }])
     if (!Array.isArray(paths) || paths.length === 0) return
