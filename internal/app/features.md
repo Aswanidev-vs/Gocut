@@ -30,7 +30,7 @@ These features from the PRD have been fully or substantially implemented.
 | Export project file | ✅ | `ExportProjectFile()` with formatted JSON |
 | Manage Recents (remove individual / clear all) | ✅ | `DeleteProject()`, `ClearRecentProjects()`, UI with X button |
 | Auto-assign FilePath on first import | ✅ | Saves alongside the first imported media asset |
-| Unsaved changes prompt | ❌ | Not implemented |
+| Unsaved changes prompt | ✅ | `beforeunload` handler + dirty check before new/open project |
 | Rename project from title bar | ❌ | Not implemented |
 
 ### Media Import & Asset Pool
@@ -71,7 +71,7 @@ These features from the PRD have been fully or substantially implemented.
 | Waveform rendering on audio clips | ✅ | Via `wavesurfer.js` |
 | Timeline ruler | ✅ | `TimelineRuler.vue` |
 | Keyboard shortcuts (Space, Delete, S, Ctrl+S, Ctrl+E) | ✅ | Global `onKeyDown` handler |
-| Right-click context menu | ❌ | Not implemented |
+| Right-click context menu | ✅ | Clip context menu: Split at Playhead, Duplicate, Speed presets, Delete |
 | J/K/L shuttle controls | ❌ | Not implemented |
 | Zoom-to-fit button | ❌ | Not implemented |
 
@@ -90,7 +90,7 @@ These features from the PRD have been fully or substantially implemented.
 | Preview quality settings (full/1/2/1/4) | ✅ | `previewQuality` ref |
 | Current time / total duration display | ✅ | `formattedTime` computed |
 | Konva.js canvas overlays | 🔄 | `CanvasOverlay.vue` exists but basic |
-| Fullscreen preview mode | ❌ | Not implemented |
+| Fullscreen preview mode | ✅ | `PreviewPlayer.vue` fullscreen button + `requestFullscreen()` |
 | Mini-scrubber under preview | ❌ | Not implemented |
 
 ### Video Clip Operations
@@ -104,7 +104,7 @@ These features from the PRD have been fully or substantially implemented.
 | Opacity (0–100%) | ✅ | `colorchannelmixer=aa={opacity}` filter |
 | Scale & Position (X/Y/W/H) | ✅ | `scale` filter with animated expressions |
 | Keyframes (any transform property) | ✅ | `BuildAnimatedExpression()` — linear interpolation between keyframes |
-| Reverse | ❌ | Model supports `Reversed` field but render pipeline doesn't implement |
+| Reverse | ✅ | `reverse` (video) + `areverse` (audio) ffmpeg filters applied in render pipeline |
 
 ### Color Grading & Filters
 
@@ -121,7 +121,7 @@ These features from the PRD have been fully or substantially implemented.
 | Color Balance (Temp, Tint, Highlights, Shadows, Lift/Gamma/Gain) | ✅ | `colorbalance=` filter |
 | Curves | ✅ | `curves=` filter |
 | Chroma Key | ✅ | `chromakey=` filter — configurable color, similarity, blend |
-| Filter Presets (12 built-in) | ❌ | Model supports, UI not implemented |
+| Filter Presets (12 built-in) | ✅ | Implemented in `RightPanel.vue` as preset buttons (Natural, Cinema, Warm, Cool, Vintage, B&W, Vivid, Matte, Golden Hour, Cyberpunk, Soft, Fade) — no thumbnail strip previews |
 | LUT import (.cube) | ❌ | Not implemented |
 
 ### Text & Titles
@@ -236,7 +236,7 @@ All MVP features from the PRD have been implemented.
 
 | # | Feature | PRD Section | Priority | Notes |
 |---|---------|-------------|----------|-------|
-| 1 | **Filter Presets (12)** | 8.6 | High | Named sets of color grading values (Natural, Cinema, Warm, Cool, Vintage, B&W, Fade, Vivid, Matte, Golden Hour, Cyberpunk, Soft). UI: horizontal scrollable strip with thumbnail previews. |
+| 1 | **Filter Presets (12)** | 8.6 | ✅ Done | Implemented in `RightPanel.vue` as preset buttons. Missing: thumbnail strip previews per PRD spec. |
 | 2 | **Text Animation Presets (12)** | 8.7 | High | None, Fade In, Fade Out, Typewriter, Slide In L/R/T/B, Bounce, Pop, Zoom In, Wipe. Configurable duration + mini-loop preview in properties panel. |
 | 3 | **LUT Import (.cube)** | 8.6 | High | Parse `.cube` files in Go, apply via `lut3d` filter. UI for importing and selecting LUTs. |
 | 4 | **WebM (VP9) Export** | 8.11 | High | Add `-c:v libvpx-vp9` path in render pipeline. Scaffolded in `RenderSettings.Format` but not wired. |
@@ -247,21 +247,21 @@ All MVP features from the PRD have been implemented.
 | 9 | **Noise Reduction Toggle** | 8.8 | Done | Apply `afftdn=nf=-25` non-destructively during render. |
 | 10 | **Audio Normalization** | 8.8 | Done | `loudnorm=I=-16:TP=-1.5:LRA=11` per-clip toggle. |
 | 11 | **BGM Duck (Sidechain)** | 8.8 | Low | Automatically reduce BGM volume when main audio is present. |
-| 12 | **Right-click Context Menu** | 8.3 | Medium | Context menu: Split at Playhead, Duplicate, Delete, Detach Audio, Speed. |
+| 12 | **Right-click Context Menu** | 8.3 | ✅ Done | Clip context menu: Split, Duplicate, Speed presets, Delete. |
 | 13 | **Zoom-to-Fit Button** | 8.3 | Low | Timeline toolbar button to fit all clips in view. |
 | 14 | **J/K/L Shuttle Controls** | 8.3 | Low | Keyboard shuttle: J=reverse, K=stop, L=forward. |
-| 15 | **Fullscreen Preview Mode** | 8.4 | Low | Preview canvas fills the entire screen/window. |
+| 15 | **Fullscreen Preview Mode** | 8.4 | ✅ Done | `PreviewPlayer.vue` fullscreen button + `requestFullscreen()`. |
 | 16 | **Mini-scrubber Under Preview** | 8.4 | Low | Small timeline strip directly under the preview canvas. |
 | 17 | **Emoji Picker / Support** | 8.7 | Low | Emoji button in text toolbar, rendered via system emoji font. |
 | 18 | **Double-click Text to Edit on Preview Canvas** | 8.7 | ✅ Done | Now implemented — inline text editing on preview player, Enter to commit, Esc to cancel. |
 | 19 | **Built-in Sticker Pack (30+)** | 8.10 | Low | Bundle open-licensed SVG/PNG stickers in `assets/stickers/`. |
 | 20 | **GIF Sticker Looping** | 8.10 | Low | Ensure GIFs loop for the duration of the clip during render. |
 | 21 | **Render Completion Notification** | 8.11 | Low | OS toast via Wails `runtime.WindowExecJS` or `go-toast`. |
-| 22 | **Unsaved Changes Prompt** | 8.1 | Medium | `beforeunload`-style confirmation dialog on close/new/load. |
+| 22 | **Unsaved Changes Prompt** | 8.1 | ✅ Done | `beforeunload` confirmation + dirty check before new/open project. |
 | 23 | **Rename Project from Title Bar** | 8.1 | Low | Double-click project name in `TopBar.vue` to rename inline. |
 | 24 | **Asset Search/Filter** | 8.2 | ✅ Done | Now implemented — text search + type filter chips in `AssetPool.vue`. |
 | 25 | **Asset Remove with Usage Warning** | 8.2 | ✅ Done | Now implemented — confirmation dialog appears if asset is in use on the timeline. |
-| 26 | **Clip Reverse (Render Pipeline)** | 8.5 | Low | `ffmpeg -vf reverse -af areverse` — model has `Reversed` field but render doesn't implement. |
+| 26 | **Clip Reverse (Render Pipeline)** | 8.5 | ✅ Done | `reverse` (video) + `areverse` (audio) ffmpeg filters applied in render pipeline. |
 
 ---
 
@@ -269,8 +269,8 @@ All MVP features from the PRD have been implemented.
 
 | # | Feature | What's Done | What's Missing |
 |---|---------|-------------|----------------|
-| 1 | **Keyframe Animation System** | Data model (`Keyframe`, `Clip.Keyframes`), FFmpeg expression builder (`BuildAnimatedExpression` with linear interpolation), `addKeyframe`/`removeKeyframe` in timelineStore, keyframe support in render overlays | No UI for editing keyframes in inspector panel; no keyframe diamond visualization on clips; no easing curves in inspector; no visual keyframe editor timeline |
-| 2 | **Multiple Video + Audio Tracks** | Model supports `TrackVideo`, `TrackAudio`, `TrackImage`, `TrackPIP`; compositor handles all tracks; timelineStore supports adding/removing arbitrary tracks; frontend UI shows track list with labels | Render pipeline concatenates video streams but doesn't layer overlay tracks properly (needs `overlay` filter chain for PIP); frontend track list needs add/remove buttons |
+| 1 | **Keyframe Animation System** | Data model (`Keyframe`, `Clip.Keyframes`), FFmpeg expression builder (`BuildAnimatedExpression` with linear interpolation), `addKeyframe`/`removeKeyframe` in timelineStore, keyframe support in render overlays, per-property `toggleKeyframe()` with diamond icons in RightPanel, draggable keyframe diamonds on Clip.vue, Keyframes tab in DesignPanel | Missing: easing-curve graph editor; no visual keyframe editor timeline rail |
+| 2 | **Multiple Video + Audio Tracks** | Model supports `TrackVideo`, `TrackAudio`, `TrackImage`, `TrackPIP`; render pipeline layers all video overlays via `overlay=` filter chain (including PIP/Image); timelineStore supports adding/removing arbitrary tracks; frontend UI shows track list with labels | Frontend track list needs add/remove buttons |
 | 3 | **Render Queue** | Queue structure (`render.Queue`) with single-worker FIFO, enqueue/get/list/cancel, progress events | Multi-job queue not implemented (single-worker by design for MVP); resume/persist queue across app restart; job priority |
 | 4 | **Loop Toggle for Audio Clips** | Frontend state (`loop` in playerStore) | Render pipeline doesn't loop audio clips to fill project duration; needs `-stream_loop -1` or similar |
 | 5 | **Waveform Rendering in Timeline** | `ExtractWaveform()` works; `wavesurfer.js` dependency is in package.json | Actual integration of WaveSurfer.js into `Clip.vue` timeline rendering not confirmed |
@@ -325,7 +325,7 @@ Features **not in the original PRD** but either already implemented or proposed 
 | 21 | **Batch Export** | Queue multiple projects or multiple versions of the same project for export | Low |
 | 22 | **Hot Reload for Node Compositor** | Live preview of node graph changes during playback | Medium |
 | 23 | **Export Presets** | Save/load named export configurations (e.g., "YouTube 1080p", "Instagram Reel") | Medium |
-| 24 | **Undo/Redo Keyboard Shortcuts** | `Ctrl+Z` / `Ctrl+Y` for undo/redo (currently structure exists but shortcuts not wired) | High |
+| 24 | **Undo/Redo Keyboard Shortcuts** | `Ctrl+Z` / `Ctrl+Y` for undo/redo — wired via `useHotkeys.js`, TopBar buttons now have `@click` handlers | High |
 
 ---
 
@@ -335,22 +335,22 @@ Features **not in the original PRD** but either already implemented or proposed 
 
 | Category | Count |
 |----------|-------|
-| ✅ **Fully Implemented (from PRD)** | ~60 features |
+| ✅ **Fully Implemented (from PRD)** | ~68 features |
 | 🔄 **Partially Implemented / In Progress** | 6 features |
-| ❌ **Not Yet Implemented (from PRD)** | 26 features |
+| ❌ **Not Yet Implemented (from PRD)** | 18 features |
 | 💡 **Bonus Features Already Built** | 11 features |
 | 🚀 **Suggested Future Features** | 24 features |
 
 ### PRD Conformance
 
 - **MVP (v0.1) Scope:** ~98% complete (all MVP features implemented)
-- **Full v1.0 Scope:** ~70% complete (majority of planned features implemented)
+- **Full v1.0 Scope:** ~82% complete (majority of planned features implemented)
 - The codebase has actually exceeded the PRD spec in several areas (node compositor, design workspace, extended color grading)
 
 ### Top Priority for Next Milestone
 
-1. **Filter Presets** (12 built-in looks) — relatively small effort, big UX impact
-2. **Text Animation Presets** — similar to above, enables creator-style text
-3. **WebM + GIF Export** — completes the export format story
-4. **Keyframe UI** — enable visual keyframe editing in the inspector
-5. **Keyboard Shortcuts for Undo/Redo** — basic UX requirement
+1. **Text Animation Presets** — enables creator-style text animations
+2. **WebM + GIF Export** — completes the export format story
+3. **Keyframe Easing Graph Editor** — visual easing curve editor in inspector
+4. **Audio Keyframes / Volume Envelope** — volume automation over timeline
+5. **Zoom-to-Fit Button** — small UX addition, frequently requested
