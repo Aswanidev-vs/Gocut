@@ -40,7 +40,6 @@ type App struct {
 	projectMgr      *project.Manager
 	store           *project.Store
 	renderQueue     *render.Queue
-	compositor      *render.Compositor
 	thumbCache      *cache.ThumbnailCache
 	frameCache      *cache.FrameCache
 	fontScanner     *fonts.Scanner
@@ -74,7 +73,6 @@ func (a *App) Startup(ctx context.Context) {
 	a.projectMgr = project.NewManager(a.store)
 
 	a.renderQueue = render.NewQueue(ctx)
-	a.compositor = render.NewCompositor(a.executor)
 
 	thumbDir := appDataDir("thumbnails")
 	thumbCache, _ := cache.NewThumbnailCache(thumbDir, 500*1024*1024)

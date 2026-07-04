@@ -41,7 +41,7 @@ func BuildTransformFilters(clip project.Clip) string {
 	}
 
 	if t.CropW > 0 && t.CropH > 0 {
-		parts = append(parts, fmt.Sprintf("crop=iw*%g:ih*%g:iw*%g:ih*%g", t.CropW, t.CropH, t.CropX, t.CropY))
+		parts = append(parts, fmt.Sprintf("crop=%g:%g:%g:%g", t.CropW, t.CropH, t.CropX, t.CropY))
 	}
 	if t.FlipH {
 		parts = append(parts, "hflip")
@@ -57,7 +57,7 @@ func BuildColorFilters(c project.ColorGrade) string {
 	if c.Brightness != 0 || c.Contrast != 0 || c.Saturation != 0 {
 		parts = append(parts, fmt.Sprintf("eq=brightness=%g:contrast=%g:saturation=%g",
 			float64(c.Brightness)/100.0,
-			float64(c.Contrast)/100.0,
+			1.0+float64(c.Contrast)/100.0,
 			float64(c.Saturation)/100.0))
 	}
 	if c.Hue != 0 {
