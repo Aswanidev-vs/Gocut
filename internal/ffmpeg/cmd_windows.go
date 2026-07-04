@@ -3,7 +3,9 @@
 package ffmpeg
 
 import (
+	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -13,4 +15,30 @@ func PrepareCmd(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.HideWindow = true
+	cmd.Env = sanitizedFFmpegEnv(cmd.Env)
+}
+
+// Some Windows FFmpeg builds link against Fontconfig but do not ship a usable
+// default config. If the parent process inherits broken FONTCONFIG_* variables,
+// FFmpeg can fail even when drawtext uses an explicit font file.
+func sanitizedFFmpegEnv(existing []string) []string {
+	env := existing
+	if len(env) == 0 {
+		env = os.Environ()
+	}
+
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		key := entry
+		if idx := strings.IndexByte(entry, '='); idx >= 0 {
+			key = entry[:idx]
+		}
+		switch strings.ToUpper(key) {
+		case "FONTCONFIG_FILE", "FONTCONFIG_PATH":
+			continue
+		default:
+			out = append(out, entry)
+		}
+	}
+	return out
 }
