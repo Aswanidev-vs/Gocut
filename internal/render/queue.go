@@ -612,21 +612,23 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			yExpr = fmt.Sprintf("(h-text_h)/2+%.0f", tc.clip.Transform.Y)
 		}
 
-		fontFile := ""
-		if runtime.GOOS == "windows" {
-			if tc.tp.Bold {
-				fontFile = "C\\:/Windows/Fonts/arialbd.ttf"
+		fontFile := tc.tp.FontFamily
+		if fontFile == "" {
+			if runtime.GOOS == "windows" {
+				if tc.tp.Bold {
+					fontFile = "C\\:/Windows/Fonts/arialbd.ttf"
+				} else {
+					fontFile = "C\\:/Windows/Fonts/arial.ttf"
+				}
+			} else if runtime.GOOS == "darwin" {
+				if tc.tp.Bold {
+					fontFile = "/System/Library/Fonts/HelveticaNeue-Bold.ttc"
+				} else {
+					fontFile = "/System/Library/Fonts/Helvetica.ttc"
+				}
 			} else {
-				fontFile = "C\\:/Windows/Fonts/arial.ttf"
+				fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 			}
-		} else if runtime.GOOS == "darwin" {
-			if tc.tp.Bold {
-				fontFile = "/System/Library/Fonts/HelveticaNeue-Bold.ttc"
-			} else {
-				fontFile = "/System/Library/Fonts/Helvetica.ttc"
-			}
-		} else {
-			fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 		}
 
 		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
