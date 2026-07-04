@@ -631,7 +631,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			}
 		}
 
-		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
+		drawtext := fmt.Sprintf("drawtext=text='%s':fontconfig=0:fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
 			text, fontFile, fontSize, fontColor, xExpr, yExpr, startT, endT)
 
 		if tc.tp.StrokeWidth > 0 {
