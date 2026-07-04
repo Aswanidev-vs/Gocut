@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -178,6 +179,9 @@ func (q *Queue) runJob(job *Job) {
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	ffmpeg.PrepareCmd(cmd)
+	// Suppress fontconfig — some FFmpeg builds crash (0xC0000005) when
+	// fontconfig has no config file (common on Windows and headless Linux).
+	cmd.Env = append(os.Environ(), "FONTCONFIG_FILE=")
 	job.Cmd = cmd
 
 	stderr, err := cmd.StderrPipe()
@@ -631,7 +635,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			}
 		}
 
-		drawtext := fmt.Sprintf("drawtext=text='%s':fontconfig=0:fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
+		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
 			text, fontFile, fontSize, fontColor, xExpr, yExpr, startT, endT)
 
 		if tc.tp.StrokeWidth > 0 {
