@@ -33,19 +33,19 @@ type ProjectSettings struct {
 }
 
 type Project struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	UpdatedAt   time.Time       `json:"updatedAt"`
-	Duration    float64         `json:"duration"`
-	AspectRatio string          `json:"aspectRatio"`
-	Resolution  Resolution      `json:"resolution"`
-	FPS         float64         `json:"fps"`
-	Timeline    Timeline        `json:"timeline"`
-	Assets      []Asset         `json:"assets"`
-	Settings    ProjectSettings `json:"settings"`
-	FilePath    string          `json:"filePath,omitempty"`
-	CustomSaveDirectory string `json:"customSaveDirectory,omitempty"`
+	ID                  string          `json:"id"`
+	Name                string          `json:"name"`
+	CreatedAt           time.Time       `json:"createdAt"`
+	UpdatedAt           time.Time       `json:"updatedAt"`
+	Duration            float64         `json:"duration"`
+	AspectRatio         string          `json:"aspectRatio"`
+	Resolution          Resolution      `json:"resolution"`
+	FPS                 float64         `json:"fps"`
+	Timeline            Timeline        `json:"timeline"`
+	Assets              []Asset         `json:"assets"`
+	Settings            ProjectSettings `json:"settings"`
+	FilePath            string          `json:"filePath,omitempty"`
+	CustomSaveDirectory string          `json:"customSaveDirectory,omitempty"`
 }
 
 type Timeline struct {
@@ -151,25 +151,25 @@ type Transition struct {
 }
 
 type Clip struct {
-	ID           string        `json:"id"`
-	AssetID      string        `json:"assetId"`
-	TrackID      string        `json:"trackId"`
-	StartTime    float64       `json:"startTime"`
-	Duration     float64       `json:"duration"`
-	TrimStart    float64       `json:"trimStart"`
-	TrimEnd      float64       `json:"trimEnd"`
-	Speed        float64       `json:"speed"`
-	Reversed     bool          `json:"reversed"`
-	Volume       float64       `json:"volume"`
-	Opacity      float64       `json:"opacity"`
-	Transform    Transform     `json:"transform"`
-	Color        ColorGrade    `json:"color"`
-	Keyframes    []Keyframe    `json:"keyframes"`
-	Transition   *Transition   `json:"transition,omitempty"`
-	Normalize    bool          `json:"normalize"`
-	NoiseReduction bool        `json:"noiseReduction"`
-	TextProps    *TextProps    `json:"textProps,omitempty"`
-	StickerProps *StickerProps `json:"stickerProps,omitempty"`
+	ID             string        `json:"id"`
+	AssetID        string        `json:"assetId"`
+	TrackID        string        `json:"trackId"`
+	StartTime      float64       `json:"startTime"`
+	Duration       float64       `json:"duration"`
+	TrimStart      float64       `json:"trimStart"`
+	TrimEnd        float64       `json:"trimEnd"`
+	Speed          float64       `json:"speed"`
+	Reversed       bool          `json:"reversed"`
+	Volume         float64       `json:"volume"`
+	Opacity        float64       `json:"opacity"`
+	Transform      Transform     `json:"transform"`
+	Color          ColorGrade    `json:"color"`
+	Keyframes      []Keyframe    `json:"keyframes"`
+	Transition     *Transition   `json:"transition,omitempty"`
+	Normalize      bool          `json:"normalize"`
+	NoiseReduction bool          `json:"noiseReduction"`
+	TextProps      *TextProps    `json:"textProps,omitempty"`
+	StickerProps   *StickerProps `json:"stickerProps,omitempty"`
 }
 
 type AssetType string
@@ -185,6 +185,7 @@ type Asset struct {
 	ID         string    `json:"id"`
 	Path       string    `json:"path"`
 	Type       AssetType `json:"type"`
+	HasAudio   bool      `json:"hasAudio,omitempty"`
 	Duration   float64   `json:"duration"`
 	Width      int       `json:"width"`
 	Height     int       `json:"height"`

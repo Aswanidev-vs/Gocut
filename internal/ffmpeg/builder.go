@@ -31,7 +31,7 @@ func BuildTransformFilters(clip project.Clip) string {
 
 	rotExpr := BuildAnimatedExpression(clip.Keyframes, "rotation", t.Rotation)
 	if rotExpr != "0" {
-		parts = append(parts, fmt.Sprintf("rotate='%s*PI/180:c=black@0'", rotExpr))
+		parts = append(parts, fmt.Sprintf("rotate='%s*PI/180:c=black@0:eval=frame'", rotExpr))
 	}
 
 	scaleXExpr := BuildAnimatedExpression(clip.Keyframes, "scaleX", t.ScaleX)
@@ -166,38 +166,10 @@ func escapeText(s string) string {
 	return s
 }
 
+// FloatToStr renders a float for use inside FFmpeg numeric expressions
+// (-ss, scale factors, keyframe values). The previous rational
+// approximation was wrong for fractions (0.5 -> "0/2" == 0),
+// so we emit a plain decimal float, which FFmpeg parses correctly.
 func FloatToStr(f float64) string {
-	if f == 0 {
-		return "0"
-	}
-	s := ""
-	if f < 0 {
-		s += "-"
-		f = -f
-	}
-	s += strconv.Itoa(int(f))
-	frac := f - float64(int(f))
-	if frac > 0 {
-		s += "/" + strconv.Itoa(int(1/frac))
-	}
-	return s
-}
-
-func IntToStr(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	out := ""
-	for i > 0 {
-		out = string(rune('0'+i%10)) + out
-		i /= 10
-	}
-	if neg {
-		out = "-" + out
-	}
-	return out
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }

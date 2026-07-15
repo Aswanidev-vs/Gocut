@@ -72,10 +72,21 @@ func (a *App) Startup(ctx context.Context) {
 	a.store = store
 	a.projectMgr = project.NewManager(a.store)
 
-	a.renderQueue = render.NewQueue(ctx)
+	a.renderQueue = render.NewQueue(ctx, a.ffmpegPath)
 
 	thumbDir := appDataDir("thumbnails")
-	thumbCache, _ := cache.NewThumbnailCache(thumbDir, 500*1024*1024)
+	thumbCache, err := cache.NewThumbnailCache(thumbDir, 500*1024*1024)
+	if err != nil {
+		// Home dir may be read-only; fall back to the OS temp dir so
+		// preview caching still works instead of silently getting a nil cache.
+		log.Printf("[warn] thumbnail cache dir unavailable (%v); using temp dir", err)
+		thumbCache, err = cache.NewThumbnailCache(filepath.Join(os.TempDir(), "gocut-thumbnails"), 500*1024*1024)
+	}
+	if thumbCache == nil {
+		// Extremely unlikely (temp dir creation failed); use an in-memory
+		// cache so callers can never hit a nil receiver.
+		thumbCache, _ = cache.NewThumbnailCache("", 500*1024*1024)
+	}
 	a.thumbCache = thumbCache
 
 	a.frameCache = cache.NewFrameCache(120, 30*time.Second)

@@ -14,8 +14,10 @@ type ThumbnailCache struct {
 }
 
 func NewThumbnailCache(baseDir string, maxSize int64) (*ThumbnailCache, error) {
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return nil, err
+	if baseDir != "" {
+		if err := os.MkdirAll(baseDir, 0755); err != nil {
+			return nil, err
+		}
 	}
 	return &ThumbnailCache{
 		baseDir: baseDir,
@@ -27,6 +29,10 @@ func NewThumbnailCache(baseDir string, maxSize int64) (*ThumbnailCache, error) {
 func (c *ThumbnailCache) Get(key string) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if c.baseDir == "" {
+		return nil, false
+	}
 
 	path := filepath.Join(c.baseDir, key)
 	data, err := os.ReadFile(path)
@@ -44,6 +50,10 @@ func (c *ThumbnailCache) Get(key string) ([]byte, bool) {
 func (c *ThumbnailCache) Put(key string, data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if c.baseDir == "" {
+		return nil
+	}
 
 	path := filepath.Join(c.baseDir, key)
 	if err := os.WriteFile(path, data, 0644); err != nil {

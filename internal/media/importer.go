@@ -146,6 +146,7 @@ func (i *Importer) importSingle(ctx context.Context, path string) (*project.Asse
 		Height:     height,
 		FPS:        info.FPS,
 		Codec:      info.Codec,
+		HasAudio:   info.AudioCodec != "",
 		FileSize:   info.FileSize,
 		ImportedAt: time.Now(),
 	}

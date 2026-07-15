@@ -51,19 +51,24 @@ type ProgressEvent struct {
 // one job at a time to avoid fighting over FFmpeg's CPU; multi-job queues
 // land in v1.0.
 type Queue struct {
-	jobs   map[string]*Job
-	mu     sync.Mutex
-	nextID int
-	ctx    context.Context
-	cancel context.CancelFunc
-	ready  chan *Job
-	emit   func(event string, data interface{})
+	jobs       map[string]*Job
+	mu         sync.Mutex
+	nextID     int
+	ctx        context.Context
+	cancel     context.CancelFunc
+	ready      chan *Job
+	emit       func(event string, data interface{})
+	ffmpegPath string
 }
 
-func NewQueue(ctx context.Context) *Queue {
+func NewQueue(ctx context.Context, ffmpegPath string) *Queue {
+	if ffmpegPath == "" {
+		ffmpegPath = "ffmpeg"
+	}
 	q := &Queue{
-		jobs:  make(map[string]*Job),
-		ready: make(chan *Job, 64),
+		jobs:       make(map[string]*Job),
+		ready:      make(chan *Job, 64),
+		ffmpegPath: ffmpegPath,
 	}
 	q.ctx, q.cancel = context.WithCancel(ctx)
 	q.emit = func(event string, data interface{}) {
@@ -166,7 +171,7 @@ func (q *Queue) runJob(job *Job) {
 	}
 
 	p := job.Project
-	args := buildSimpleFFmpegArgs(p, settings, outputPath)
+	args := buildSimpleFFmpegArgs(p, settings, outputPath, q.ffmpegPath)
 	if len(args) == 0 {
 		q.failJob(job, fmt.Errorf("no clips to render"))
 		return
@@ -189,6 +194,7 @@ func (q *Queue) runJob(job *Job) {
 		q.failJob(job, fmt.Errorf("stderr pipe: %w", err))
 		return
 	}
+	defer stderr.Close()
 	if err := cmd.Start(); err != nil {
 		q.failJob(job, fmt.Errorf("start ffmpeg: %w", err))
 		return
@@ -236,8 +242,7 @@ func (q *Queue) failJob(job *Job, err error) {
 
 // parseProgressAndCapture reads FFmpeg stderr, emits progress events, and
 // returns all collected lines so the caller can report errors.
-func (q *Queue) parseProgressAndCapture(job *Job, r io.ReadCloser) []string {
-	defer r.Close()
+func (q *Queue) parseProgressAndCapture(job *Job, r io.Reader) []string {
 	scanner := bufio.NewScanner(r)
 
 	// FFmpeg uses \r (carriage return) for progress updates, not \n.
@@ -324,13 +329,13 @@ func (q *Queue) emitProgress(ev ProgressEvent) {
 	q.emit("render:progress", ev)
 }
 
-func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, outputPath string) []string {
+func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, outputPath string, ffmpegPath string) []string {
 	if len(p.Timeline.Tracks) == 0 {
 		return nil
 	}
 
 	var args []string
-	args = append(args, "ffmpeg", "-y")
+	args = append(args, ffmpegPath, "-y")
 
 	// Calculate project duration based on the end time or max clip end
 	duration := settings.EndTime
@@ -379,7 +384,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	}
 
 	filterParts := []string{}
-	
+
 	// Create base video and base audio
 	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=%.3f[basev]", w, h, fps, duration))
 	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
@@ -472,30 +477,34 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
 				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
 
-				// Also process embedded audio from video clips
-				aLabel := fmt.Sprintf("[va%d]", inputIdx)
-				var aFilters []string
-				aFilters = append(aFilters, "asetpts=PTS-STARTPTS")
-				if clip.Speed > 0 && clip.Speed != 1.0 {
-					aFilters = append(aFilters, fmt.Sprintf("atempo=%g", clip.Speed))
+				// Only extract audio if the source actually has an audio
+				// stream; referencing '[i:a]' on a silent clip makes FFmpeg
+				// abort the whole render with "Stream specifier matches no streams".
+				if asset := lookupAsset(p, clip.AssetID); asset != nil && asset.HasAudio {
+					aLabel := fmt.Sprintf("[va%d]", inputIdx)
+					var aFilters []string
+					aFilters = append(aFilters, "asetpts=PTS-STARTPTS")
+					if clip.Speed > 0 && clip.Speed != 1.0 {
+						aFilters = append(aFilters, fmt.Sprintf("atempo=%g", clip.Speed))
+					}
+					vol := clip.Volume
+					if vol > 0 && vol != 1.0 {
+						aFilters = append(aFilters, fmt.Sprintf("volume=%g", vol))
+					}
+					if track.Muted {
+						aFilters = append(aFilters, "volume=0")
+					}
+					if clip.Normalize {
+						aFilters = append(aFilters, filters.BuildLoudNormFilter())
+					}
+					if clip.NoiseReduction {
+						aFilters = append(aFilters, filters.BuildNoiseReductionFilter())
+					}
+					delayMs := int(clip.StartTime * 1000)
+					aFilters = append(aFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
+					filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(aFilters, ","), aLabel))
+					audioLabels = append(audioLabels, aLabel)
 				}
-				vol := clip.Volume
-				if vol > 0 && vol != 1.0 {
-					aFilters = append(aFilters, fmt.Sprintf("volume=%g", vol))
-				}
-				if track.Muted {
-					aFilters = append(aFilters, "volume=0")
-				}
-				if clip.Normalize {
-					aFilters = append(aFilters, filters.BuildLoudNormFilter())
-				}
-				if clip.NoiseReduction {
-					aFilters = append(aFilters, filters.BuildNoiseReductionFilter())
-				}
-				delayMs := int(clip.StartTime * 1000)
-				aFilters = append(aFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
-				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(aFilters, ","), aLabel))
-				audioLabels = append(audioLabels, aLabel)
 
 			} else if track.Type == project.TrackImage || track.Type == project.TrackPIP {
 				label := fmt.Sprintf("[v%d]", inputIdx)
@@ -577,24 +586,24 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		yAnim := ffmpeg.BuildAnimatedExpression(vo.clip.Keyframes, "y", vo.clip.Transform.Y)
 		xExpr := fmt.Sprintf("(W-w)/2+%s", xAnim)
 		yExpr := fmt.Sprintf("(H-h)/2+%s", yAnim)
-		
+
 		if vo.clip.Transition != nil && vo.clip.Transition.Type != "none" && vo.clip.Transition.Duration > 0 {
 			trans := vo.clip.Transition
 			start := vo.clip.StartTime
 			dur := trans.Duration
 			finalX := fmt.Sprintf("((W-w)/2+%.0f)", vo.clip.Transform.X)
-			
+
 			switch trans.Type {
 			case "slideleft":
 				xExpr = fmt.Sprintf("if(lt(t,%g),W-(W-%s)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
 			case "slideright":
 				xExpr = fmt.Sprintf("if(lt(t,%g),-w+(%s+w)*(t-%g)/%g,%s)", start+dur, finalX, start, dur, finalX)
 			case "zoomin":
-				// zoomin transition is implemented as scale in the clipFilters if needed, 
+				// zoomin transition is implemented as scale in the clipFilters if needed,
 				// or we can simulate it by moving from center offset
 			}
 		}
-		
+
 		filterParts = append(filterParts, fmt.Sprintf("%s%soverlay=x='%s':y='%s':eof_action=pass%s", lastV, vo.label, xExpr, yExpr, nextV))
 		lastV = nextV
 	}
@@ -673,7 +682,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		"-crf", strconv.Itoa(crf),
 		"-pix_fmt", "yuv420p",
 	)
-	
+
 	audioBitrate := settings.AudioBitrate
 	if audioBitrate == "" {
 		audioBitrate = "192k"
@@ -727,6 +736,15 @@ func lookupAssetPath(p project.Project, assetID string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("asset not found: %s", assetID)
+}
+
+func lookupAsset(p project.Project, assetID string) *project.Asset {
+	for i := range p.Assets {
+		if p.Assets[i].ID == assetID {
+			return &p.Assets[i]
+		}
+	}
+	return nil
 }
 
 func extractField(line, key string) string {
