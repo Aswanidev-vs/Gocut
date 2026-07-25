@@ -7,6 +7,11 @@ const DEFAULT_SHORTCUTS = {
   cut: 'ctrl+x',
   copy: 'ctrl+c',
   paste: 'ctrl+v',
+  duplicate: 'ctrl+d',
+  export: 'ctrl+shift+e',
+  shuttleReverse: 'j',
+  shuttleStop: 'k',
+  shuttleForward: 'l',
 }
 
 export const useSettingsStore = defineStore('settings', () => {

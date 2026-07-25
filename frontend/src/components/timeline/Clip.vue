@@ -209,17 +209,32 @@ function onKeyframeMouseDown(e, kf) {
     <Teleport to="body">
       <div
         v-if="showMenu"
-        class="fixed z-50 min-w-36 bg-bg border border-border rounded-lg shadow-xl py-1 text-xs"
+        class="fixed z-50 min-w-40 bg-bg border border-border rounded-lg shadow-xl py-1 text-xs"
         :style="{ left: menuX + 'px', top: menuY + 'px' }"
         @click.stop
       >
-        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="splitClip">Split at Playhead</button>
-        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="duplicateClip">Duplicate</button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary flex items-center justify-between" @click="splitClip">
+          <span>Split at Playhead</span>
+          <span class="text-text-secondary text-[10px]">S</span>
+        </button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary flex items-center justify-between" @click="duplicateClip">
+          <span>Duplicate</span>
+          <span class="text-text-secondary text-[10px]">Ctrl+D</span>
+        </button>
         <div class="h-px bg-border my-1" />
-        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="setSpeed(0.5)">Half Speed</button>
-        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary" @click="setSpeed(2)">Double Speed</button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary flex items-center justify-between" @click="setSpeed(0.5)">
+          <span>Half Speed</span>
+          <span class="text-text-secondary text-[10px]">J</span>
+        </button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-accent/10 text-text-primary flex items-center justify-between" @click="setSpeed(2)">
+          <span>Double Speed</span>
+          <span class="text-text-secondary text-[10px]">L</span>
+        </button>
         <div class="h-px bg-border my-1" />
-        <button class="w-full text-left px-3 py-1.5 hover:bg-red-500/10 text-red-400" @click="deleteClip">Delete</button>
+        <button class="w-full text-left px-3 py-1.5 hover:bg-red-500/10 text-red-400 flex items-center justify-between" @click="deleteClip">
+          <span>Delete</span>
+          <span class="text-text-secondary text-[10px]">Del</span>
+        </button>
       </div>
     </Teleport>
   </div>

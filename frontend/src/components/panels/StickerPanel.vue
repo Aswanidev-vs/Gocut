@@ -1,7 +1,9 @@
 <script setup>
+import { ref } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
-import { Smile, Plus } from 'lucide-vue-next'
+import { OpenFilePicker } from '../../lib/wails'
+import { Smile, Plus, Upload, X } from 'lucide-vue-next'
 
 const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
@@ -26,6 +28,9 @@ const stickers = [
   { name: '100',      svg: '<text x="50" y="62" text-anchor="middle" font-size="38" font-weight="900" fill="#FACC15">100</text>' },
 ]
 
+// Custom stickers imported by the user
+const customStickers = ref([])
+
 function addSticker(s) {
   const t = timelineStore.getTrackByType('sticker') || timelineStore.addTrack('sticker')
   const clip = timelineStore.addClip({
@@ -37,25 +42,96 @@ function addSticker(s) {
     stickerProps: {
       x: 0, y: 0, width: 0.2, height: 0.2, rotation: 0, opacity: 1,
       flipH: false, flipV: false, svg: s.svg, name: s.name,
+      imagePath: s.imagePath || null,
     },
   })
   timelineStore.selectClip(clip.id)
   uiStore.addToast(`Added ${s.name} sticker`, 'success', 1500)
 }
+
+async function importSticker() {
+  try {
+    const paths = await OpenFilePicker([
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }
+    ])
+
+    if (!Array.isArray(paths) || paths.length === 0) return
+
+    for (const path of paths) {
+      const name = path.split(/[/\\]/).pop() || 'Custom Sticker'
+      customStickers.value.push({
+        name: name.replace(/\.[^/.]+$/, ''),
+        imagePath: path,
+        svg: null,
+        isCustom: true,
+      })
+    }
+
+    uiStore.addToast(`Imported ${paths.length} sticker(s)`, 'success', 1500)
+  } catch (err) {
+    uiStore.addToast('Import failed: ' + (err?.message || err), 'error')
+  }
+}
+
+function removeCustomSticker(index) {
+  customStickers.value.splice(index, 1)
+}
 </script>
 
 <template>
   <div class="p-2 flex flex-col gap-2">
-    <div class="grid grid-cols-3 gap-1.5">
-      <button
-        v-for="(s, i) in stickers"
-        :key="i"
-        class="aspect-square rounded bg-bg/60 border border-border/60 hover:border-accent/50 transition-colors flex items-center justify-center group"
-        @click="addSticker(s)"
-        :title="s.name"
-      >
-        <svg viewBox="0 0 100 100" class="w-10 h-10" v-html="s.svg" />
-      </button>
+    <!-- Import button -->
+    <button
+      class="flex items-center justify-center gap-1.5 w-full py-2 rounded bg-accent text-bg text-xs font-medium hover:bg-accent-hover transition-colors"
+      @click="importSticker"
+    >
+      <Upload :size="12" /> Import Sticker
+    </button>
+
+    <!-- Custom stickers section -->
+    <div v-if="customStickers.length > 0" class="flex flex-col gap-1.5">
+      <div class="text-[10px] text-text-secondary uppercase tracking-wider px-1">Custom</div>
+      <div class="grid grid-cols-3 gap-1.5">
+        <div
+          v-for="(s, i) in customStickers"
+          :key="'custom-' + i"
+          class="aspect-square rounded bg-bg/60 border border-border/60 hover:border-accent/50 transition-colors flex items-center justify-center group relative"
+        >
+          <img
+            :src="'file:///' + s.imagePath"
+            :alt="s.name"
+            class="w-10 h-10 object-contain"
+            @error="(e) => e.target.style.display = 'none'"
+          />
+          <button
+            class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-bg border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:border-red-500/50"
+            @click.stop="removeCustomSticker(i)"
+          >
+            <X :size="8" class="text-text-secondary" />
+          </button>
+          <button
+            class="absolute inset-0"
+            @click="addSticker(s)"
+            :title="s.name"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Built-in stickers -->
+    <div class="flex flex-col gap-1.5">
+      <div class="text-[10px] text-text-secondary uppercase tracking-wider px-1">Built-in</div>
+      <div class="grid grid-cols-3 gap-1.5">
+        <button
+          v-for="(s, i) in stickers"
+          :key="i"
+          class="aspect-square rounded bg-bg/60 border border-border/60 hover:border-accent/50 transition-colors flex items-center justify-center group"
+          @click="addSticker(s)"
+          :title="s.name"
+        >
+          <svg viewBox="0 0 100 100" class="w-10 h-10" v-html="s.svg" />
+        </button>
+      </div>
     </div>
   </div>
 </template>

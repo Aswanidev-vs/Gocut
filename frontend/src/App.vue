@@ -36,11 +36,13 @@ onMounted(() => {
   // Global keyboard shortcuts.
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('shortcut:export', onShortcutExport)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('shortcut:export', onShortcutExport)
 })
 
 watch(() => projectStore.project?.id, () => {
@@ -90,6 +92,11 @@ function onKeyDown(e) {
     e.preventDefault()
     uiStore.isExportDialogOpen = true
   }
+}
+
+// Listen for shortcut:export event from useHotkeys
+function onShortcutExport() {
+  uiStore.isExportDialogOpen = true
 }
 
 function openNewProjectDialog() {
