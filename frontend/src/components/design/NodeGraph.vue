@@ -895,11 +895,11 @@ function addNodeFromPalette(type) {
       @close="showSearchPalette = false"
       @select="addNodeFromPalette"
     />
-    <div class="absolute bottom-2 left-2 text-[10px] text-text-secondary/40 font-mono">
+    <div class="absolute bottom-2 left-2 text-[10px] text-text-secondary/40 font-mono max-w-[calc(100%-180px)] truncate">
       {{ designStore.nodes.length }} nodes · {{ designStore.connections.length }} connections
       · Shift+Drag to detach/heal · Drag lines to connect · Hover lines to insert
     </div>
-    <div class="absolute bottom-2 right-2 z-10">
+    <div class="absolute bottom-2 right-2 z-10 hidden lg:block">
       <Minimap :width="160" :height="100" />
     </div>
   </div>

@@ -25,11 +25,47 @@ const designStore = useDesignStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
-// Resizable panel widths
-const libraryWidth = ref(240)
-const inspectorWidth = ref(300)
+// Resizable panel widths — responsive to viewport
+const MIN_CENTER_WIDTH = 360
+const MIN_LIBRARY_WIDTH = 160
+const MIN_INSPECTOR_WIDTH = 200
+
+const isNarrowScreen = ref(typeof window !== 'undefined' && window.innerWidth < 1100)
+const isSmallScreen = ref(typeof window !== 'undefined' && window.innerWidth < 800)
+
+function clampPanelWidths() {
+  const vw = window.innerWidth
+  // Reserve at least MIN_CENTER_WIDTH for the center graph area.
+  const maxTotalSide = Math.max(0, vw - MIN_CENTER_WIDTH - 220) // 220 = outer left panel + resizers
+  const maxLibrary = Math.floor(maxTotalSide * 0.45)
+  const maxInspector = Math.floor(maxTotalSide * 0.55)
+
+  libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(libraryWidth.value, Math.max(MIN_LIBRARY_WIDTH, maxLibrary)))
+  inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(inspectorWidth.value, Math.max(MIN_INSPECTOR_WIDTH, maxInspector)))
+
+  // At narrow widths, stack panels to never exceed viewport
+  if (libraryWidth.value + inspectorWidth.value > maxTotalSide) {
+    const ratio = libraryWidth.value / (libraryWidth.value + inspectorWidth.value)
+    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.floor(maxTotalSide * ratio))
+    inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.floor(maxTotalSide * (1 - ratio)))
+  }
+}
+
+function updateScreenFlags() {
+  isNarrowScreen.value = window.innerWidth < 1100
+  isSmallScreen.value = window.innerWidth < 800
+  clampPanelWidths()
+}
+
+// Initial widths based on viewport
+const vwInit = typeof window !== 'undefined' ? window.innerWidth : 1366
+const defaultLibrary = Math.min(240, Math.max(180, Math.floor((vwInit - 220) * 0.35)))
+const defaultInspector = Math.min(300, Math.max(220, Math.floor((vwInit - 220) * 0.4)))
+
+const libraryWidth = ref(defaultLibrary)
+const inspectorWidth = ref(defaultInspector)
 const showCurves = ref(false)
-const curvesHeight = ref(160)
+const curvesHeight = ref(140)
 const showOnboarding = computed(() => designStore.nodes.length === 0)
 const viewMode = ref('graph') // 'graph' | 'preview' | 'split'
 
@@ -53,21 +89,51 @@ function startDrag(e, panel) {
   document.addEventListener('mouseup', stopDrag)
   e.preventDefault()
 }
+
+// Track available space accounting for outer left panel (260px) + resizer
+const availableWidth = () => {
+  const vw = window.innerWidth
+  return Math.max(0, vw - 260 - 4) // outer left panel + resizers
+}
+
 function onDrag(e) {
   if (!activeDrag) return
+  const avail = availableWidth()
+  const maxCenterSide = Math.max(0, avail - MIN_CENTER_WIDTH)
+  const rect = e.currentTarget?.parentElement?.getBoundingClientRect?.()
+  const localX = rect ? e.clientX - rect.left : e.clientX
+
   if (activeDrag === 'library') {
-    libraryWidth.value = Math.max(180, Math.min(e.clientX, window.innerWidth - inspectorWidth.value - 200))
+    const max = Math.max(MIN_LIBRARY_WIDTH, Math.min(maxCenterSide - MIN_INSPECTOR_WIDTH, maxCenterSide * 0.5))
+    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(localX, max))
   } else if (activeDrag === 'inspector') {
-    inspectorWidth.value = Math.max(220, Math.min(window.innerWidth - e.clientX, window.innerWidth - libraryWidth.value - 200))
+    const max = Math.max(MIN_INSPECTOR_WIDTH, Math.min(maxCenterSide - MIN_LIBRARY_WIDTH, maxCenterSide * 0.6))
+    inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(avail - localX, max))
   } else if (activeDrag === 'curves') {
-    curvesHeight.value = Math.max(80, Math.min(window.innerHeight - e.clientY, window.innerHeight - 200))
+    curvesHeight.value = Math.max(80, Math.min(window.innerHeight - e.clientY, window.innerHeight - 150))
   }
 }
+
 function stopDrag() {
   activeDrag = null
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
 }
+
+// Lifecycle: responsive resize + design playback events
+onMounted(() => {
+  updateScreenFlags()
+  window.addEventListener('resize', updateScreenFlags)
+  window.addEventListener('design:togglePlay', togglePlay)
+  window.addEventListener('design:stepPlayhead', onStepPlayhead)
+})
+
+onUnmounted(() => {
+  clearInterval(playInterval)
+  window.removeEventListener('resize', updateScreenFlags)
+  window.removeEventListener('design:togglePlay', togglePlay)
+  window.removeEventListener('design:stepPlayhead', onStepPlayhead)
+})
 
 function togglePlay() {
   isPlaying.value = !isPlaying.value
@@ -89,17 +155,6 @@ function resetPlayhead() {
   isPlaying.value = false
   clearInterval(playInterval)
 }
-
-onMounted(() => {
-  window.addEventListener('design:togglePlay', togglePlay)
-  window.addEventListener('design:stepPlayhead', onStepPlayhead)
-})
-
-onUnmounted(() => {
-  clearInterval(playInterval)
-  window.removeEventListener('design:togglePlay', togglePlay)
-  window.removeEventListener('design:stepPlayhead', onStepPlayhead)
-})
 
 function onStepPlayhead(e) {
   const step = (e.detail || 1) * (1 / (designStore.composition.fps || 30))
@@ -132,23 +187,23 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 
 <template>
   <div class="flex flex-col h-full bg-bg overflow-hidden">
-    <!-- Design Toolbar -->
-    <div class="h-10 bg-panel border-b border-border flex items-center px-2 gap-1 flex-shrink-0">
-      <div class="flex items-center gap-1.5 px-2">
+    <!-- Design Toolbar (scrollable on narrow screens) -->
+    <div class="h-10 bg-panel border-b border-border flex items-center px-2 gap-1 flex-shrink-0 overflow-x-auto">
+      <div class="flex items-center gap-1.5 px-2 flex-shrink-0">
         <div class="w-1.5 h-1.5 rounded-full bg-pink-500 animate-pulse" />
         <span class="text-[11px] font-semibold text-text-primary">Design</span>
-        <span class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border">Fusion-style</span>
+        <span v-if="!isNarrowScreen" class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border">Fusion-style</span>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1" />
+      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
 
-      <div class="flex items-center gap-0.5">
+      <div class="flex items-center gap-0.5 flex-shrink-0">
         <button
           class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
           @click="designStore.addNode('media')"
           title="Add Media Node"
         >
-          <Plus :size="11" /> Add Node
+          <Plus :size="11" /> <span v-if="!isNarrowScreen">Add Node</span>
         </button>
         <button
           class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
@@ -157,7 +212,7 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           @click="designStore.duplicateSelectedNode()"
           title="Duplicate (Ctrl+D)"
         >
-          <Copy :size="11" /> Duplicate
+          <Copy :size="11" /> <span v-if="!isNarrowScreen">Duplicate</span>
         </button>
         <button
           class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -166,13 +221,13 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           @click="designStore.removeSelectedNode()"
           title="Delete (Del)"
         >
-          <Trash2 :size="11" /> Delete
+          <Trash2 :size="11" /> <span v-if="!isNarrowScreen">Delete</span>
         </button>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1" />
+      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
 
-      <div class="flex items-center gap-0.5">
+      <div class="flex items-center gap-0.5 flex-shrink-0">
         <button
           class="p-1.5 rounded transition-colors"
           :class="designStore.snapEnabled ? 'text-accent bg-accent/10' : 'text-text-secondary hover:text-text-primary hover:bg-border/60'"
@@ -207,10 +262,10 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         </div>
       </div>
 
-      <div class="flex-1" />
+      <div class="flex-1 flex-shrink-0" />
 
       <!-- Composition info -->
-      <div class="flex items-center gap-2 px-2">
+      <div v-if="!isSmallScreen" class="flex items-center gap-2 px-2 flex-shrink-0">
         <div class="text-[10px] text-text-secondary">
           <span class="text-text-primary font-medium">{{ designStore.composition.name }}</span>
           <span class="mx-1">·</span>
@@ -220,10 +275,10 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         </div>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1" />
+      <div v-if="!isSmallScreen" class="w-px h-5 bg-border mx-1 flex-shrink-0" />
 
       <!-- Playback -->
-      <div class="flex items-center gap-0.5">
+      <div class="flex items-center gap-0.5 flex-shrink-0">
         <button
           class="p-1.5 rounded transition-colors"
           :class="isPlaying ? 'text-pink-400 bg-pink-500/10' : 'text-text-secondary hover:text-text-primary hover:bg-border/60'"
@@ -240,15 +295,15 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         >
           <RotateCcw :size="12" />
         </button>
-        <div class="text-[10px] text-text-secondary px-2 font-mono">
+        <div v-if="!isSmallScreen" class="text-[10px] text-text-secondary px-2 font-mono">
           {{ playheadTime.toFixed(2) }}s / {{ designStore.composition.duration.toFixed(2) }}s
         </div>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1" />
+      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
 
       <!-- View mode toggle -->
-      <div class="flex items-center gap-0.5 bg-bg/60 rounded p-0.5">
+      <div class="flex items-center gap-0.5 bg-bg/60 rounded p-0.5 flex-shrink-0">
         <button
           class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
           :class="viewMode === 'graph' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
@@ -275,15 +330,15 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         </button>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1" />
+      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
 
       <button
-        class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
+        class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors flex-shrink-0"
         :class="showCurves && 'text-accent bg-accent/10'"
         @click="showCurves = !showCurves"
         title="Toggle Animation Curves"
       >
-        <Zap :size="11" /> Curves
+        <Zap :size="11" /> <span v-if="!isNarrowScreen">Curves</span>
       </button>
     </div>
 
@@ -295,12 +350,13 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           <button
             v-for="t in tabs"
             :key="t.id"
-            class="flex-1 flex items-center justify-center gap-1 py-1.5 rounded text-[10px] transition-colors"
+            class="flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded text-[10px] transition-colors min-w-0"
             :class="activeTab === t.id ? 'bg-accent/10 text-accent' : 'text-text-secondary hover:text-text-primary hover:bg-border/50'"
             @click="activeTab = t.id"
+            :title="t.label"
           >
-            <component :is="t.icon" :size="11" />
-            <span>{{ t.label }}</span>
+            <component :is="t.icon" :size="11" class="flex-shrink-0" />
+            <span v-if="!isSmallScreen" class="leading-none truncate max-w-full">{{ t.label }}</span>
           </button>
         </div>
         <div class="flex-1 overflow-y-auto">

@@ -159,7 +159,9 @@ function startDrag(e, panel) {
 function onDrag(e) {
   if (!activeDrag) return
   if (activeDrag === 'left') {
-    leftWidth.value = Math.max(150, Math.min(e.clientX, window.innerWidth - rightWidth.value - 200))
+    const isDesign = uiStore.activeWorkspace === 'design'
+    const maxX = isDesign ? window.innerWidth - 400 : window.innerWidth - rightWidth.value - 200
+    leftWidth.value = Math.max(150, Math.min(e.clientX, maxX))
   } else if (activeDrag === 'right') {
     rightWidth.value = Math.max(150, Math.min(window.innerWidth - e.clientX, window.innerWidth - leftWidth.value - 200))
   } else if (activeDrag === 'bottom') {
@@ -286,9 +288,11 @@ function stopDrag() {
           </template>
         </div>
         
-        <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'right')" />
+        <template v-if="uiStore.activeWorkspace !== 'design'">
+          <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'right')" />
 
-        <RightPanel :style="{ width: rightWidth + 'px' }" />
+          <RightPanel :style="{ width: rightWidth + 'px' }" />
+        </template>
       </div>
 
       <!-- DaVinci Resolve-style Workspace Bar -->
