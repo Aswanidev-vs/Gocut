@@ -7,6 +7,7 @@ import { useHistoryStore } from './stores/historyStore'
 import { OpenFilePicker } from './lib/wails'
 import { Film, FolderOpen, FilePlus, Sparkles, Github, Scissors, Palette, Headphones, X } from 'lucide-vue-next'
 import { useHotkeys } from './composables/useHotkeys'
+import { useDesignHistoryStore } from './stores/designHistoryStore'
 
 import TopBar from './components/layout/TopBar.vue'
 import LeftPanel from './components/layout/LeftPanel.vue'
@@ -16,14 +17,13 @@ import PreviewPlayer from './components/preview/PreviewPlayer.vue'
 import NewProjectDialog from './components/common/NewProjectDialog.vue'
 import ExportDialog from './components/export/ExportDialog.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
-import DesignPanel from './components/panels/DesignPanel.vue'
-import FusionNodeEditor from './components/panels/FusionNodeEditor.vue'
-import FusionViewer from './components/panels/FusionViewer.vue'
+import DesignWorkspace from './components/design/DesignWorkspace.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
 const timelineStore = useTimelineStore()
 const historyStore = useHistoryStore()
+const designHistoryStore = useDesignHistoryStore()
 
 useHotkeys()
 
@@ -47,6 +47,7 @@ onUnmounted(() => {
 
 watch(() => projectStore.project?.id, () => {
   historyStore.clearHistory()
+  designHistoryStore.clearHistory()
   if (projectStore.hasProject) {
     historyStore.pushSnapshot()
   }
@@ -274,26 +275,7 @@ function stopDrag() {
 
         <div class="flex-1 flex flex-col overflow-hidden bg-bg">
           <template v-if="uiStore.activeWorkspace === 'design'">
-            <div class="flex-1 flex min-h-0">
-              <!-- Design Controls Panel -->
-              <div class="w-[380px] border-r border-border flex flex-col bg-panel overflow-y-auto">
-                <div class="border-b border-border bg-panel/95 px-4 py-3">
-                  <div class="text-[11px] uppercase tracking-[0.22em] text-text-secondary">Design / Animation</div>
-                  <div class="mt-1 text-sm text-text-primary font-semibold">Lite Resolve-style creative workspace</div>
-                  <p class="text-[11px] text-text-secondary">Build motion, text FX, and composite layers from one dedicated panel.</p>
-                </div>
-                <DesignPanel />
-              </div>
-
-              <!-- Real-time Preview Player (Fusion Viewers) -->
-              <div class="flex-1 flex flex-col min-w-0 bg-bg">
-                <FusionViewer :nodes="[]" class="flex-1" />
-              </div>
-            </div>
-
-            <!-- Resize handle & Node Editor at bottom -->
-            <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'bottom')" />
-            <FusionNodeEditor :style="{ height: bottomHeight + 'px' }" />
+            <DesignWorkspace class="flex-1" />
           </template>
           <template v-else>
             <PreviewPlayer class="flex-1" />

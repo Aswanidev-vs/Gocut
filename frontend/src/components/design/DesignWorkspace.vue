@@ -4,19 +4,22 @@ import { useDesignStore } from '../../stores/designStore'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
 import {
-  Plus, Trash2, Copy, Play, Pause, RotateCcw, Save, FolderOpen,
-  MousePointer2, Hand, ZoomIn, ZoomOut, Maximize2, Magnet,
-  ChevronRight, Sparkles, Wand2, Layers, Eye, EyeOff, Lock, Unlock,
-  X, Settings, Code, Zap, Square, Circle, Triangle, Star, Hexagon,
-  Type as TypeIcon, Image as ImageIcon, Video, Music, Sun, Moon,
-  ChevronDown, Search, Download, Upload, FileText, Box, ArrowRight,
-  Diamond, Hexa
+  Plus, Trash2, Copy, Play, Pause, RotateCcw,
+  ZoomIn, ZoomOut, Maximize2, Magnet,
+  Sparkles, Wand2, Zap, Box, Crosshair,
 } from 'lucide-vue-next'
 import NodeGraph from './NodeGraph.vue'
 import NodeInspector from './NodeInspector.vue'
 import NodeLibrary from './NodeLibrary.vue'
 import AnimationCurves from './AnimationCurves.vue'
 import TemplateGallery from './TemplateGallery.vue'
+import DesignOnboarding from './DesignOnboarding.vue'
+import SimpleEffectsPanel from './SimpleEffectsPanel.vue'
+import TrackingPanel from '../tracking/TrackingPanel.vue'
+import CompositingCanvas from './CompositingCanvas.vue'
+import { useDesignHotkeys } from '../../composables/useDesignHotkeys'
+
+useDesignHotkeys()
 
 const designStore = useDesignStore()
 const timelineStore = useTimelineStore()
@@ -27,7 +30,8 @@ const libraryWidth = ref(240)
 const inspectorWidth = ref(300)
 const showCurves = ref(false)
 const curvesHeight = ref(160)
-const showTemplates = ref(false)
+const showOnboarding = computed(() => designStore.nodes.length === 0)
+const viewMode = ref('graph') // 'graph' | 'preview' | 'split'
 
 const isPlaying = ref(false)
 let playInterval = null
@@ -36,7 +40,9 @@ const playheadTime = ref(0)
 const tabs = [
   { id: 'nodes', label: 'Nodes', icon: Box },
   { id: 'templates', label: 'Templates', icon: Sparkles },
-  { id: 'presets', label: 'Presets', icon: Wand2 },
+  { id: 'effects', label: 'Effects', icon: Wand2 },
+  { id: 'tracking', label: 'Track', icon: Crosshair },
+  { id: 'presets', label: 'Presets', icon: Zap },
 ]
 const activeTab = ref('nodes')
 
@@ -84,14 +90,42 @@ function resetPlayhead() {
   clearInterval(playInterval)
 }
 
+onMounted(() => {
+  window.addEventListener('design:togglePlay', togglePlay)
+  window.addEventListener('design:stepPlayhead', onStepPlayhead)
+})
+
 onUnmounted(() => {
   clearInterval(playInterval)
+  window.removeEventListener('design:togglePlay', togglePlay)
+  window.removeEventListener('design:stepPlayhead', onStepPlayhead)
 })
+
+function onStepPlayhead(e) {
+  const step = (e.detail || 1) * (1 / (designStore.composition.fps || 30))
+  playheadTime.value = Math.max(0, Math.min(designStore.composition.duration, playheadTime.value + step))
+}
 
 // Watch timeline playhead for sync
 watch(() => timelineStore.currentTime, (t) => {
   // Optionally sync from main timeline
 })
+
+// Onboarding handlers
+function startWithTemplate() {
+  activeTab.value = 'templates'
+}
+function startWithEffect() {
+  activeTab.value = 'effects'
+}
+function startWithNodes() {
+  activeTab.value = 'nodes'
+  // Seed a basic graph so the user isn't staring at emptiness
+  if (designStore.nodes.length === 0) {
+    designStore.addNode('text', { x: 120, y: 200, label: 'Title', params: { text: 'Hello', fontSize: 64, color: '#FFFFFF' } })
+    designStore.addNode('output', { x: 500, y: 200, label: 'Output' })
+  }
+}
 
 defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 </script>
@@ -213,6 +247,36 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 
       <div class="w-px h-5 bg-border mx-1" />
 
+      <!-- View mode toggle -->
+      <div class="flex items-center gap-0.5 bg-bg/60 rounded p-0.5">
+        <button
+          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'graph' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          @click="viewMode = 'graph'"
+          title="Node Graph"
+        >
+          Graph
+        </button>
+        <button
+          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'preview' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          @click="viewMode = 'preview'"
+          title="Compositing Preview"
+        >
+          Preview
+        </button>
+        <button
+          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'split' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          @click="viewMode = 'split'"
+          title="Split View"
+        >
+          Split
+        </button>
+      </div>
+
+      <div class="w-px h-5 bg-border mx-1" />
+
       <button
         class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
         :class="showCurves && 'text-accent bg-accent/10'"
@@ -241,7 +305,9 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         </div>
         <div class="flex-1 overflow-y-auto">
           <NodeLibrary v-if="activeTab === 'nodes'" />
-          <TemplateGallery v-else-if="activeTab === 'templates'" @insert="(nodes) => { designStore.insertTemplate(nodes); activeTab = 'nodes' }" />
+          <TemplateGallery v-else-if="activeTab === 'templates'" @insert="activeTab = 'nodes'" />
+          <SimpleEffectsPanel v-else-if="activeTab === 'effects'" @applied="activeTab = 'nodes'" />
+          <TrackingPanel v-else-if="activeTab === 'tracking'" />
           <div v-else class="p-2">
             <div class="text-[10px] text-text-secondary uppercase tracking-wider mb-2 px-1">Saved Presets</div>
             <div class="space-y-1">
@@ -271,16 +337,42 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 
       <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'library')" />
 
-      <!-- Center: Node Graph + Curves -->
+      <!-- Center: Node Graph + Curves (or Onboarding when empty) -->
       <div class="flex-1 flex flex-col overflow-hidden bg-bg">
-        <div class="flex-1 overflow-hidden" :style="showCurves ? { height: `calc(100% - ${curvesHeight}px - 4px)` } : {}">
-          <NodeGraph :playhead-time="playheadTime" :is-playing="isPlaying" />
-        </div>
-        <template v-if="showCurves">
-          <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'curves')" />
-          <div :style="{ height: curvesHeight + 'px' }" class="flex-shrink-0">
-            <AnimationCurves :playhead-time="playheadTime" @seek="(t) => playheadTime = t" />
-          </div>
+        <DesignOnboarding
+          v-if="showOnboarding"
+          @start-template="startWithTemplate"
+          @start-effect="startWithEffect"
+          @start-blank="startWithNodes"
+        />
+        <template v-else>
+          <!-- Split view: preview on top, graph on bottom -->
+          <template v-if="viewMode === 'split'">
+            <div class="flex-1 min-h-0 border-b border-border">
+              <CompositingCanvas ref="compositingRef" :playhead-time="playheadTime" :is-playing="isPlaying" />
+            </div>
+            <div class="flex-1 min-h-0">
+              <NodeGraph :playhead-time="playheadTime" :is-playing="isPlaying" />
+            </div>
+          </template>
+          <!-- Preview only -->
+          <template v-else-if="viewMode === 'preview'">
+            <div class="flex-1 overflow-hidden">
+              <CompositingCanvas ref="compositingRef" :playhead-time="playheadTime" :is-playing="isPlaying" />
+            </div>
+          </template>
+          <!-- Graph only (default) -->
+          <template v-else>
+            <div class="flex-1 overflow-hidden" :style="showCurves ? { height: `calc(100% - ${curvesHeight}px - 4px)` } : {}">
+              <NodeGraph :playhead-time="playheadTime" :is-playing="isPlaying" />
+            </div>
+            <template v-if="showCurves">
+              <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'curves')" />
+              <div :style="{ height: curvesHeight + 'px' }" class="flex-shrink-0">
+                <AnimationCurves :playhead-time="playheadTime" @seek="(t) => playheadTime = t" />
+              </div>
+            </template>
+          </template>
         </template>
       </div>
 

@@ -22,6 +22,7 @@ import (
 	"Gocut/internal/media"
 	"Gocut/internal/project"
 	"Gocut/internal/render"
+	"Gocut/internal/tracking"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -747,4 +748,68 @@ func findFFprobe() string {
 		}
 	}
 	return ""
+}
+
+// ============ TRACKING METHODS ============
+
+func (a *App) AnalyzeMotion(settings tracking.TrackingSettings) (*tracking.TrackingData, error) {
+	if a.currentProject == nil {
+		return nil, fmt.Errorf("no project loaded")
+	}
+
+	// Find the asset
+	var assetPath string
+	for _, asset := range a.currentProject.Assets {
+		if asset.ID == settings.AssetID {
+			assetPath = asset.Path
+			break
+		}
+	}
+	if assetPath == "" {
+		return nil, fmt.Errorf("asset not found: %s", settings.AssetID)
+	}
+
+	analyzer := tracking.NewAnalyzer(a.ffmpegPath)
+	result, err := analyzer.AnalyzeMotion(settings, assetPath, func(progress float64) {
+		runtime.EventsEmit(a.ctx, "tracking:progress", map[string]interface{}{
+			"assetId":  settings.AssetID,
+			"progress": progress,
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	runtime.EventsEmit(a.ctx, "tracking:complete", map[string]interface{}{
+		"assetId":     settings.AssetID,
+		"frameCount":  result.FrameCount,
+		"confidence":  result.Confidence,
+	})
+
+	return result, nil
+}
+
+func (a *App) ApplyStabilization(assetID string, trackingData tracking.TrackingData, outputPath string) error {
+	if a.currentProject == nil {
+		return fmt.Errorf("no project loaded")
+	}
+
+	var assetPath string
+	for _, asset := range a.currentProject.Assets {
+		if asset.ID == assetID {
+			assetPath = asset.Path
+			break
+		}
+	}
+	if assetPath == "" {
+		return fmt.Errorf("asset not found: %s", assetID)
+	}
+
+	stabilizer := tracking.NewStabilizer(a.ffmpegPath)
+	return stabilizer.ApplyStabilization(assetPath, &trackingData, outputPath, func(progress float64) {
+		runtime.EventsEmit(a.ctx, "tracking:applyProgress", map[string]interface{}{
+			"assetId":  assetID,
+			"progress": progress,
+		})
+	})
 }

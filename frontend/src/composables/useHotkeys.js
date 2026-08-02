@@ -1,7 +1,9 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useHistoryStore } from '../stores/historyStore'
+import { useDesignHistoryStore } from '../stores/designHistoryStore'
 import { useTimelineStore } from '../stores/timelineStore'
+import { useUiStore } from '../stores/uiStore'
 
 function getComboString(e) {
   let combo = []
@@ -33,16 +35,26 @@ export function useHotkeys() {
 
     const settings = useSettingsStore()
     const history = useHistoryStore()
+    const designHistory = useDesignHistoryStore()
     const timeline = useTimelineStore()
+    const ui = useUiStore()
 
     switch (combo) {
       case settings.shortcuts.undo:
         e.preventDefault()
-        history.undo()
+        if (ui.activeWorkspace === 'design') {
+          designHistory.undo()
+        } else {
+          history.undo()
+        }
         break
       case settings.shortcuts.redo:
         e.preventDefault()
-        history.redo()
+        if (ui.activeWorkspace === 'design') {
+          designHistory.redo()
+        } else {
+          history.redo()
+        }
         break
       case settings.shortcuts.cut:
         e.preventDefault()

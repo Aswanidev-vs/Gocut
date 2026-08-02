@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useDesignStore, getNodeType, EASING_TYPES } from '../../stores/designStore'
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-vue-next'
 
 const props = defineProps({ playheadTime: { type: Number, default: 0 } })
 const designStore = useDesignStore()
@@ -10,10 +10,12 @@ const node = computed(() => designStore.selectedNode)
 const type = computed(() => node.value ? getNodeType(node.value.type) : null)
 const localParams = ref({})
 const activeKeyframeParam = ref(null)
+const expandedKeyframes = ref(new Set())
 
 watch(node, (n) => {
   localParams.value = n ? JSON.parse(JSON.stringify(n.params)) : {}
   activeKeyframeParam.value = null
+  expandedKeyframes.value = new Set()
 }, { immediate: true })
 
 function updateParam(paramId, value) {
@@ -32,6 +34,27 @@ function addKeyframeForParam(paramId) {
 function hasKeyframeAtTime(paramId) {
   if (!node.value || !node.value.keyframes[paramId]) return false
   return node.value.keyframes[paramId].some(k => Math.abs(k.time - props.playheadTime) < 0.02)
+}
+
+function removeKeyframe(paramId, kfId) {
+  if (!node.value) return
+  designStore.removeKeyframe(node.value.id, paramId, kfId)
+}
+
+function updateKeyframeEasing(paramId, kfId, easing) {
+  if (!node.value) return
+  const kfs = node.value.keyframes[paramId]
+  if (!kfs) return
+  const kf = kfs.find(k => k.id === kfId)
+  if (kf) kf.easing = easing
+}
+
+function toggleKeyframeExpand(paramId) {
+  if (expandedKeyframes.value.has(paramId)) {
+    expandedKeyframes.value.delete(paramId)
+  } else {
+    expandedKeyframes.value.add(paramId)
+  }
 }
 
 const keyframedParams = computed(() => {
@@ -124,9 +147,39 @@ const keyframedParams = computed(() => {
           {{ localParams[p.id] ? 'ON' : 'OFF' }}
         </button>
 
-        <!-- keyframe count -->
-        <div v-if="keyframedParams[p.id]?.length" class="text-[9px] text-amber-500/70">
-          {{ keyframedParams[p.id].length }} keyframe(s)
+        <!-- Keyframe list for this param -->
+        <div v-if="keyframedParams[p.id]?.length" class="mt-1">
+          <button
+            class="flex items-center gap-1 text-[9px] text-amber-500/70 hover:text-amber-400 transition-colors"
+            @click="toggleKeyframeExpand(p.id)"
+          >
+            <ChevronRight v-if="!expandedKeyframes.has(p.id)" :size="10" />
+            <ChevronDown v-else :size="10" />
+            {{ keyframedParams[p.id].length }} keyframe(s)
+          </button>
+          <div v-if="expandedKeyframes.has(p.id)" class="mt-1 space-y-1 pl-2">
+            <div
+              v-for="kf in keyframedParams[p.id]"
+              :key="kf.id"
+              class="flex items-center gap-1.5 text-[9px] bg-bg/60 rounded px-1.5 py-1"
+            >
+              <span class="text-text-secondary font-mono w-8">{{ kf.time.toFixed(1) }}s</span>
+              <span class="text-text-primary font-mono flex-1">{{ typeof kf.value === 'number' ? kf.value.toFixed(2) : kf.value }}</span>
+              <select
+                :value="kf.easing"
+                @change="updateKeyframeEasing(p.id, kf.id, $event.target.value)"
+                class="bg-transparent text-[8px] text-text-secondary border border-border/60 rounded px-1 py-0.5 outline-none"
+              >
+                <option v-for="e in EASING_TYPES" :key="e.id" :value="e.id">{{ e.label }}</option>
+              </select>
+              <button
+                class="text-text-secondary/40 hover:text-red-400 transition-colors"
+                @click="removeKeyframe(p.id, kf.id)"
+              >
+                <Trash2 :size="9" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

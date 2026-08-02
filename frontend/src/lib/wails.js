@@ -25,5 +25,7 @@ export {
   GetMediaServerPort,
   DeleteProject,
   ClearRecentProjects,
+  AnalyzeMotion,
+  ApplyStabilization,
 } from '../../wailsjs/go/app/App.js'
 
