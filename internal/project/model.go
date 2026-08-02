@@ -1,6 +1,9 @@
 package project
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type TrackType string
 
@@ -43,6 +46,7 @@ type Project struct {
 	FPS                 float64         `json:"fps"`
 	Timeline            Timeline        `json:"timeline"`
 	Assets              []Asset         `json:"assets"`
+	DesignGraph         json.RawMessage `json:"designGraph,omitempty"`
 	Settings            ProjectSettings `json:"settings"`
 	FilePath            string          `json:"filePath,omitempty"`
 	CustomSaveDirectory string          `json:"customSaveDirectory,omitempty"`

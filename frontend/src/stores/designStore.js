@@ -1,7 +1,24 @@
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { ref, computed } from 'vue'
 
 const generateId = () => crypto.randomUUID()
+
+function getDesignHistoryStoreSafely() {
+  try {
+    const pinia = getActivePinia()
+    if (!pinia) return null
+    return pinia._s && pinia._s.get('designHistory') ? pinia._s.get('designHistory') : null
+  } catch (_) {
+    return null
+  }
+}
+
+function pushDesignSnapshot() {
+  try {
+    const hs = getDesignHistoryStoreSafely()
+    if (hs) hs.pushSnapshot()
+  } catch (_) { /* ignore */ }
+}
 
 // ============== NODE TYPE DEFINITIONS ==============
 export const NODE_TYPES = {
@@ -97,6 +114,82 @@ export const NODE_TYPES = {
     ]},
   ]},
   output: { cat: 'Output', label: 'Output', col: '#F472B6', in: ['in'], out: [], params: []},
+
+  // ============ EXTENDED NODE TYPES ============
+  solidColor: { cat: 'Sources', label: 'Solid Color', col: '#F59E0B', in: [], out: ['out'], params: [
+    { id: 'color', label: 'Color', type: 'color' },
+    { id: 'width', label: 'Width', type: 'number', def: 1920, min: 1, step: 1, suffix: 'px' },
+    { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
+  ], defaults: { color: '#00D4FF' }},
+
+  noise: { cat: 'Sources', label: 'Noise', col: '#F59E0B', in: [], out: ['out'], params: [
+    { id: 'noiseType', label: 'Type', type: 'select', def: 'perlin', options: [
+      { value: 'perlin', label: 'Perlin' }, { value: 'fractal', label: 'Fractal' }, { value: 'white', label: 'White' },
+    ]},
+    { id: 'scale', label: 'Scale', type: 'number', def: 50, min: 1, max: 500, step: 1 },
+    { id: 'octaves', label: 'Octaves', type: 'number', def: 4, min: 1, max: 8, step: 1 },
+    { id: 'seed', label: 'Seed', type: 'number', def: 0, min: 0, max: 9999, step: 1 },
+  ]},
+
+  crop: { cat: 'Transform', label: 'Crop', col: '#8B5CF6', in: ['in'], out: ['out'], params: [
+    { id: 'x', label: 'X', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'y', label: 'Y', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'width', label: 'Width', type: 'number', def: 1920, min: 1, step: 1, suffix: 'px' },
+    { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
+  ]},
+
+  cornerPin: { cat: 'Transform', label: 'Corner Pin', col: '#8B5CF6', in: ['in'], out: ['out'], params: [
+    { id: 'tlX', label: 'Top-Left X', type: 'number', def: 0, step: 1 },
+    { id: 'tlY', label: 'Top-Left Y', type: 'number', def: 0, step: 1 },
+    { id: 'trX', label: 'Top-Right X', type: 'number', def: 1920, step: 1 },
+    { id: 'trY', label: 'Top-Right Y', type: 'number', def: 0, step: 1 },
+    { id: 'blX', label: 'Bot-Left X', type: 'number', def: 0, step: 1 },
+    { id: 'blY', label: 'Bot-Left Y', type: 'number', def: 1080, step: 1 },
+    { id: 'brX', label: 'Bot-Right X', type: 'number', def: 1920, step: 1 },
+    { id: 'brY', label: 'Bot-Right Y', type: 'number', def: 1080, step: 1 },
+  ]},
+
+  channelSplit: { cat: 'Effects', label: 'Channel Split', col: '#EC4899', in: ['in'], out: ['r', 'g', 'b', 'a'], params: []},
+  channelMerge: { cat: 'Effects', label: 'Channel Merge', col: '#EC4899', in: ['r', 'g', 'b', 'a'], out: ['out'], params: []},
+
+  levels: { cat: 'Effects', label: 'Levels', col: '#EC4899', in: ['in'], out: ['out'], params: [
+    { id: 'inBlack', label: 'In Black', type: 'number', def: 0, min: 0, max: 255, step: 1 },
+    { id: 'inWhite', label: 'In White', type: 'number', def: 255, min: 0, max: 255, step: 1 },
+    { id: 'gamma', label: 'Gamma', type: 'number', def: 1, min: 0.1, max: 10, step: 0.1 },
+    { id: 'outBlack', label: 'Out Black', type: 'number', def: 0, min: 0, max: 255, step: 1 },
+    { id: 'outWhite', label: 'Out White', type: 'number', def: 255, min: 0, max: 255, step: 1 },
+  ]},
+
+  invert: { cat: 'Effects', label: 'Invert', col: '#EC4899', in: ['in'], out: ['out'], params: []},
+
+  temperature: { cat: 'Effects', label: 'Temperature', col: '#EC4899', in: ['in'], out: ['out'], params: [
+    { id: 'temperature', label: 'Temperature', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
+    { id: 'tint', label: 'Tint', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
+  ]},
+
+  directionalBlur: { cat: 'Effects', label: 'Directional Blur', col: '#EC4899', in: ['in'], out: ['out'], params: [
+    { id: 'angle', label: 'Angle', type: 'number', def: 0, min: 0, max: 360, step: 1, suffix: '°' },
+    { id: 'distance', label: 'Distance', type: 'number', def: 10, min: 0, max: 200, step: 1, suffix: 'px' },
+  ]},
+
+  mask: { cat: 'Effects', label: 'Mask', col: '#EC4899', in: ['in'], out: ['out'], params: [
+    { id: 'maskType', label: 'Shape', type: 'select', def: 'rectangle', options: [
+      { value: 'rectangle', label: 'Rectangle' }, { value: 'ellipse', label: 'Ellipse' },
+    ]},
+    { id: 'x', label: 'X', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'y', label: 'Y', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'width', label: 'Width', type: 'number', def: 1920, min: 1, step: 1, suffix: 'px' },
+    { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
+    { id: 'feather', label: 'Feather', type: 'number', def: 0, min: 0, max: 200, step: 1, suffix: 'px' },
+  ]},
+
+  timeShift: { cat: 'Time', label: 'Time Shift', col: '#F59E0B', in: ['in'], out: ['out'], params: [
+    { id: 'offset', label: 'Offset', type: 'number', def: 0, step: 0.1, suffix: 's' },
+  ]},
+
+  expression: { cat: 'Utility', label: 'Expression', col: '#A78BFA', in: ['a', 'b', 'c', 'd'], out: ['out'], params: [
+    { id: 'expression', label: 'Expression', type: 'text', def: 'a + b' },
+  ]},
 }
 
 export function getNodeType(type) {
@@ -130,15 +223,19 @@ export const useDesignStore = defineStore('design', () => {
   const nodes = ref([])
   const connections = ref([])
   const selectedNodeId = ref(null)
+  const selectedNodeIds = ref(new Set())
   const selectedConnectionId = ref(null)
   const zoom = ref(1)
   const panX = ref(0)
   const panY = ref(0)
   const snapEnabled = ref(true)
   const presets = ref([])
+  const groups = ref([])
+  const bookmarks = ref({})
 
   const selectedNode = computed(() => nodes.value.find(n => n.id === selectedNodeId.value) || null)
   const outputNode = computed(() => nodes.value.find(n => n.type === 'output') || null)
+  const selectedNodes = computed(() => nodes.value.filter(n => selectedNodeIds.value.has(n.id)))
 
   function addNode(type, opts = {}) {
     if (!NODE_TYPES[type]) return null
@@ -169,6 +266,7 @@ export const useDesignStore = defineStore('design', () => {
     }
     
     selectedNodeId.value = node.id
+    pushDesignSnapshot()
     return node
   }
 
@@ -176,6 +274,7 @@ export const useDesignStore = defineStore('design', () => {
     connections.value = connections.value.filter(c => c.fromNode !== nodeId && c.toNode !== nodeId)
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     if (selectedNodeId.value === nodeId) selectedNodeId.value = null
+    pushDesignSnapshot()
   }
 
   function removeSelectedNode() {
@@ -193,15 +292,18 @@ export const useDesignStore = defineStore('design', () => {
     cloned.label = node.label + ' Copy'
     nodes.value.push(cloned)
     selectedNodeId.value = cloned.id
+    pushDesignSnapshot()
   }
 
   function addConnection(fromNode, fromPort, toNode, toPort) {
     connections.value = connections.value.filter(c => !(c.toNode === toNode && c.toPort === toPort))
     connections.value.push({ id: generateId(), fromNode, fromPort, toNode, toPort })
+    pushDesignSnapshot()
   }
 
   function removeConnection(id) {
     connections.value = connections.value.filter(c => c.id !== id)
+    pushDesignSnapshot()
   }
 
   function addKeyframe(nodeId, paramId, time, value, easing = 'linear') {
@@ -211,12 +313,14 @@ export const useDesignStore = defineStore('design', () => {
     node.keyframes[paramId] = node.keyframes[paramId].filter(k => Math.abs(k.time - time) > 0.01)
     node.keyframes[paramId].push({ id: generateId(), time, value, easing })
     node.keyframes[paramId].sort((a, b) => a.time - b.time)
+    pushDesignSnapshot()
   }
 
   function removeKeyframe(nodeId, paramId, keyframeId) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node || !node.keyframes[paramId]) return
     node.keyframes[paramId] = node.keyframes[paramId].filter(k => k.id !== keyframeId)
+    pushDesignSnapshot()
   }
 
   function getParamValue(nodeId, paramId, time) {
@@ -233,10 +337,30 @@ export const useDesignStore = defineStore('design', () => {
       const a = kfs[i], b = kfs[i + 1]
       if (time >= a.time && time < b.time) {
         const t = a.time === b.time ? 0 : (time - a.time) / (b.time - a.time)
-        return a.value + (b.value - a.value) * t
+        return a.value + (b.value - a.value) * applyEasing(t, a.easing)
       }
     }
     return node.params[paramId] ?? 0
+  }
+
+  function applyEasing(t, easing) {
+    switch (easing) {
+      case 'easeIn': return t * t
+      case 'easeOut': return 1 - (1 - t) * (1 - t)
+      case 'easeInOut': return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      case 'bounce': {
+        const n1 = 7.5625, d1 = 2.75
+        if (t < 1 / d1) return n1 * t * t
+        if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75
+        if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375
+        return n1 * (t -= 2.625 / d1) * t + 0.984375
+      }
+      case 'elastic': {
+        if (t === 0 || t === 1) return t
+        return -Math.pow(2, 10 * t - 10) * Math.sin((t * 10 - 10.75) * (2 * Math.PI / 3))
+      }
+      default: return t // linear
+    }
   }
 
   function zoomIn() { zoom.value = Math.min(5, zoom.value * 1.2) }
@@ -248,7 +372,10 @@ export const useDesignStore = defineStore('design', () => {
   }
   function loadPreset(id) {
     const p = presets.value.find(x => x.id === id)
-    if (p) nodes.value = JSON.parse(JSON.stringify(p.nodes))
+    if (p) {
+      nodes.value = JSON.parse(JSON.stringify(p.nodes))
+      pushDesignSnapshot()
+    }
   }
   function insertTemplate(nodesData) {
     for (const n of nodesData) {
@@ -257,24 +384,160 @@ export const useDesignStore = defineStore('design', () => {
       n.y += 50
     }
     nodes.value.push(...nodesData)
+    pushDesignSnapshot()
   }
 
   function updateNodeParam(nodeId, paramId, value) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) node.params[paramId] = value
+    pushDesignSnapshot()
   }
 
   function updateNodePosition(nodeId, x, y) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) { node.x = x; node.y = y }
+    pushDesignSnapshot()
+  }
+
+  // ============ MULTI-SELECTION ============
+  function toggleNodeSelection(nodeId, additive = false) {
+    if (!additive) {
+      selectedNodeIds.value = new Set([nodeId])
+    } else {
+      if (selectedNodeIds.value.has(nodeId)) {
+        selectedNodeIds.value.delete(nodeId)
+        selectedNodeIds.value = new Set(selectedNodeIds.value)
+      } else {
+        selectedNodeIds.value = new Set([...selectedNodeIds.value, nodeId])
+      }
+    }
+    selectedNodeId.value = nodeId
+  }
+
+  function selectAllNodes() {
+    selectedNodeIds.value = new Set(nodes.value.map(n => n.id))
+    if (nodes.value.length > 0) selectedNodeId.value = nodes.value[0].id
+  }
+
+  function clearSelection() {
+    selectedNodeIds.value = new Set()
+    selectedNodeId.value = null
+    selectedConnectionId.value = null
+  }
+
+  // ============ GROUPS ============
+  function groupNodes(nodeIds) {
+    if (nodeIds.length < 2) return
+    const groupId = generateId()
+    const groupNodes = nodes.value.filter(n => nodeIds.includes(n.id))
+    if (groupNodes.length < 2) return
+
+    // Calculate bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const n of groupNodes) {
+      minX = Math.min(minX, n.x)
+      minY = Math.min(minY, n.y)
+      maxX = Math.max(maxX, n.x + 160)
+      maxY = Math.max(maxY, n.y + 60)
+    }
+
+    groups.value.push({
+      id: groupId,
+      name: 'Group ' + (groups.value.length + 1),
+      nodeIds: [...nodeIds],
+      x: minX - 10,
+      y: minY - 30,
+      width: maxX - minX + 20,
+      height: maxY - minY + 50,
+      collapsed: false,
+    })
+    pushDesignSnapshot()
+  }
+
+  function ungroupNode(groupId) {
+    groups.value = groups.value.filter(g => g.id !== groupId)
+    pushDesignSnapshot()
+  }
+
+  function renameGroup(groupId, name) {
+    const g = groups.value.find(g => g.id === groupId)
+    if (g) g.name = name
+  }
+
+  // ============ BOOKMARKS ============
+  function saveBookmark(slot) {
+    bookmarks.value[slot] = {
+      panX: panX.value,
+      panY: panY.value,
+      zoom: zoom.value,
+    }
+    pushDesignSnapshot()
+  }
+
+  function loadBookmark(slot) {
+    const b = bookmarks.value[slot]
+    if (b) {
+      panX.value = b.panX
+      panY.value = b.panY
+      zoom.value = b.zoom
+    }
+  }
+
+  function moveSelectedNodes(dx, dy) {
+    for (const id of selectedNodeIds.value) {
+      const node = nodes.value.find(n => n.id === id)
+      if (node && !node.locked) {
+        node.x = Math.max(0, node.x + dx)
+        node.y = Math.max(0, node.y + dy)
+      }
+    }
+  }
+
+  function deleteSelectedNodes() {
+    if (selectedNodeIds.value.size > 0) {
+      for (const id of selectedNodeIds.value) {
+        removeNode(id)
+      }
+      selectedNodeIds.value = new Set()
+    } else if (selectedNodeId.value) {
+      removeNode(selectedNodeId.value)
+    }
+  }
+
+  function serialize() {
+    return JSON.parse(JSON.stringify({
+      composition: composition.value,
+      nodes: nodes.value,
+      connections: connections.value,
+      presets: presets.value,
+      groups: groups.value,
+      bookmarks: bookmarks.value,
+    }))
+  }
+
+  function deserialize(data) {
+    if (!data) return
+    if (data.composition) composition.value = data.composition
+    if (data.nodes) nodes.value = data.nodes
+    if (data.connections) connections.value = data.connections
+    if (data.presets) presets.value = data.presets
+    if (data.groups) groups.value = data.groups
+    if (data.bookmarks) bookmarks.value = data.bookmarks
+    selectedNodeId.value = null
+    selectedNodeIds.value = new Set()
+    selectedConnectionId.value = null
   }
 
   return {
-    composition, nodes, connections, selectedNodeId, selectedConnectionId, zoom, panX, panY, snapEnabled, presets,
-    selectedNode, outputNode,
+    composition, nodes, connections, selectedNodeId, selectedNodeIds, selectedConnectionId, zoom, panX, panY, snapEnabled, presets, groups, bookmarks,
+    selectedNode, outputNode, selectedNodes,
     addNode, removeNode, removeSelectedNode, duplicateSelectedNode, addConnection, removeConnection,
     addKeyframe, removeKeyframe, getParamValue,
     zoomIn, zoomOut, zoomFit, saveAsPreset, loadPreset, insertTemplate,
     updateNodeParam, updateNodePosition,
+    serialize, deserialize,
+    toggleNodeSelection, selectAllNodes, clearSelection, moveSelectedNodes, deleteSelectedNodes,
+    groupNodes, ungroupNode, renameGroup,
+    saveBookmark, loadBookmark,
   }
 })

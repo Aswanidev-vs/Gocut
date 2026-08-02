@@ -33,6 +33,16 @@ function getTimelineStoreSafely() {
   }
 }
 
+function getDesignStoreSafely() {
+  try {
+    const pinia = getActivePinia()
+    if (!pinia) return null
+    return pinia._s && pinia._s.get('design') ? pinia._s.get('design') : null
+  } catch (_) {
+    return null
+  }
+}
+
 function hydrateTimelineAsync(p) {
   // Defer to a microtask so we never call into another store while still
   // inside a store's setup function.
@@ -44,6 +54,18 @@ function hydrateTimelineAsync(p) {
         ts.loadFromProject(p)
       } else {
         ts.clearAll()
+      }
+    } catch (_) { /* ignore */ }
+  })
+}
+
+function hydrateDesignAsync(p) {
+  Promise.resolve().then(() => {
+    try {
+      const ds = getDesignStoreSafely()
+      if (!ds) return
+      if (p?.designGraph) {
+        ds.deserialize(p.designGraph)
       }
     } catch (_) { /* ignore */ }
   })
@@ -92,6 +114,11 @@ export const useProjectStore = defineStore('project', () => {
         duration: ts.duration,
       }
     }
+    // Include design graph state
+    try {
+      const ds = getDesignStoreSafely()
+      if (ds) payload.designGraph = ds.serialize()
+    } catch (_) { /* designStore not initialized yet */ }
     payload.assets = payload.assets || []
     return payload
   }
@@ -129,6 +156,7 @@ export const useProjectStore = defineStore('project', () => {
       autosaveTimer = null
     }
     hydrateTimelineAsync(p)
+    hydrateDesignAsync(p)
   }
 
   async function createProject({

@@ -4,6 +4,7 @@ export namespace project {
 	    id: string;
 	    path: string;
 	    type: string;
+	    hasAudio?: boolean;
 	    duration: number;
 	    width: number;
 	    height: number;
@@ -24,6 +25,7 @@ export namespace project {
 	        this.id = source["id"];
 	        this.path = source["path"];
 	        this.type = source["type"];
+	        this.hasAudio = source["hasAudio"];
 	        this.duration = source["duration"];
 	        this.width = source["width"];
 	        this.height = source["height"];
@@ -502,6 +504,7 @@ export namespace project {
 	    fps: number;
 	    timeline: Timeline;
 	    assets: Asset[];
+	    designGraph?: number[];
 	    settings: ProjectSettings;
 	    filePath?: string;
 	    customSaveDirectory?: string;
@@ -522,6 +525,7 @@ export namespace project {
 	        this.fps = source["fps"];
 	        this.timeline = this.convertValues(source["timeline"], Timeline);
 	        this.assets = this.convertValues(source["assets"], Asset);
+	        this.designGraph = source["designGraph"];
 	        this.settings = this.convertValues(source["settings"], ProjectSettings);
 	        this.filePath = source["filePath"];
 	        this.customSaveDirectory = source["customSaveDirectory"];
@@ -653,6 +657,101 @@ export namespace project {
 	
 	
 	
+
+}
+
+export namespace tracking {
+	
+	export class TrackedPoint {
+	    frame: number;
+	    time: number;
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrackedPoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.frame = source["frame"];
+	        this.time = source["time"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
+	export class TrackingData {
+	    assetId: string;
+	    method: string;
+	    points: TrackedPoint[];
+	    transformFile: string;
+	    confidence: number;
+	    frameCount: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrackingData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.assetId = source["assetId"];
+	        this.method = source["method"];
+	        this.points = this.convertValues(source["points"], TrackedPoint);
+	        this.transformFile = source["transformFile"];
+	        this.confidence = source["confidence"];
+	        this.frameCount = source["frameCount"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TrackingSettings {
+	    method: string;
+	    assetId: string;
+	    startTime: number;
+	    duration: number;
+	    regionX: number;
+	    regionY: number;
+	    regionW: number;
+	    regionH: number;
+	    shaking: number;
+	    accuracy: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrackingSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.assetId = source["assetId"];
+	        this.startTime = source["startTime"];
+	        this.duration = source["duration"];
+	        this.regionX = source["regionX"];
+	        this.regionY = source["regionY"];
+	        this.regionW = source["regionW"];
+	        this.regionH = source["regionH"];
+	        this.shaking = source["shaking"];
+	        this.accuracy = source["accuracy"];
+	    }
+	}
 
 }
 

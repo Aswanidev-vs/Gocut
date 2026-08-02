@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useDesignStore, NODE_TYPES, makeDefaultParams as defaultParams } from '../../stores/designStore'
+import { useDesignStore } from '../../stores/designStore'
 import { Play, Plus } from 'lucide-vue-next'
 
 const emit = defineEmits(['insert'])
 const designStore = useDesignStore()
+const search = ref('')
 
 const templates = [
   {
@@ -74,9 +75,11 @@ const templates = [
     desc: 'Green screen keying setup',
     cat: 'Effects',
     create: () => {
-      designStore.addNode('media', { x: 100, y: 350, label: 'Video' })
+      const src = designStore.addNode('media', { x: 100, y: 350, label: 'Video' })
       const ck = designStore.addNode('chromaKey', { x: 350, y: 350 })
-      designStore.addNode('output', { x: 600, y: 350 })
+      const out = designStore.addNode('output', { x: 600, y: 350 })
+      if (src && ck) designStore.addConnection(src.id, 'out', ck.id, 'in')
+      if (ck && out) designStore.addConnection(ck.id, 'out', out.id, 'in')
     }
   },
   {
@@ -99,18 +102,25 @@ const templates = [
 
 function applyTemplate(tpl) {
   tpl.create()
-  emit('insert', designStore.nodes)
+  emit('insert')
 }
+
+const filteredTemplates = computed(() => {
+  if (!search.value) return templates
+  const q = search.value.toLowerCase()
+  return templates.filter(t => t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q) || t.cat.toLowerCase().includes(q))
+})
 </script>
 
 <template>
   <div class="p-2 space-y-2">
     <input
+      v-model="search"
       type="text"
       placeholder="Search templates…"
       class="w-full bg-bg border border-border rounded px-2.5 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent placeholder:text-text-secondary/60"
     />
-    <div v-for="(tpl, i) in templates" :key="i" class="space-y-1">
+    <div v-for="(tpl, i) in filteredTemplates" :key="i" class="space-y-1">
       <div class="text-[10px] text-text-secondary uppercase tracking-wider px-1">{{ tpl.cat }}</div>
       <button
         class="w-full rounded-lg border border-border/60 bg-panel/60 p-2.5 text-left transition hover:border-accent/40 hover:bg-accent/5"
