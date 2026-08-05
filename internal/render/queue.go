@@ -673,6 +673,26 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		filterParts = append(filterParts, "[basea]anull[outa]")
 	}
 
+	audioBitrate := settings.AudioBitrate
+	if audioBitrate == "" {
+		audioBitrate = "192k"
+	}
+
+	// MP3 is an audio-only container. Do not pass the UI's "mp3" codec
+	// through as a video encoder, and do not map the generated video stream.
+	if settings.Format == "mp3" {
+		args = append(args,
+			"-filter_complex", strings.Join(filterParts, ";"),
+			"-map", lastA,
+			"-vn",
+			"-c:a", "libmp3lame",
+			"-b:a", audioBitrate,
+			"-f", "mp3",
+			outputPath,
+		)
+		return args
+	}
+
 	args = append(args,
 		"-filter_complex", strings.Join(filterParts, ";"),
 		"-map", lastV,
@@ -682,11 +702,6 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		"-crf", strconv.Itoa(crf),
 		"-pix_fmt", "yuv420p",
 	)
-
-	audioBitrate := settings.AudioBitrate
-	if audioBitrate == "" {
-		audioBitrate = "192k"
-	}
 
 	// Set audio codec based on format or default to aac
 	audioCodec := "aac"

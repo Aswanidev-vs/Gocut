@@ -378,8 +378,13 @@ watch(() => timelineStore.currentTime, (t) => {
 // Sync immediately when clip properties (like speed, volume, etc.) change
 watch(() => timelineStore.clips, () => {
   try {
+    // A removed video clip must invalidate the old FFmpeg frame immediately;
+    // otherwise the previous frame can remain visible while a stale request
+    // finishes in the background.
+    playerStore.invalidatePreview()
     syncAudioElements()
     syncVideoElement()
+    playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
   } catch (err) {
     console.error('Error syncing clips on change:', err)
   }

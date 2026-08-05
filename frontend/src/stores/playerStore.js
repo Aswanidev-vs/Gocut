@@ -116,6 +116,15 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  function invalidatePreview() {
+    previewRequestId++
+    queuedPreview = false
+    queuedPreviewTime = 0
+    lastCompletedPreviewTime = -1
+    previewImage.value = null
+    previewError.value = null
+  }
+
   async function preload() {
     const ps = getProjectStore()
     if (!ps || !ps.project) return
@@ -193,6 +202,7 @@ export const usePlayerStore = defineStore('player', () => {
     toggleLoop,
     setPreviewQuality,
     refreshPreview,
+    invalidatePreview,
     preload,
     formatTimecode,
     mediaServerPort,

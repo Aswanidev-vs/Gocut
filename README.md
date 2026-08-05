@@ -43,7 +43,7 @@ else's server.
 -  **Transitions** — 11 built-in `xfade` transitions (fade, dissolve, wipe, slide, zoom, …) with **live CSS preview** during playback
 -  **Visual clip indicators** — timeline clips show icons when transitions (↔) or color effects (🎨) are applied
 -  **Audio engine** — per-clip volume, muting, and (in-progress) waveform visualization
--  **Background export** — render MP4 (H.264 + AAC) in a Go goroutine, with progress and cancel
+-  **Background export** — render MP4 (H.264 + AAC) or audio-only MP3 in a Go goroutine, with progress and cancel
 -  **Portable `.Gocut` projects** — save, load, and share your project as a single JSON file directly from the editor
 -  **Auto-assign FilePath** — auto-configures project file location to the first imported media asset's directory for seamless background autosaves
 -  **Auto-save** — transparently saves draft history to SQLite every 60 s, writing directly to the `.gocut` file once it is defined on disk
@@ -328,8 +328,12 @@ belongs. No Electron, no Chromium-on-CI, ~10× smaller binaries.
 
 ### Export
 - `mp4` (H.264 + AAC) — primary format
-- Additional formats (WebM, GIF, audio-only) are scaffolded in
-  `RenderSettings` and are tracked in the [Roadmap](#-roadmap).
+- `mp3` (MP3 audio-only) — supported with the `libmp3lame` encoder
+- `webm` (VP9) and `gif` are visible in the export UI but their dedicated
+  render paths are not complete yet.
+
+> **Note:** Removing a video clip from the timeline invalidates in-flight and
+> cached preview frames, so the removed source is not reused by the preview.
 
 ---
 
@@ -384,6 +388,7 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [x] **Live CSS transition preview** — fade, dissolve, wipe, slide, zoom, flip, circle, pixelize, and blur transitions animate in real-time during playback (no FFmpeg round-trip needed)
 - [x] **Visual clip indicators** — timeline clips display transition (↔) and effect (🎨) icons so users can see at a glance which clips have modifications applied
 - [x] Export to MP4 (H.264 + AAC) with background render, progress events, and cancel
+- [x] Export audio-only MP3 with background render, progress events, and cancel
 - [x] Auto-save every 60 s
 - [x] Cross-platform: Windows, macOS, Linux
 - [x] In-app media HTTP server (audio extraction on demand, cached)
@@ -409,7 +414,7 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [ ] Audio fade handles + per-clip volume keyframes
 - [ ] Noise reduction (`afftdn`) + loudness normalization (`loudnorm`)
 - [ ] Chroma key
-- [ ] Multi-format export: WebM (VP9), GIF, audio-only (MP3 / AAC)
+- [ ] Multi-format export: WebM (VP9), GIF, and audio-only AAC
 - [ ] Multi-job render queue
 - [ ] Multiple video + audio tracks
 - [ ] System font picker
@@ -452,7 +457,7 @@ git push origin v0.1.0
 
 A few candidates right now:
 
-- Add WebM / GIF / audio-only export paths to `internal/render`
+- Add WebM / GIF / audio-only AAC export paths to `internal/render`
 - Wire the system font scanner into the text inspector
 - Add unit tests for `internal/ffmpeg/builder.go` filter chain output
 - Implement true cross-fade overlap logic between adjacent clips
