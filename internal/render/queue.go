@@ -383,10 +383,17 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		crf = 23
 	}
 
+	// MP3 is an audio-only container. Every video branch below must be
+	// skipped: FFmpeg aborts with "has output N unconnected" if the
+	// filtergraph produces labelled video pads that no -map consumes.
+	audioOnly := settings.Format == "mp3"
+
 	filterParts := []string{}
 
 	// Create base video and base audio
-	filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=%.3f[basev]", w, h, fps, duration))
+	if !audioOnly {
+		filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=%.3f[basev]", w, h, fps, duration))
+	}
 	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
 	// than the 'd' parameter which some builds don't recognise on anullsrc.
 	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo,atrim=duration=%.3f[basea]", duration))
@@ -408,6 +415,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 
 	for _, track := range p.Timeline.Tracks {
 		for _, clip := range track.Clips {
+			if audioOnly && track.Type != project.TrackAudio && track.Type != project.TrackVideo {
+				continue
+			}
 			if track.Type == project.TrackText {
 				if clip.TextProps != nil {
 					textClips = append(textClips, textOverlay{clip: clip, tp: *clip.TextProps})
@@ -417,6 +427,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 
 			assetPath, err := lookupAssetPath(p, clip.AssetID)
 			if err != nil || assetPath == "" {
+				continue
+			}
+
+			asset := lookupAsset(p, clip.AssetID)
+			if audioOnly && track.Type == project.TrackVideo && (asset == nil || !asset.HasAudio) {
 				continue
 			}
 
@@ -440,47 +455,49 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			args = append(args, "-i", assetPath)
 
 			if track.Type == project.TrackVideo {
-				label := fmt.Sprintf("[v%d]", inputIdx)
-				var clipFilters []string
+				if !audioOnly {
+					label := fmt.Sprintf("[v%d]", inputIdx)
+					var clipFilters []string
 
-				clipFilters = append(clipFilters, "format=yuva420p")
-				clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
-				clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
-				clipFilters = append(clipFilters, "setsar=1")
+					clipFilters = append(clipFilters, "format=yuva420p")
+					clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
+					clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
+					clipFilters = append(clipFilters, "setsar=1")
 
-				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
-					clipFilters = append(clipFilters, cf)
-				}
-				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
-					clipFilters = append(clipFilters, tf)
-				}
-				if clip.Opacity > 0 && clip.Opacity < 1.0 {
-					clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
-				}
-				if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
-					trans := clip.Transition
-					D := trans.Duration
-					switch trans.Type {
-					case "fade", "dissolve":
-						clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", D))
-					case "blur":
-						clipFilters = append(clipFilters, fmt.Sprintf("boxblur=luma_radius='if(lt(t\\,%g)\\,20*(1-t/%g)\\,0)'", D, D))
+					if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
+						clipFilters = append(clipFilters, cf)
 					}
-				}
+					if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
+						clipFilters = append(clipFilters, tf)
+					}
+					if clip.Opacity > 0 && clip.Opacity < 1.0 {
+						clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
+					}
+					if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
+						trans := clip.Transition
+						D := trans.Duration
+						switch trans.Type {
+						case "fade", "dissolve":
+							clipFilters = append(clipFilters, fmt.Sprintf("fade=t=in:st=0:d=%g:alpha=1", D))
+						case "blur":
+							clipFilters = append(clipFilters, fmt.Sprintf("boxblur=luma_radius='if(lt(t\\,%g)\\,20*(1-t/%g)\\,0)'", D, D))
+						}
+					}
 
-				ptsExpr := "PTS-STARTPTS"
-				if clip.Speed > 0 && clip.Speed != 1.0 {
-					ptsExpr = fmt.Sprintf("(PTS-STARTPTS)/%g", clip.Speed)
-				}
-				clipFilters = append(clipFilters, fmt.Sprintf("setpts=%s+%.3f/TB", ptsExpr, clip.StartTime))
+					ptsExpr := "PTS-STARTPTS"
+					if clip.Speed > 0 && clip.Speed != 1.0 {
+						ptsExpr = fmt.Sprintf("(PTS-STARTPTS)/%g", clip.Speed)
+					}
+					clipFilters = append(clipFilters, fmt.Sprintf("setpts=%s+%.3f/TB", ptsExpr, clip.StartTime))
 
-				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
-				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
+					filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
+					videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
+				}
 
 				// Only extract audio if the source actually has an audio
 				// stream; referencing '[i:a]' on a silent clip makes FFmpeg
 				// abort the whole render with "Stream specifier matches no streams".
-				if asset := lookupAsset(p, clip.AssetID); asset != nil && asset.HasAudio {
+				if asset != nil && asset.HasAudio {
 					aLabel := fmt.Sprintf("[va%d]", inputIdx)
 					var aFilters []string
 					aFilters = append(aFilters, "asetpts=PTS-STARTPTS")

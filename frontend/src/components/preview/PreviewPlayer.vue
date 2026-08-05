@@ -375,16 +375,36 @@ watch(() => timelineStore.currentTime, (t) => {
   }
 }, { flush: 'sync' })
 
-// Sync immediately when clip properties (like speed, volume, etc.) change
-watch(() => timelineStore.clips, () => {
+// Sync immediately when clip properties (like speed, volume, etc.) change.
+// A deep watch on a ref hands back the same array for in-place edits, so
+// removals are detected against an id set we track ourselves.
+let knownClipIds = new Set(timelineStore.clips.map(c => c.id))
+
+watch(() => timelineStore.clips, (newClips) => {
   try {
-    // A removed video clip must invalidate the old FFmpeg frame immediately;
-    // otherwise the previous frame can remain visible while a stale request
-    // finishes in the background.
-    playerStore.invalidatePreview()
+    const ids = new Set(newClips.map(c => c.id))
+    let removed = false
+    for (const id of knownClipIds) {
+      if (!ids.has(id)) { removed = true; break }
+    }
+    knownClipIds = ids
+
     syncAudioElements()
     syncVideoElement()
-    playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
+
+    if (removed) {
+      // A removed clip must invalidate the old FFmpeg frame immediately;
+      // otherwise the previous frame can remain visible while a stale
+      // request finishes in the background.
+      playerStore.invalidatePreview()
+      playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
+    } else {
+      // Drag/trim mutates clips on every mousemove. Forcing here would bypass
+      // the store in-flight guard and pile up backend renders, so let the
+      // store coalesce to one active plus one queued request.
+      playerStore.markPreviewStale()
+      playerStore.refreshPreview(false, timelineStore.currentTime).catch(() => {})
+    }
   } catch (err) {
     console.error('Error syncing clips on change:', err)
   }

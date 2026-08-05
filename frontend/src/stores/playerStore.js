@@ -125,6 +125,13 @@ export const usePlayerStore = defineStore('player', () => {
     previewError.value = null
   }
 
+  // Drops the "already rendered this timestamp" memo without clearing the
+  // visible frame, so a non-force refresh still goes through when clip
+  // content changed but the playhead did not.
+  function markPreviewStale() {
+    lastCompletedPreviewTime = -1
+  }
+
   async function preload() {
     const ps = getProjectStore()
     if (!ps || !ps.project) return
@@ -203,6 +210,7 @@ export const usePlayerStore = defineStore('player', () => {
     setPreviewQuality,
     refreshPreview,
     invalidatePreview,
+    markPreviewStale,
     preload,
     formatTimecode,
     mediaServerPort,
