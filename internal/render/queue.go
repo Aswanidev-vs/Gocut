@@ -383,10 +383,17 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		crf = 23
 	}
 
-	// MP3 is an audio-only container. Every video branch below must be
+	if videoCodec == "vp9" {
+		videoCodec = "libvpx-vp9"
+	}
+	if settings.Format == "webm" && (videoCodec == "" || videoCodec == "libx264" || videoCodec == "h264") {
+		videoCodec = "libvpx-vp9"
+	}
+
+	// MP3/AAC/M4A are audio-only containers. Every video branch below must be
 	// skipped: FFmpeg aborts with "has output N unconnected" if the
 	// filtergraph produces labelled video pads that no -map consumes.
-	audioOnly := settings.Format == "mp3"
+	audioOnly := settings.Format == "mp3" || settings.Format == "aac" || settings.Format == "m4a"
 
 	filterParts := []string{}
 
@@ -504,9 +511,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					if clip.Speed > 0 && clip.Speed != 1.0 {
 						aFilters = append(aFilters, fmt.Sprintf("atempo=%g", clip.Speed))
 					}
-					vol := clip.Volume
-					if vol > 0 && vol != 1.0 {
-						aFilters = append(aFilters, fmt.Sprintf("volume=%g", vol))
+					if hasKeyframeProp(clip.Keyframes, "volume") {
+						volExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "volume", clip.Volume)
+						aFilters = append(aFilters, fmt.Sprintf("volume=volume='%s':eval=frame", volExpr))
+					} else if clip.Volume > 0 && clip.Volume != 1.0 {
+						aFilters = append(aFilters, fmt.Sprintf("volume=%g", clip.Volume))
 					}
 					if track.Muted {
 						aFilters = append(aFilters, "volume=0")
@@ -576,7 +585,10 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if fadeIn {
 					fadeDur = clip.Transition.Duration
 				}
-				if af := ffmpeg.BuildAudioFilters(clip.Volume, fadeIn, false, fadeDur, clip.Duration); af != "" {
+				if hasKeyframeProp(clip.Keyframes, "volume") {
+					volExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "volume", clip.Volume)
+					clipFilters = append(clipFilters, fmt.Sprintf("volume=volume='%s':eval=frame", volExpr))
+				} else if af := ffmpeg.BuildAudioFilters(clip.Volume, fadeIn, false, fadeDur, clip.Duration); af != "" {
 					clipFilters = append(clipFilters, af)
 				}
 				if clip.Normalize {
@@ -695,16 +707,43 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		audioBitrate = "192k"
 	}
 
-	// MP3 is an audio-only container. Do not pass the UI's "mp3" codec
-	// through as a video encoder, and do not map the generated video stream.
-	if settings.Format == "mp3" {
+	// Audio-only formats (MP3, AAC, M4A). Do not pass video encoder options
+	// or map video streams.
+	if audioOnly {
+		aCodec := "libmp3lame"
+		aFormat := settings.Format
+		if settings.Format == "aac" {
+			aCodec = "aac"
+			aFormat = "adts"
+		} else if settings.Format == "m4a" {
+			aCodec = "aac"
+			aFormat = "ipod"
+		}
 		args = append(args,
 			"-filter_complex", strings.Join(filterParts, ";"),
 			"-map", lastA,
 			"-vn",
-			"-c:a", "libmp3lame",
+			"-c:a", aCodec,
 			"-b:a", audioBitrate,
-			"-f", "mp3",
+		)
+		if aFormat != "" {
+			args = append(args, "-f", aFormat)
+		}
+		args = append(args, outputPath)
+		return args
+	}
+
+	if settings.Format == "gif" {
+		gifOutV := "[gifout]"
+		filterParts = append(filterParts, fmt.Sprintf("%ssplit[s0][s1];[s0]palettegen[p];[s1][p]paletteuse%s", lastV, gifOutV))
+		lastV = gifOutV
+
+		args = append(args,
+			"-filter_complex", strings.Join(filterParts, ";"),
+			"-map", lastV,
+			"-an",
+			"-c:v", "gif",
+			"-f", "gif",
 			outputPath,
 		)
 		return args
@@ -801,4 +840,13 @@ func parseFFmpegTime(s string) float64 {
 	m, _ := strconv.ParseFloat(parts[1], 64)
 	sec, _ := strconv.ParseFloat(parts[2], 64)
 	return h*3600 + m*60 + sec
+}
+
+func hasKeyframeProp(kfs []project.Keyframe, prop string) bool {
+	for _, kf := range kfs {
+		if kf.Property == prop {
+			return true
+		}
+	}
+	return false
 }

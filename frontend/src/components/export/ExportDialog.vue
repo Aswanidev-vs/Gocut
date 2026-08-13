@@ -38,6 +38,7 @@ const formats = [
   { id: 'webm', label: 'WebM (VP9)',  codec: 'vp9' },
   { id: 'gif',  label: 'GIF',          codec: 'gif' },
   { id: 'mp3',  label: 'MP3 (Audio)',  codec: 'mp3' },
+  { id: 'aac',  label: 'AAC (Audio)',  codec: 'aac' },
 ]
 const resolutions = [
   { id: '480p',  label: '480p',  w: 854,  h: 480  },

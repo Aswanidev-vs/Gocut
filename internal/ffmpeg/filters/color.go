@@ -70,10 +70,20 @@ func BuildColorFilterChain(c project.ColorGrade) string {
 		}
 		parts = append(parts, fmt.Sprintf("chromakey=color=%s:similarity=%g:blend=%g", color, similarity, blend))
 	}
+	if c.LutPath != "" {
+		parts = append(parts, fmt.Sprintf("lut3d=file='%s'", escapePathForFFmpeg(c.LutPath)))
+	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return strings.Join(parts, ",")
+}
+
+func escapePathForFFmpeg(p string) string {
+	p = strings.ReplaceAll(p, "\\", "/")
+	p = strings.ReplaceAll(p, ":", "\\:")
+	p = strings.ReplaceAll(p, "'", "'\\''")
+	return p
 }
 
 func needsColorBalance(c project.ColorGrade) bool {

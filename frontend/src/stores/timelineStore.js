@@ -87,7 +87,16 @@ export function getInterpolatedProperty(clip, property, time, defaultValue) {
     const k2 = kfs[i + 1]
     if (time >= k1.time && time < k2.time) {
       if (k1.time === k2.time) return parseFloat(k2.value)
-      return parseFloat(k1.value) + (parseFloat(k2.value) - parseFloat(k1.value)) * (time - k1.time) / (k2.time - k1.time)
+      let u = (time - k1.time) / (k2.time - k1.time)
+      const easing = k1.easing || 'linear'
+      if (easing === 'easeIn' || easing === 'ease-in') {
+        u = u * u
+      } else if (easing === 'easeOut' || easing === 'ease-out') {
+        u = u * (2 - u)
+      } else if (easing === 'easeInOut' || easing === 'ease-in-out') {
+        u = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2
+      }
+      return parseFloat(k1.value) + (parseFloat(k2.value) - parseFloat(k1.value)) * u
     }
   }
   return defaultValue

@@ -2,7 +2,8 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { Minus, Plus, RotateCcw, BarChart2 } from 'lucide-vue-next'
+import { OpenFilePicker } from '../../lib/wails'
+import { Minus, Plus, RotateCcw, BarChart2, FileText, Upload } from 'lucide-vue-next'
 import { computeSpline } from '../../lib/curves'
 
 const timelineStore = useTimelineStore()
@@ -13,6 +14,30 @@ const clip = computed(() => timelineStore.selectedClips[0])
 const chromaKeyColor = computed(() => clip.value?.color?.chromaKeyColor || '')
 const chromaKeySimilarity = computed(() => clip.value?.color?.chromaKeySimilarity || 0.01)
 const chromaKeyBlend = computed(() => clip.value?.color?.chromaKeyBlend || 0.0)
+const lutPath = computed(() => clip.value?.color?.lutPath || '')
+const lutFileName = computed(() => {
+  if (!lutPath.value) return ''
+  return lutPath.value.split(/[\\/]/).pop() || lutPath.value
+})
+
+async function importLut() {
+  if (!clip.value) return
+  try {
+    const files = await OpenFilePicker([
+      { name: '3D LUT Files (*.cube)', extensions: ['cube'] }
+    ])
+    if (files && files.length > 0) {
+      timelineStore.updateClipColor(clip.value.id, { lutPath: files[0] })
+    }
+  } catch (err) {
+    console.error('Failed to import LUT:', err)
+  }
+}
+
+function clearLut() {
+  if (!clip.value) return
+  timelineStore.updateClipColor(clip.value.id, { lutPath: '' })
+}
 
 function updateChromaKey(key, value) {
   if (!clip.value) return
@@ -412,6 +437,36 @@ onMounted(() => {
           @mouseup="onMouseUp"
           @mouseleave="onMouseUp"
         />
+      </div>
+    </div>
+
+    <!-- 3D LUT Section -->
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-text-secondary flex items-center gap-1">
+          <FileText :size="14" class="text-accent" />
+          3D LUT Profile (.cube)
+        </div>
+      </div>
+      <div v-if="!lutPath" class="flex items-center">
+        <button
+          class="flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded border border-dashed border-border hover:border-accent text-text-secondary hover:text-text-primary hover:bg-border/40 transition-colors w-full"
+          @click="importLut"
+        >
+          <Upload :size="12" /> Import 3D LUT (.cube)
+        </button>
+      </div>
+      <div v-else class="flex items-center justify-between bg-bg/80 border border-border rounded px-2.5 py-1.5">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <FileText :size="12" class="text-accent shrink-0" />
+          <span class="text-xs font-mono text-text-primary truncate">{{ lutFileName }}</span>
+        </div>
+        <button
+          class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-red-400 hover:border-red-400 transition-colors shrink-0"
+          @click="clearLut"
+        >
+          Clear
+        </button>
       </div>
     </div>
 

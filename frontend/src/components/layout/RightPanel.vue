@@ -3,12 +3,14 @@ import { ref, computed, watch } from 'vue'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus } from 'lucide-vue-next'
+import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus, Activity } from 'lucide-vue-next'
 import ColorInspector from '../inspector/ColorInspector.vue'
+import KeyframeEasingDialog from '../timeline/KeyframeEasingDialog.vue'
 
 const timelineStore = useTimelineStore()
 const projectStore = useProjectStore()
 const uiStore = useUiStore()
+const showEasingDialog = ref(false)
 
 const hasSelection = computed(() => timelineStore.selectedClips.length > 0)
 const selectedClip = computed(() => timelineStore.selectedClips[0])
@@ -69,6 +71,9 @@ function getPropValue(prop, defaultValue) {
   if (prop === 'opacity') {
     return selectedClip.value.opacity !== undefined ? selectedClip.value.opacity : 1.0
   }
+  if (prop === 'volume') {
+    return selectedClip.value.volume !== undefined ? selectedClip.value.volume : 1.0
+  }
   return selectedClip.value.transform?.[prop] !== undefined ? selectedClip.value.transform[prop] : defaultValue
 }
 
@@ -99,8 +104,8 @@ function setTextProp(key, val) {
 }
 function updateClipField(key, val) {
   if (!selectedClip.value) return
-  if (key === 'opacity' && hasAnyKeyframe('opacity')) {
-    timelineStore.addKeyframe(selectedClip.value.id, 'opacity', val, clipTime.value)
+  if ((key === 'opacity' || key === 'volume') && hasAnyKeyframe(key)) {
+    timelineStore.addKeyframe(selectedClip.value.id, key, val, clipTime.value)
   }
   timelineStore.updateClip(selectedClip.value.id, { [key]: val })
 }
@@ -520,7 +525,12 @@ function applyCustomAnimation() {
           <div>
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Transform</h4>
-              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetTransform" title="Reset"><RotateCcw :size="10" /></button>
+              <div class="flex items-center gap-1.5">
+                <button class="px-1.5 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors text-[9px] flex items-center gap-1 font-medium" @click="showEasingDialog = true" title="Easing Graph Editor">
+                  <Activity :size="10" /> Curves
+                </button>
+                <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetTransform" title="Reset"><RotateCcw :size="10" /></button>
+              </div>
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -575,11 +585,14 @@ function applyCustomAnimation() {
           <div v-if="isVideo || isAudio">
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Volume</h4>
-              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+              <div class="flex items-center gap-1.5">
+                <button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('volume')}" @click="toggleKeyframe('volume', getPropValue('volume', 1.0))"><Diamond :size="10" :fill="hasKeyframe('volume') ? 'currentColor' : 'none'" /></button>
+                <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+              </div>
             </div>
             <div class="flex items-center gap-2">
-              <input type="range" min="0" max="2" step="0.01" :value="selectedClip.volume" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
-              <input type="number" :value="Math.round(selectedClip.volume * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              <input type="range" min="0" max="2" step="0.01" :value="getPropValue('volume', 1.0)" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
+              <input type="number" :value="Math.round(getPropValue('volume', 1.0) * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-14 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
             </div>
           </div>
 
@@ -665,11 +678,14 @@ function applyCustomAnimation() {
           <div>
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Volume</h4>
-              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+              <div class="flex items-center gap-1.5">
+                <button class="text-text-secondary hover:text-accent" :class="{'text-accent': hasKeyframe('volume')}" @click="toggleKeyframe('volume', getPropValue('volume', 1.0))"><Diamond :size="10" :fill="hasKeyframe('volume') ? 'currentColor' : 'none'" /></button>
+                <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetVolume" title="Reset"><RotateCcw :size="10" /></button>
+              </div>
             </div>
             <div class="flex items-center gap-2">
-              <input type="range" min="0" max="2" step="0.01" :value="selectedClip.volume" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
-              <input type="number" :value="Math.round(selectedClip.volume * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-16 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+              <input type="range" min="0" max="2" step="0.01" :value="getPropValue('volume', 1.0)" @input="(e) => updateClipField('volume', parseFloat(e.target.value))" class="flex-1 accent-accent" />
+              <input type="number" :value="Math.round(getPropValue('volume', 1.0) * 100)" :step="1" min="0" max="200" @input="(e) => updateClipField('volume', Math.max(0, Math.min(2, (parseFloat(e.target.value) || 0) / 100)))" class="w-16 bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
             </div>
           </div>
 
@@ -840,5 +856,6 @@ function applyCustomAnimation() {
       </div>
     </div>
     </template>
+    <KeyframeEasingDialog :isOpen="showEasingDialog" @close="showEasingDialog = false" />
   </div>
 </template>
