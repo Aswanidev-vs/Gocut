@@ -106,6 +106,7 @@ type ColorGrade struct {
 	ChromaKeyColor      string  `json:"chromaKeyColor"`
 	ChromaKeySimilarity float64 `json:"chromaKeySimilarity"`
 	ChromaKeyBlend      float64 `json:"chromaKeyBlend"`
+	LutPath             string  `json:"lutPath,omitempty"`
 }
 
 type TextProps struct {

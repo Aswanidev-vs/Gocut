@@ -44,8 +44,8 @@ func BuildAnimatedExpression(keyframes []project.Keyframe, property string, base
 		if t2 == t1 {
 			lerp = FloatToStr(v2)
 		} else {
-			// linear interpolation
-			lerp = fmt.Sprintf("(%g+(%g-%g)*(t-%g)/%g)", v1, v2, v1, t1, t2-t1)
+			ratio := buildEasingRatioExpr(t1, t2, kf1.Easing)
+			lerp = fmt.Sprintf("(%g+(%g-%g)*%s)", v1, v2, v1, ratio)
 		}
 
 		nextExpr := buildExpr(idx + 1)
@@ -54,6 +54,21 @@ func BuildAnimatedExpression(keyframes []project.Keyframe, property string, base
 
 	firstKF := kfs[0]
 	return fmt.Sprintf("if(lt(t,%g),%g,%s)", firstKF.Time, getFloat(firstKF.Value), buildExpr(0))
+}
+
+func buildEasingRatioExpr(t1, t2 float64, easing string) string {
+	dur := t2 - t1
+	u := fmt.Sprintf("((t-%g)/%g)", t1, dur)
+	switch easing {
+	case "easeIn", "ease-in":
+		return fmt.Sprintf("(%s*%s)", u, u)
+	case "easeOut", "ease-out":
+		return fmt.Sprintf("(%s*(2-%s))", u, u)
+	case "easeInOut", "ease-in-out":
+		return fmt.Sprintf("if(lt(%s,0.5),2*%s*%s,1-pow(-2*%s+2,2)/2)", u, u, u, u)
+	default:
+		return u
+	}
 }
 
 func getFloat(v interface{}) float64 {
