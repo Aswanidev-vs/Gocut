@@ -1,3 +1,5 @@
+
+
 <div align="center">
 
 <img src="frontend/src/assets/images/logo-universal.png" alt="Gocut logo" width="180" />
@@ -289,7 +291,7 @@ belongs. No Electron, no Chromium-on-CI, ~10× smaller binaries.
 | ---------------------- | --------------------------------------------- |
 | Desktop shell          | [`wailsapp/wails/v2`](https://wails.io) v2.12  |
 | Media processing       | FFmpeg via `os/exec`, with a typed arg builder |
-| Project storage        | [`ncruces/go-sqlite3`](https://github.com/ncruces/go-strftime) (WASM-backed, no CGo required) |
+| Project storage        | [`ncruces/go-sqlite3`](https://github.com/ncruces/go-sqlite3) (WASM-backed, no CGo required) |
 | Thumbnail cache        | Custom disk-based LRU (~500 MB cap)            |
 | Frame cache            | In-memory ring buffer (120 entries, 30 s TTL) |
 | Background jobs        | Goroutines + buffered channels + `context`     |
