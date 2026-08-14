@@ -20,14 +20,70 @@ function pushDesignSnapshot() {
   } catch (_) { /* ignore */ }
 }
 
+// Socket port color mapping in DaVinci Resolve Fusion style
+export const FUSION_SOCKET_COLORS = {
+  bg: '#EAB308',     // Yellow (Background input)
+  fg: '#22C55E',     // Green (Foreground input)
+  mask: '#3B82F6',   // Blue (Effect Mask input)
+  matte: '#EC4899',  // Magenta / Garbage Matte
+  in: '#94A3B8',    // Standard input
+  out: '#FFFFFF',   // Standard output (White)
+}
+
 // ============== NODE TYPE DEFINITIONS ==============
 export const NODE_TYPES = {
-  media:    { cat: 'Sources',   label: 'Media In',   col: '#00D4FF', in: [],          out: ['out'], params: [
+  // Fusion Standard Media Nodes
+  mediaIn: { cat: 'Sources', label: 'MediaIn', col: '#0284C7', in: ['mask'], out: ['out'], params: [
+    { id: 'assetId',   label: 'Source Clip', type: 'asset' },
+    { id: 'startTime', label: 'Global In',   type: 'number', def: 0, min: 0, step: 0.1, suffix: 's' },
+    { id: 'duration',  label: 'Hold Frames', type: 'number', def: 5, min: 0.1, step: 0.1, suffix: 's' },
+  ]},
+  mediaOut: { cat: 'Output', label: 'MediaOut', col: '#F43F5E', in: ['in'], out: [], params: []},
+
+  // Fusion Source Generators
+  background: { cat: 'Sources', label: 'Background', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
+    { id: 'type', label: 'Type', type: 'select', def: 'solid', options: [
+      { value: 'solid', label: 'Solid Color' },
+      { value: 'horizontal', label: 'Horizontal Gradient' },
+      { value: 'vertical', label: 'Vertical Gradient' },
+      { value: 'radial', label: 'Radial Gradient' },
+    ]},
+    { id: 'color', label: 'Primary Color', type: 'color' },
+    { id: 'color2', label: 'Secondary Color', type: 'color' },
+    { id: 'alpha', label: 'Alpha', type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
+    { id: 'width', label: 'Width', type: 'number', def: 1920, min: 1, step: 1, suffix: 'px' },
+    { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
+  ], defaults: { color: '#000000', color2: '#1e293b' }},
+
+  fastNoise: { cat: 'Sources', label: 'FastNoise', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
+    { id: 'detail', label: 'Detail', type: 'number', def: 4, min: 1, max: 10, step: 1 },
+    { id: 'contrast', label: 'Contrast', type: 'number', def: 1.5, min: 0, max: 5, step: 0.1 },
+    { id: 'brightness', label: 'Brightness', type: 'number', def: 0, min: -1, max: 1, step: 0.05 },
+    { id: 'scale', label: 'Scale', type: 'number', def: 15, min: 1, max: 100, step: 1 },
+    { id: 'seethe', label: 'Seethe Rate', type: 'number', def: 0.5, min: 0, max: 5, step: 0.1 },
+    { id: 'color1', label: 'Color 1', type: 'color' },
+    { id: 'color2', label: 'Color 2', type: 'color' },
+  ], defaults: { color1: '#000000', color2: '#FFFFFF' }},
+
+  textPlus: { cat: 'Sources', label: 'Text+', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
+    { id: 'text', label: 'Styled Text', type: 'text' },
+    { id: 'fontSize', label: 'Size', type: 'number', def: 64, min: 8, max: 400, step: 1, suffix: 'px' },
+    { id: 'color', label: 'Color', type: 'color' },
+    { id: 'fontFamily', label: 'Font', type: 'font' },
+    { id: 'tracking', label: 'Tracking', type: 'number', def: 0, min: -10, max: 50, step: 1 },
+    { id: 'writeOnStart', label: 'Write On Start', type: 'number', def: 0, min: 0, max: 1, step: 0.01 },
+    { id: 'writeOnEnd', label: 'Write On End', type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
+    { id: 'bold', label: 'Bold', type: 'toggle' },
+    { id: 'italic', label: 'Italic', type: 'toggle' },
+  ], defaults: { text: 'Fusion Text+', color: '#FFFFFF' }},
+
+  // Legacy aliases
+  media: { cat: 'Sources', label: 'Media In', col: '#00D4FF', in: ['mask'], out: ['out'], params: [
     { id: 'assetId',   label: 'Source',   type: 'asset' },
     { id: 'startTime', label: 'In',       type: 'number', def: 0, min: 0, step: 0.1, suffix: 's' },
     { id: 'duration',  label: 'Duration', type: 'number', def: 5, min: 0.1, step: 0.1, suffix: 's' },
   ]},
-  text:     { cat: 'Sources',   label: 'Text',       col: '#F59E0B', in: [],          out: ['out'], params: [
+  text: { cat: 'Sources', label: 'Text', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
     { id: 'text',       label: 'Text',  type: 'text' },
     { id: 'fontSize',   label: 'Size',  type: 'number', def: 48, min: 8, max: 300, step: 1, suffix: 'px' },
     { id: 'color',      label: 'Color', type: 'color' },
@@ -35,102 +91,110 @@ export const NODE_TYPES = {
     { id: 'bold',       label: 'Bold',  type: 'toggle' },
     { id: 'italic',     label: 'Italic',type: 'toggle' },
   ], defaults: { text: 'Hello Gocut', color: '#FFFFFF' }},
-  rectangle:{ cat: 'Sources',   label: 'Rectangle',  col: '#F59E0B', in: [],          out: ['out'], params: [
-    { id: 'width',  label: 'Width',  type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
+
+  rectangle: { cat: 'Sources', label: 'Rectangle', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
+    { id: 'width', label: 'Width', type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
     { id: 'height', label: 'Height', type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
-    { id: 'fill',   label: 'Fill',   type: 'color' },
+    { id: 'fill', label: 'Fill', type: 'color' },
     { id: 'cornerRadius', label: 'Radius', type: 'number', def: 0, min: 0, max: 200, step: 1, suffix: 'px' },
   ], defaults: { fill: '#00D4FF' }},
-  ellipse:  { cat: 'Sources',   label: 'Ellipse',    col: '#F59E0B', in: [],          out: ['out'], params: [
-    { id: 'width',  label: 'Width',  type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
+
+  ellipse: { cat: 'Sources', label: 'Ellipse', col: '#F59E0B', in: ['mask'], out: ['out'], params: [
+    { id: 'width', label: 'Width', type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
     { id: 'height', label: 'Height', type: 'number', def: 200, min: 1, step: 1, suffix: 'px' },
-    { id: 'fill',   label: 'Fill',   type: 'color' },
+    { id: 'fill', label: 'Fill', type: 'color' },
   ], defaults: { fill: '#EC4899' }},
-  polygon:  { cat: 'Sources',   label: 'Polygon',    col: '#F59E0B', in: [],          out: ['out'], params: [
-    { id: 'sides',  label: 'Sides',  type: 'number', def: 5, min: 3, max: 12, step: 1 },
-    { id: 'radius', label: 'Radius', type: 'number', def: 100, min: 1, step: 1, suffix: 'px' },
-    { id: 'fill',   label: 'Fill',   type: 'color' },
-  ], defaults: { fill: '#10B981' }},
-  star:     { cat: 'Sources',   label: 'Star',       col: '#F59E0B', in: [],          out: ['out'], params: [
-    { id: 'numPoints',   label: 'Points',  type: 'number', def: 5, min: 3, max: 20, step: 1 },
-    { id: 'innerRadius', label: 'Inner R', type: 'number', def: 40, min: 0, step: 1, suffix: 'px' },
-    { id: 'outerRadius', label: 'Outer R', type: 'number', def: 100, min: 1, step: 1, suffix: 'px' },
-    { id: 'fill',        label: 'Fill',    type: 'color' },
-  ], defaults: { fill: '#F59E0B' }},
-  gradient: { cat: 'Sources',   label: 'Gradient',   col: '#F59E0B', in: [],          out: ['out'], params: [
-    { id: 'color1', label: 'Color 1', type: 'color' },
-    { id: 'color2', label: 'Color 2', type: 'color' },
-    { id: 'angle',  label: 'Angle',   type: 'number', def: 90, min: 0, max: 360, step: 1, suffix: '°' },
-  ], defaults: { color1: '#00D4FF', color2: '#EC4899' }},
-  transform: { cat: 'Transform', label: 'Transform', col: '#8B5CF6', in: ['in'],       out: ['out'], params: [
-    { id: 'x',         label: 'X',         type: 'number', def: 0, step: 1, suffix: 'px' },
-    { id: 'y',         label: 'Y',         type: 'number', def: 0, step: 1, suffix: 'px' },
-    { id: 'scaleX',    label: 'Scale X',   type: 'number', def: 1, min: 0, max: 10, step: 0.05 },
-    { id: 'scaleY',    label: 'Scale Y',   type: 'number', def: 1, min: 0, max: 10, step: 0.05 },
-    { id: 'rotation',  label: 'Rotation',  type: 'number', def: 0, min: -720, max: 720, step: 1, suffix: '°' },
-    { id: 'opacity',   label: 'Opacity',   type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
-  ]},
-  merge:     { cat: 'Composite', label: 'Merge',     col: '#10B981', in: ['fg', 'bg'], out: ['out'], params: [
-    { id: 'mode', label: 'Mode', type: 'select', def: 'normal', options: [
-      { value: 'normal', label: 'Normal' }, { value: 'multiply', label: 'Multiply' },
-      { value: 'screen', label: 'Screen' }, { value: 'overlay', label: 'Overlay' },
-      { value: 'add', label: 'Add' }, { value: 'subtract', label: 'Subtract' },
-      { value: 'difference', label: 'Difference' }, { value: 'lighten', label: 'Lighten' },
-      { value: 'darken', label: 'Darken' }, { value: 'colordodge', label: 'Color Dodge' },
+
+  // Fusion Compositing & Mask Nodes
+  merge: { cat: 'Composite', label: 'Merge', col: '#10B981', in: ['bg', 'fg', 'mask'], out: ['out'], params: [
+    { id: 'mode', label: 'Apply Mode', type: 'select', def: 'normal', options: [
+      { value: 'normal', label: 'Normal / Over' },
+      { value: 'multiply', label: 'Multiply' },
+      { value: 'screen', label: 'Screen' },
+      { value: 'overlay', label: 'Overlay' },
+      { value: 'add', label: 'Add / Linear Dodge' },
+      { value: 'subtract', label: 'Subtract' },
+      { value: 'difference', label: 'Difference' },
+      { value: 'lighten', label: 'Lighten' },
+      { value: 'darken', label: 'Darken' },
+      { value: 'colordodge', label: 'Color Dodge' },
       { value: 'colorburn', label: 'Color Burn' },
     ]},
+    { id: 'blend', label: 'Blend', type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
+    { id: 'burnIn', label: 'Burn In', type: 'number', def: 0, min: 0, max: 1, step: 0.01 },
+    { id: 'centerPivot', label: 'Center Pivot', type: 'toggle', def: true },
   ]},
-  blur:        { cat: 'Effects', label: 'Blur',     col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'radius', label: 'Radius', type: 'number', def: 5, min: 0, max: 100, step: 0.5, suffix: 'px' },
+
+  maskPolygon: { cat: 'Mask', label: 'Polygon Mask', col: '#3B82F6', in: [], out: ['out'], params: [
+    { id: 'invert', label: 'Invert Mask', type: 'toggle', def: false },
+    { id: 'softEdge', label: 'Soft Edge / Feather', type: 'number', def: 0, min: 0, max: 100, step: 0.5, suffix: 'px' },
+    { id: 'borderWidth', label: 'Border Width', type: 'number', def: 0, min: 0, max: 50, step: 0.5, suffix: 'px' },
+    { id: 'paintMode', label: 'Paint Mode', type: 'select', def: 'merge', options: [
+      { value: 'merge', label: 'Merge / Add' },
+      { value: 'subtract', label: 'Subtract' },
+      { value: 'intersect', label: 'Intersect' },
+    ]},
   ]},
-  glow:        { cat: 'Effects', label: 'Glow',     col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'intensity', label: 'Intensity', type: 'number', def: 1, min: 0, max: 5, step: 0.1 },
-    { id: 'color',     label: 'Color',     type: 'color' },
-    { id: 'radius',    label: 'Radius',    type: 'number', def: 10, min: 0, max: 100, step: 1, suffix: 'px' },
-  ], defaults: { color: '#00D4FF' }},
-  shadow:      { cat: 'Effects', label: 'Shadow',   col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'color',   label: 'Color',     type: 'color' },
-    { id: 'blur',    label: 'Blur',      type: 'number', def: 8, min: 0, max: 100, step: 1, suffix: 'px' },
-    { id: 'offsetX', label: 'Offset X',  type: 'number', def: 0, step: 1, suffix: 'px' },
-    { id: 'offsetY', label: 'Offset Y',  type: 'number', def: 4, step: 1, suffix: 'px' },
-  ], defaults: { color: '#000000' }},
-  colorCorrect:{ cat: 'Effects', label: 'Color Correct', col: '#EC4899', in: ['in'], out: ['out'], params: [
+
+  // Fusion Transform & Spatial Nodes
+  transform: { cat: 'Transform', label: 'Transform (Xf)', col: '#8B5CF6', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'x', label: 'Center X', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'y', label: 'Center Y', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'scaleX', label: 'Size X', type: 'number', def: 1, min: 0, max: 10, step: 0.01 },
+    { id: 'scaleY', label: 'Size Y', type: 'number', def: 1, min: 0, max: 10, step: 0.01 },
+    { id: 'rotation', label: 'Angle', type: 'number', def: 0, min: -720, max: 720, step: 1, suffix: '°' },
+    { id: 'opacity', label: 'Blend', type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
+    { id: 'edges', label: 'Edges', type: 'select', def: 'black', options: [
+      { value: 'black', label: 'Black / Transparent' },
+      { value: 'wrap', label: 'Wrap / Repeat' },
+      { value: 'mirror', label: 'Mirror' },
+    ]},
+  ]},
+
+  // Fusion Color Nodes
+  colorCorrector: { cat: 'Color', label: 'ColorCorrector (CC)', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'lift', label: 'Lift / Shadows', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
+    { id: 'gamma', label: 'Gamma / Midtones', type: 'number', def: 1, min: 0.1, max: 4, step: 0.05 },
+    { id: 'gain', label: 'Gain / Highlights', type: 'number', def: 1, min: 0, max: 4, step: 0.05 },
+    { id: 'saturation', label: 'Saturation', type: 'number', def: 1, min: 0, max: 4, step: 0.02 },
+    { id: 'tint', label: 'Tint Hue', type: 'number', def: 0, min: -180, max: 180, step: 1, suffix: '°' },
+    { id: 'brightness', label: 'Brightness Offset', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
+  ]},
+
+  colorCorrect: { cat: 'Color', label: 'Color Correct', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
     { id: 'brightness', label: 'Brightness', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
     { id: 'contrast',   label: 'Contrast',   type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
     { id: 'saturation', label: 'Saturation', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
     { id: 'hue',        label: 'Hue',        type: 'number', def: 0, min: -180, max: 180, step: 1, suffix: '°' },
   ]},
-  chromaKey:   { cat: 'Effects', label: 'Chroma Key', col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'keyColor',   label: 'Key Color',  type: 'color' },
-    { id: 'similarity', label: 'Similarity', type: 'number', def: 0.4, min: 0, max: 1, step: 0.01 },
-    { id: 'smoothness', label: 'Smoothness', type: 'number', def: 0.1, min: 0, max: 1, step: 0.01 },
-  ], defaults: { keyColor: '#00FF00' }},
-  math: { cat: 'Math', label: 'Math', col: '#A78BFA', in: ['a', 'b'], out: ['out'], params: [
-    { id: 'operation', label: 'Operation', type: 'select', def: 'add', options: [
-      { value: 'add', label: 'A + B' }, { value: 'subtract', label: 'A - B' },
-      { value: 'multiply', label: 'A × B' }, { value: 'divide', label: 'A ÷ B' },
-      { value: 'min', label: 'Min(A, B)' }, { value: 'max', label: 'Max(A, B)' },
-      { value: 'sin', label: 'sin(A)' }, { value: 'cos', label: 'cos(A)' },
-    ]},
-  ]},
-  output: { cat: 'Output', label: 'Output', col: '#F472B6', in: ['in'], out: [], params: []},
 
-  // ============ EXTENDED NODE TYPES ============
-  solidColor: { cat: 'Sources', label: 'Solid Color', col: '#F59E0B', in: [], out: ['out'], params: [
-    { id: 'color', label: 'Color', type: 'color' },
-    { id: 'width', label: 'Width', type: 'number', def: 1920, min: 1, step: 1, suffix: 'px' },
-    { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
+  blur: { cat: 'Effects', label: 'Blur', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'radius', label: 'Blur Size', type: 'number', def: 5, min: 0, max: 100, step: 0.5, suffix: 'px' },
+    { id: 'blend', label: 'Blend', type: 'number', def: 1, min: 0, max: 1, step: 0.01 },
+  ]},
+
+  glow: { cat: 'Effects', label: 'Glow', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'intensity', label: 'Glow / Shine', type: 'number', def: 1, min: 0, max: 5, step: 0.1 },
+    { id: 'color', label: 'Glow Color', type: 'color' },
+    { id: 'radius', label: 'Glow Size', type: 'number', def: 10, min: 0, max: 100, step: 1, suffix: 'px' },
   ], defaults: { color: '#00D4FF' }},
 
-  noise: { cat: 'Sources', label: 'Noise', col: '#F59E0B', in: [], out: ['out'], params: [
-    { id: 'noiseType', label: 'Type', type: 'select', def: 'perlin', options: [
-      { value: 'perlin', label: 'Perlin' }, { value: 'fractal', label: 'Fractal' }, { value: 'white', label: 'White' },
-    ]},
-    { id: 'scale', label: 'Scale', type: 'number', def: 50, min: 1, max: 500, step: 1 },
-    { id: 'octaves', label: 'Octaves', type: 'number', def: 4, min: 1, max: 8, step: 1 },
-    { id: 'seed', label: 'Seed', type: 'number', def: 0, min: 0, max: 9999, step: 1 },
-  ]},
+  shadow: { cat: 'Effects', label: 'Drop Shadow', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'color', label: 'Shadow Color', type: 'color' },
+    { id: 'blur', label: 'Softness', type: 'number', def: 8, min: 0, max: 100, step: 1, suffix: 'px' },
+    { id: 'offsetX', label: 'Offset X', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'offsetY', label: 'Offset Y', type: 'number', def: 4, step: 1, suffix: 'px' },
+  ], defaults: { color: '#000000' }},
 
+  chromaKey: { cat: 'Effects', label: 'Chroma Keyer', col: '#EC4899', in: ['in', 'mask'], out: ['out'], params: [
+    { id: 'keyColor', label: 'Key Color', type: 'color' },
+    { id: 'similarity', label: 'Acceptance Range', type: 'number', def: 0.4, min: 0, max: 1, step: 0.01 },
+    { id: 'smoothness', label: 'Edge Softness', type: 'number', def: 0.1, min: 0, max: 1, step: 0.01 },
+  ], defaults: { keyColor: '#00FF00' }},
+
+  output: { cat: 'Output', label: 'Output', col: '#F43F5E', in: ['in'], out: [], params: []},
+
+  // ============ EXTENDED UTILITY NODES ============
   crop: { cat: 'Transform', label: 'Crop', col: '#8B5CF6', in: ['in'], out: ['out'], params: [
     { id: 'x', label: 'X', type: 'number', def: 0, step: 1, suffix: 'px' },
     { id: 'y', label: 'Y', type: 'number', def: 0, step: 1, suffix: 'px' },
@@ -138,41 +202,7 @@ export const NODE_TYPES = {
     { id: 'height', label: 'Height', type: 'number', def: 1080, min: 1, step: 1, suffix: 'px' },
   ]},
 
-  cornerPin: { cat: 'Transform', label: 'Corner Pin', col: '#8B5CF6', in: ['in'], out: ['out'], params: [
-    { id: 'tlX', label: 'Top-Left X', type: 'number', def: 0, step: 1 },
-    { id: 'tlY', label: 'Top-Left Y', type: 'number', def: 0, step: 1 },
-    { id: 'trX', label: 'Top-Right X', type: 'number', def: 1920, step: 1 },
-    { id: 'trY', label: 'Top-Right Y', type: 'number', def: 0, step: 1 },
-    { id: 'blX', label: 'Bot-Left X', type: 'number', def: 0, step: 1 },
-    { id: 'blY', label: 'Bot-Left Y', type: 'number', def: 1080, step: 1 },
-    { id: 'brX', label: 'Bot-Right X', type: 'number', def: 1920, step: 1 },
-    { id: 'brY', label: 'Bot-Right Y', type: 'number', def: 1080, step: 1 },
-  ]},
-
-  channelSplit: { cat: 'Effects', label: 'Channel Split', col: '#EC4899', in: ['in'], out: ['r', 'g', 'b', 'a'], params: []},
-  channelMerge: { cat: 'Effects', label: 'Channel Merge', col: '#EC4899', in: ['r', 'g', 'b', 'a'], out: ['out'], params: []},
-
-  levels: { cat: 'Effects', label: 'Levels', col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'inBlack', label: 'In Black', type: 'number', def: 0, min: 0, max: 255, step: 1 },
-    { id: 'inWhite', label: 'In White', type: 'number', def: 255, min: 0, max: 255, step: 1 },
-    { id: 'gamma', label: 'Gamma', type: 'number', def: 1, min: 0.1, max: 10, step: 0.1 },
-    { id: 'outBlack', label: 'Out Black', type: 'number', def: 0, min: 0, max: 255, step: 1 },
-    { id: 'outWhite', label: 'Out White', type: 'number', def: 255, min: 0, max: 255, step: 1 },
-  ]},
-
-  invert: { cat: 'Effects', label: 'Invert', col: '#EC4899', in: ['in'], out: ['out'], params: []},
-
-  temperature: { cat: 'Effects', label: 'Temperature', col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'temperature', label: 'Temperature', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
-    { id: 'tint', label: 'Tint', type: 'number', def: 0, min: -1, max: 1, step: 0.01 },
-  ]},
-
-  directionalBlur: { cat: 'Effects', label: 'Directional Blur', col: '#EC4899', in: ['in'], out: ['out'], params: [
-    { id: 'angle', label: 'Angle', type: 'number', def: 0, min: 0, max: 360, step: 1, suffix: '°' },
-    { id: 'distance', label: 'Distance', type: 'number', def: 10, min: 0, max: 200, step: 1, suffix: 'px' },
-  ]},
-
-  mask: { cat: 'Effects', label: 'Mask', col: '#EC4899', in: ['in'], out: ['out'], params: [
+  mask: { cat: 'Mask', label: 'Mask', col: '#3B82F6', in: ['in'], out: ['out'], params: [
     { id: 'maskType', label: 'Shape', type: 'select', def: 'rectangle', options: [
       { value: 'rectangle', label: 'Rectangle' }, { value: 'ellipse', label: 'Ellipse' },
     ]},
@@ -203,6 +233,7 @@ export const EASING_TYPES = [
   { id: 'easeIn',   label: 'Ease In' },
   { id: 'easeOut',  label: 'Ease Out' },
   { id: 'easeInOut',label: 'Ease In/Out' },
+  { id: 'smooth',   label: 'Smooth (S)' },
   { id: 'bounce',   label: 'Bounce' },
   { id: 'elastic',  label: 'Elastic' },
 ]
@@ -225,6 +256,11 @@ export const useDesignStore = defineStore('design', () => {
   const selectedNodeId = ref(null)
   const selectedNodeIds = ref(new Set())
   const selectedConnectionId = ref(null)
+
+  // DaVinci Resolve Fusion Dual Viewers (Viewer 1 / Left & Viewer 2 / Right)
+  const viewer1NodeId = ref(null)
+  const viewer2NodeId = ref(null)
+  const activeViewer = ref(1) // 1 or 2
   const zoom = ref(1)
   const panX = ref(0)
   const panY = ref(0)
@@ -399,6 +435,22 @@ export const useDesignStore = defineStore('design', () => {
     pushDesignSnapshot()
   }
 
+  function setViewerNode(viewerNum, nodeId) {
+    if (viewerNum === 1) {
+      viewer1NodeId.value = viewer1NodeId.value === nodeId ? null : nodeId
+    } else if (viewerNum === 2) {
+      viewer2NodeId.value = viewer2NodeId.value === nodeId ? null : nodeId
+    }
+  }
+
+  function setViewer1(nodeId) {
+    viewer1NodeId.value = viewer1NodeId.value === nodeId ? null : nodeId
+  }
+
+  function setViewer2(nodeId) {
+    viewer2NodeId.value = viewer2NodeId.value === nodeId ? null : nodeId
+  }
+
   // ============ MULTI-SELECTION ============
   function toggleNodeSelection(nodeId, additive = false) {
     if (!additive) {
@@ -535,7 +587,7 @@ export const useDesignStore = defineStore('design', () => {
     addKeyframe, removeKeyframe, getParamValue,
     zoomIn, zoomOut, zoomFit, saveAsPreset, loadPreset, insertTemplate,
     updateNodeParam, updateNodePosition,
-    serialize, deserialize,
+    viewer1NodeId, viewer2NodeId, setViewerNode, setViewer1, setViewer2,
     toggleNodeSelection, selectAllNodes, clearSelection, moveSelectedNodes, deleteSelectedNodes,
     groupNodes, ungroupNode, renameGroup,
     saveBookmark, loadBookmark,

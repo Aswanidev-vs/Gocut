@@ -8,6 +8,8 @@ import { nodeEvaluators } from '../../engine/nodeEvaluators'
 const props = defineProps({
   playheadTime: { type: Number, default: 0 },
   isPlaying: { type: Boolean, default: false },
+  targetNodeId: { type: String, default: null },
+  viewerLabel: { type: String, default: '' },
 })
 
 const designStore = useDesignStore()
@@ -57,16 +59,24 @@ async function renderFrame() {
       nodeEvaluators
     )
 
-    // Find output node and render its result
-    const outputNode = findOutputNode(designStore.nodes)
-    if (outputNode && outputs.has(outputNode.id)) {
-      const output = outputs.get(outputNode.id)
-      renderOutputToCanvas(ctx2d, output, canvas.width, canvas.height, resolution)
-      statusText.value = ''
+    // Fusion Viewer Target Routing
+    if (props.targetNodeId && outputs.has(props.targetNodeId)) {
+      const output = outputs.get(props.targetNodeId)
+      renderNodeOutput(ctx2d, output, canvas.width, canvas.height, resolution)
+      const targetNode = designStore.nodes.find(n => n.id === props.targetNodeId)
+      statusText.value = targetNode ? `${targetNode.label || targetNode.type}` : ''
     } else {
-      // Render all source nodes as a preview
-      renderSourcesPreview(ctx2d, outputs, canvas.width, canvas.height, resolution)
-      statusText.value = 'Connect to an Output node to finalize'
+      // Find output / mediaOut node and render its result
+      const outputNode = designStore.nodes.find(n => n.type === 'output' || n.type === 'mediaOut')
+      if (outputNode && outputs.has(outputNode.id)) {
+        const output = outputs.get(outputNode.id)
+        renderOutputToCanvas(ctx2d, output, canvas.width, canvas.height, resolution)
+        statusText.value = ''
+      } else {
+        // Render all source nodes as a preview
+        renderSourcesPreview(ctx2d, outputs, canvas.width, canvas.height, resolution)
+        statusText.value = 'Connect to an Output/MediaOut node to finalize'
+      }
     }
 
     compositingStore.setNodeOutputs(outputs)
@@ -417,23 +427,29 @@ defineExpose({ renderFrame })
 </script>
 
 <template>
-  <div class="relative w-full h-full bg-black flex flex-col">
-    <canvas
-      ref="canvasRef"
-      :width="designStore.composition.width"
-      :height="designStore.composition.height"
-      class="w-full h-full object-contain"
-    />
-    <!-- Status overlay -->
-    <div v-if="statusText" class="absolute bottom-2 left-2 right-2 flex items-center justify-center">
-      <div class="px-2 py-1 rounded bg-black/60 text-[10px] text-text-secondary font-mono">
-        {{ statusText }}
+  <div class="relative w-full h-full bg-[#08080C] flex flex-col select-none overflow-hidden">
+    <!-- Viewer header bar (Fusion style) -->
+    <div class="h-6 bg-[#12121A]/90 border-b border-border/60 flex items-center justify-between px-2 text-[10px] text-text-secondary z-10">
+      <div class="flex items-center gap-1.5 font-medium">
+        <span class="px-1.5 py-0.2 rounded font-mono text-[9px] bg-accent/15 text-accent border border-accent/30">
+          {{ viewerLabel || 'Viewer' }}
+        </span>
+        <span v-if="statusText" class="text-text-primary text-[10px] font-semibold">{{ statusText }}</span>
+      </div>
+      <div class="flex items-center gap-2 text-[9px] font-mono text-text-secondary/70">
+        <span>{{ designStore.composition.width }}×{{ designStore.composition.height }}</span>
+        <span v-if="compositingStore.renderTime > 0">· {{ compositingStore.renderTime.toFixed(1) }}ms</span>
       </div>
     </div>
-    <!-- Render info -->
-    <div class="absolute top-2 right-2 text-[9px] text-text-secondary/50 font-mono">
-      {{ designStore.composition.width }}×{{ designStore.composition.height }}
-      <span v-if="compositingStore.renderTime > 0"> · {{ compositingStore.renderTime.toFixed(1) }}ms</span>
+
+    <!-- Canvas area -->
+    <div class="flex-1 relative flex items-center justify-center overflow-hidden">
+      <canvas
+        ref="canvasRef"
+        :width="designStore.composition.width"
+        :height="designStore.composition.height"
+        class="max-w-full max-h-full object-contain shadow-2xl border border-border/30 rounded-sm"
+      />
     </div>
   </div>
 </template>

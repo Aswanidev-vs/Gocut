@@ -199,36 +199,80 @@ function draw() {
     c2d.roundRect(pos.x, pos.y, nw, 20, { upperLeft: 6, upperRight: 6 })
     c2d.fill()
 
-    // Title
+    // Title & Type
     c2d.fillStyle = '#E8E8E8'
-    c2d.font = '10px DM Sans, sans-serif'
+    c2d.font = 'bold 10px DM Sans, sans-serif'
     c2d.fillText(node.label || type.label, pos.x + 8, pos.y + 14)
 
-    // Input port dots
+    // Fusion Viewer Indicator Dots ([1] [2]) on top-right of node header
+    const v1Active = designStore.viewer1NodeId === node.id
+    const v2Active = designStore.viewer2NodeId === node.id
+    
+    // Viewer 1 dot
+    const v1X = pos.x + nw - 28
+    const v1Y = pos.y + 10
+    c2d.fillStyle = v1Active ? '#00D4FF' : 'rgba(255,255,255,0.15)'
+    c2d.strokeStyle = v1Active ? '#FFFFFF' : 'rgba(255,255,255,0.3)'
+    c2d.lineWidth = 1
+    c2d.beginPath()
+    c2d.arc(v1X, v1Y, 5, 0, Math.PI * 2)
+    c2d.fill()
+    c2d.stroke()
+    c2d.fillStyle = v1Active ? '#000000' : '#888888'
+    c2d.font = 'bold 7px sans-serif'
+    c2d.textAlign = 'center'
+    c2d.textBaseline = 'middle'
+    c2d.fillText('1', v1X, v1Y)
+
+    // Viewer 2 dot
+    const v2X = pos.x + nw - 12
+    const v2Y = pos.y + 10
+    c2d.fillStyle = v2Active ? '#EC4899' : 'rgba(255,255,255,0.15)'
+    c2d.strokeStyle = v2Active ? '#FFFFFF' : 'rgba(255,255,255,0.3)'
+    c2d.beginPath()
+    c2d.arc(v2X, v2Y, 5, 0, Math.PI * 2)
+    c2d.fill()
+    c2d.stroke()
+    c2d.fillStyle = v2Active ? '#000000' : '#888888'
+    c2d.fillText('2', v2X, v2Y)
+
+    // Reset alignment for other text
+    c2d.textAlign = 'left'
+    c2d.textBaseline = 'alphabetic'
+
+    // Input port dots (Fusion color-coded: Yellow bg, Green fg, Blue mask)
     for (let i = 0; i < type.inputs.length; i++) {
       const socketWorld = getInputSocketPos(node, i, type.inputs.length)
       const socketScreen = worldToScreen(socketWorld.x, socketWorld.y)
+      const portName = type.inputs[i]
       
       const isHovered = dragConnectionTarget.value && 
                         dragConnectionTarget.value.nodeId === node.id && 
                         dragConnectionTarget.value.portType === 'in' && 
-                        dragConnectionTarget.value.portName === type.inputs[i]
+                        dragConnectionTarget.value.portName === portName
       
       const isCompatible = isDraggingConnection.value && 
                            activeConnectionSource.value && 
                            activeConnectionSource.value.nodeId !== node.id && 
                            activeConnectionSource.value.portType === 'out'
 
+      // Fusion socket color coding
+      let socketColor = '#94A3B8'
+      if (portName === 'bg') socketColor = '#EAB308'      // Yellow Background
+      else if (portName === 'fg') socketColor = '#22C55E'  // Green Foreground
+      else if (portName === 'mask') socketColor = '#3B82F6'// Blue Mask
+      else if (portName === 'matte') socketColor = '#EC4899'
+
       // Glow compatible sockets
       if (isCompatible) {
-        c2d.strokeStyle = 'rgba(0, 212, 255, 0.4)'
+        c2d.strokeStyle = socketColor
         c2d.lineWidth = 1.5
         c2d.beginPath()
         c2d.arc(socketScreen.x, socketScreen.y, (8 + Math.sin(dashOffset.value * 0.8) * 2) * designStore.zoom, 0, Math.PI * 2)
         c2d.stroke()
       }
 
-      c2d.fillStyle = isHovered ? '#00D4FF' : '#9CA3AF'
+      c2d.fillStyle = isHovered ? '#FFFFFF' : socketColor
       c2d.strokeStyle = '#1E1E2E'
       c2d.lineWidth = 1.5
       c2d.beginPath()
@@ -240,12 +284,12 @@ function draw() {
       const isCurrentlyHovered = (hoveredSocket.value && 
                                   hoveredSocket.value.nodeId === node.id && 
                                   hoveredSocket.value.portType === 'in' && 
-                                  hoveredSocket.value.portName === type.inputs[i]) || isHovered
+                                  hoveredSocket.value.portName === portName) || isHovered
       if (isCurrentlyHovered) {
-        c2d.fillStyle = 'rgba(15, 15, 25, 0.9)'
-        c2d.strokeStyle = '#00D4FF'
+        c2d.fillStyle = 'rgba(15, 15, 25, 0.95)'
+        c2d.strokeStyle = socketColor
         c2d.lineWidth = 1
-        const text = type.inputs[i].toUpperCase()
+        const text = portName.toUpperCase()
         c2d.font = '9px monospace'
         const tw = c2d.measureText(text).width
         c2d.beginPath()
@@ -442,6 +486,18 @@ function onMouseDown(e) {
     if (n.visible === false || n.locked) continue
     const pos = worldToScreen(n.x, n.y)
     if (mx >= pos.x && mx <= pos.x + 160 && my >= pos.y && my <= pos.y + 60) {
+      // Check if clicked Viewer 1 or Viewer 2 indicator dot
+      const v1Dist = Math.hypot(mx - (pos.x + 160 - 28), my - (pos.y + 10))
+      const v2Dist = Math.hypot(mx - (pos.x + 160 - 12), my - (pos.y + 10))
+      if (v1Dist <= 8) {
+        designStore.setViewer1(n.id)
+        return
+      }
+      if (v2Dist <= 8) {
+        designStore.setViewer2(n.id)
+        return
+      }
+
       // Ctrl+click for additive selection
       if (e.ctrlKey || e.metaKey) {
         designStore.toggleNodeSelection(n.id, true)

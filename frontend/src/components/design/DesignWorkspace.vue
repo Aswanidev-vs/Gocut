@@ -25,7 +25,7 @@ const designStore = useDesignStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
-// Resizable panel widths — responsive to viewport
+// Resizable panel widths & heights
 const MIN_CENTER_WIDTH = 360
 const MIN_LIBRARY_WIDTH = 160
 const MIN_INSPECTOR_WIDTH = 200
@@ -33,54 +33,42 @@ const MIN_INSPECTOR_WIDTH = 200
 const isNarrowScreen = ref(typeof window !== 'undefined' && window.innerWidth < 1100)
 const isSmallScreen = ref(typeof window !== 'undefined' && window.innerWidth < 800)
 
-function clampPanelWidths() {
-  const vw = window.innerWidth
-  // Reserve at least MIN_CENTER_WIDTH for the center graph area.
-  const maxTotalSide = Math.max(0, vw - MIN_CENTER_WIDTH - 220) // 220 = outer left panel + resizers
-  const maxLibrary = Math.floor(maxTotalSide * 0.45)
-  const maxInspector = Math.floor(maxTotalSide * 0.55)
-
-  libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(libraryWidth.value, Math.max(MIN_LIBRARY_WIDTH, maxLibrary)))
-  inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(inspectorWidth.value, Math.max(MIN_INSPECTOR_WIDTH, maxInspector)))
-
-  // At narrow widths, stack panels to never exceed viewport
-  if (libraryWidth.value + inspectorWidth.value > maxTotalSide) {
-    const ratio = libraryWidth.value / (libraryWidth.value + inspectorWidth.value)
-    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.floor(maxTotalSide * ratio))
-    inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.floor(maxTotalSide * (1 - ratio)))
-  }
-}
-
-function updateScreenFlags() {
-  isNarrowScreen.value = window.innerWidth < 1100
-  isSmallScreen.value = window.innerWidth < 800
-  clampPanelWidths()
-}
-
-// Initial widths based on viewport
-const vwInit = typeof window !== 'undefined' ? window.innerWidth : 1366
-const defaultLibrary = Math.min(240, Math.max(180, Math.floor((vwInit - 220) * 0.35)))
-const defaultInspector = Math.min(300, Math.max(220, Math.floor((vwInit - 220) * 0.4)))
-
-const libraryWidth = ref(defaultLibrary)
-const inspectorWidth = ref(defaultInspector)
+const libraryWidth = ref(220)
+const inspectorWidth = ref(280)
 const showCurves = ref(false)
-const curvesHeight = ref(140)
+const curvesHeight = ref(180)
+const viewerHeight = ref(320)
 const showOnboarding = computed(() => designStore.nodes.length === 0)
-const viewMode = ref('graph') // 'graph' | 'preview' | 'split'
+const viewMode = ref('dual') // 'dual' | 'single' | 'graph'
 
 const isPlaying = ref(false)
 let playInterval = null
 const playheadTime = ref(0)
 
 const tabs = [
-  { id: 'nodes', label: 'Nodes', icon: Box },
+  { id: 'nodes', label: 'Tools', icon: Box },
   { id: 'templates', label: 'Templates', icon: Sparkles },
   { id: 'effects', label: 'Effects', icon: Wand2 },
   { id: 'tracking', label: 'Track', icon: Crosshair },
   { id: 'presets', label: 'Presets', icon: Zap },
 ]
 const activeTab = ref('nodes')
+
+// Fusion Toolbar Quick Tool Definitions
+const FUSION_SHELF_TOOLS = [
+  { type: 'background', label: 'Bg', title: 'Background Generator (Bg)', color: '#F59E0B' },
+  { type: 'fastNoise', label: 'Noise', title: 'FastNoise (FN)', color: '#F59E0B' },
+  { type: 'textPlus', label: 'Text+', title: 'Text+ Generator', color: '#F59E0B' },
+  { type: 'maskPolygon', label: 'Mask', title: 'Polygon Mask (Poly)', color: '#3B82F6' },
+  { type: 'transform', label: 'Xf', title: 'Transform (Xf)', color: '#8B5CF6' },
+  { type: 'merge', label: 'Mrg', title: 'Merge (Mrg)', color: '#10B981' },
+  { type: 'colorCorrector', label: 'CC', title: 'ColorCorrector (CC)', color: '#EC4899' },
+  { type: 'blur', label: 'Blur', title: 'Blur Effect', color: '#EC4899' },
+]
+
+function quickAddTool(toolType) {
+  designStore.addNode(toolType)
+}
 
 let activeDrag = null
 function startDrag(e, panel) {
@@ -90,27 +78,16 @@ function startDrag(e, panel) {
   e.preventDefault()
 }
 
-// Track available space accounting for outer left panel (260px) + resizer
-const availableWidth = () => {
-  const vw = window.innerWidth
-  return Math.max(0, vw - 260 - 4) // outer left panel + resizers
-}
-
 function onDrag(e) {
   if (!activeDrag) return
-  const avail = availableWidth()
-  const maxCenterSide = Math.max(0, avail - MIN_CENTER_WIDTH)
-  const rect = e.currentTarget?.parentElement?.getBoundingClientRect?.()
-  const localX = rect ? e.clientX - rect.left : e.clientX
-
   if (activeDrag === 'library') {
-    const max = Math.max(MIN_LIBRARY_WIDTH, Math.min(maxCenterSide - MIN_INSPECTOR_WIDTH, maxCenterSide * 0.5))
-    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(localX, max))
+    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(e.clientX - 260, 400))
   } else if (activeDrag === 'inspector') {
-    const max = Math.max(MIN_INSPECTOR_WIDTH, Math.min(maxCenterSide - MIN_LIBRARY_WIDTH, maxCenterSide * 0.6))
-    inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(avail - localX, max))
+    inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(window.innerWidth - e.clientX, 450))
+  } else if (activeDrag === 'viewer') {
+    viewerHeight.value = Math.max(160, Math.min(e.clientY - 80, window.innerHeight - 250))
   } else if (activeDrag === 'curves') {
-    curvesHeight.value = Math.max(80, Math.min(window.innerHeight - e.clientY, window.innerHeight - 150))
+    curvesHeight.value = Math.max(100, Math.min(window.innerHeight - e.clientY, window.innerHeight - 150))
   }
 }
 
@@ -122,15 +99,12 @@ function stopDrag() {
 
 // Lifecycle: responsive resize + design playback events
 onMounted(() => {
-  updateScreenFlags()
-  window.addEventListener('resize', updateScreenFlags)
   window.addEventListener('design:togglePlay', togglePlay)
   window.addEventListener('design:stepPlayhead', onStepPlayhead)
 })
 
 onUnmounted(() => {
   clearInterval(playInterval)
-  window.removeEventListener('resize', updateScreenFlags)
   window.removeEventListener('design:togglePlay', togglePlay)
   window.removeEventListener('design:stepPlayhead', onStepPlayhead)
 })
@@ -161,11 +135,6 @@ function onStepPlayhead(e) {
   playheadTime.value = Math.max(0, Math.min(designStore.composition.duration, playheadTime.value + step))
 }
 
-// Watch timeline playhead for sync
-watch(() => timelineStore.currentTime, (t) => {
-  // Optionally sync from main timeline
-})
-
 // Onboarding handlers
 function startWithTemplate() {
   activeTab.value = 'templates'
@@ -175,10 +144,19 @@ function startWithEffect() {
 }
 function startWithNodes() {
   activeTab.value = 'nodes'
-  // Seed a basic graph so the user isn't staring at emptiness
   if (designStore.nodes.length === 0) {
-    designStore.addNode('text', { x: 120, y: 200, label: 'Title', params: { text: 'Hello', fontSize: 64, color: '#FFFFFF' } })
-    designStore.addNode('output', { x: 500, y: 200, label: 'Output' })
+    const bg = designStore.addNode('background', { x: 100, y: 150, label: 'Background1' })
+    const txt = designStore.addNode('textPlus', { x: 100, y: 280, label: 'Text1' })
+    const mrg = designStore.addNode('merge', { x: 340, y: 200, label: 'Merge1' })
+    const out = designStore.addNode('mediaOut', { x: 560, y: 200, label: 'MediaOut1' })
+    
+    if (bg && txt && mrg && out) {
+      designStore.addConnection(bg.id, 'out', mrg.id, 'bg')
+      designStore.addConnection(txt.id, 'out', mrg.id, 'fg')
+      designStore.addConnection(mrg.id, 'out', out.id, 'in')
+      designStore.setViewer1(txt.id)
+      designStore.setViewer2(mrg.id)
+    }
   }
 }
 
@@ -186,60 +164,46 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-bg overflow-hidden">
-    <!-- Design Toolbar (scrollable on narrow screens) -->
-    <div class="h-10 bg-panel border-b border-border flex items-center px-2 gap-1 flex-shrink-0 overflow-x-auto">
-      <div class="flex items-center gap-1.5 px-2 flex-shrink-0">
-        <div class="w-1.5 h-1.5 rounded-full bg-pink-500 animate-pulse" />
-        <span class="text-[11px] font-semibold text-text-primary">Design</span>
-        <span v-if="!isNarrowScreen" class="text-[10px] text-text-secondary px-1.5 py-0.5 rounded border border-border">Fusion-style</span>
+  <div class="flex flex-col h-full bg-[#0A0A10] overflow-hidden select-none">
+    <!-- Fusion Shelf / Quick Tool Bar -->
+    <div class="h-10 bg-[#14141E] border-b border-border/80 flex items-center px-2 gap-1.5 flex-shrink-0 overflow-x-auto">
+      <div class="flex items-center gap-1 px-1.5 flex-shrink-0">
+        <div class="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.8)]" />
+        <span class="text-[11px] font-bold text-text-primary uppercase tracking-wider">Fusion</span>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
+      <div class="w-px h-5 bg-border/60 mx-1 flex-shrink-0" />
 
-      <div class="flex items-center gap-0.5 flex-shrink-0">
+      <!-- Resolve Fusion Quick Tool Icons -->
+      <div class="flex items-center gap-1 flex-shrink-0">
         <button
-          class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
-          @click="designStore.addNode('media')"
-          title="Add Media Node"
+          v-for="tool in FUSION_SHELF_TOOLS"
+          :key="tool.type"
+          class="flex items-center gap-1 px-2 py-1 rounded bg-[#1C1C28] hover:bg-accent/20 hover:border-accent/50 border border-border/60 text-[10px] font-medium text-text-primary transition-colors shadow-sm"
+          :title="tool.title"
+          @click="quickAddTool(tool.type)"
         >
-          <Plus :size="11" /> <span v-if="!isNarrowScreen">Add Node</span>
-        </button>
-        <button
-          class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
-          :disabled="!designStore.selectedNodeId"
-          :class="!designStore.selectedNodeId && 'opacity-40 cursor-not-allowed'"
-          @click="designStore.duplicateSelectedNode()"
-          title="Duplicate (Ctrl+D)"
-        >
-          <Copy :size="11" /> <span v-if="!isNarrowScreen">Duplicate</span>
-        </button>
-        <button
-          class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          :disabled="!designStore.selectedNodeId"
-          :class="!designStore.selectedNodeId && 'opacity-40 cursor-not-allowed'"
-          @click="designStore.removeSelectedNode()"
-          title="Delete (Del)"
-        >
-          <Trash2 :size="11" /> <span v-if="!isNarrowScreen">Delete</span>
+          <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: tool.color }" />
+          <span>{{ tool.label }}</span>
         </button>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
+      <div class="w-px h-5 bg-border/60 mx-1 flex-shrink-0" />
 
+      <!-- Graph Operations -->
       <div class="flex items-center gap-0.5 flex-shrink-0">
         <button
           class="p-1.5 rounded transition-colors"
           :class="designStore.snapEnabled ? 'text-accent bg-accent/10' : 'text-text-secondary hover:text-text-primary hover:bg-border/60'"
           @click="designStore.snapEnabled = !designStore.snapEnabled"
-          title="Snap to Grid"
+          title="Snap to Grid (S)"
         >
           <Magnet :size="12" />
         </button>
         <button
           class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
           @click="designStore.zoomFit()"
-          title="Zoom to Fit"
+          title="Zoom to Fit (Ctrl+0)"
         >
           <Maximize2 :size="12" />
         </button>
@@ -257,106 +221,88 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
         >
           <ZoomOut :size="12" />
         </button>
-        <div class="text-[10px] text-text-secondary px-1.5 font-mono">
-          {{ Math.round(designStore.zoom * 100) }}%
-        </div>
       </div>
 
       <div class="flex-1 flex-shrink-0" />
 
-      <!-- Composition info -->
-      <div v-if="!isSmallScreen" class="flex items-center gap-2 px-2 flex-shrink-0">
-        <div class="text-[10px] text-text-secondary">
-          <span class="text-text-primary font-medium">{{ designStore.composition.name }}</span>
-          <span class="mx-1">·</span>
-          <span>{{ designStore.composition.width }}×{{ designStore.composition.height }}</span>
-          <span class="mx-1">·</span>
-          <span class="font-mono">{{ designStore.composition.fps }}fps</span>
-        </div>
-      </div>
-
-      <div v-if="!isSmallScreen" class="w-px h-5 bg-border mx-1 flex-shrink-0" />
-
-      <!-- Playback -->
-      <div class="flex items-center gap-0.5 flex-shrink-0">
+      <!-- Transport Playback -->
+      <div class="flex items-center gap-1 flex-shrink-0 bg-[#0F0F17] px-2 py-0.5 rounded border border-border/60">
         <button
-          class="p-1.5 rounded transition-colors"
-          :class="isPlaying ? 'text-pink-400 bg-pink-500/10' : 'text-text-secondary hover:text-text-primary hover:bg-border/60'"
+          class="p-1 rounded transition-colors"
+          :class="isPlaying ? 'text-pink-400 bg-pink-500/10' : 'text-text-secondary hover:text-text-primary'"
           @click="togglePlay"
-          :title="isPlaying ? 'Pause' : 'Play'"
+          :title="isPlaying ? 'Pause (Space)' : 'Play (Space)'"
         >
           <Pause v-if="isPlaying" :size="12" />
           <Play v-else :size="12" />
         </button>
         <button
-          class="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors"
+          class="p-1 rounded text-text-secondary hover:text-text-primary transition-colors"
           @click="resetPlayhead"
-          title="Reset to Start"
+          title="Reset to 0s"
         >
           <RotateCcw :size="12" />
         </button>
-        <div v-if="!isSmallScreen" class="text-[10px] text-text-secondary px-2 font-mono">
+        <div class="text-[10px] text-text-primary px-1 font-mono">
           {{ playheadTime.toFixed(2) }}s / {{ designStore.composition.duration.toFixed(2) }}s
         </div>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
+      <div class="w-px h-5 bg-border/60 mx-1 flex-shrink-0" />
 
-      <!-- View mode toggle -->
-      <div class="flex items-center gap-0.5 bg-bg/60 rounded p-0.5 flex-shrink-0">
+      <!-- View layout switcher -->
+      <div class="flex items-center gap-0.5 bg-[#0F0F17] rounded p-0.5 flex-shrink-0 border border-border/60">
         <button
-          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
-          :class="viewMode === 'graph' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
+          class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'dual' ? 'bg-accent/20 text-accent font-semibold' : 'text-text-secondary hover:text-text-primary'"
+          @click="viewMode = 'dual'"
+          title="Fusion Dual Viewers (Viewer 1 & 2)"
+        >
+          Dual
+        </button>
+        <button
+          class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'single' ? 'bg-accent/20 text-accent font-semibold' : 'text-text-secondary hover:text-text-primary'"
+          @click="viewMode = 'single'"
+          title="Single Output Viewer"
+        >
+          Single
+        </button>
+        <button
+          class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+          :class="viewMode === 'graph' ? 'bg-accent/20 text-accent font-semibold' : 'text-text-secondary hover:text-text-primary'"
           @click="viewMode = 'graph'"
-          title="Node Graph"
+          title="Full Flow Graph"
         >
-          Graph
-        </button>
-        <button
-          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
-          :class="viewMode === 'preview' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
-          @click="viewMode = 'preview'"
-          title="Compositing Preview"
-        >
-          Preview
-        </button>
-        <button
-          class="px-2 py-1 rounded text-[10px] font-medium transition-colors"
-          :class="viewMode === 'split' ? 'bg-accent/15 text-accent' : 'text-text-secondary hover:text-text-primary'"
-          @click="viewMode = 'split'"
-          title="Split View"
-        >
-          Split
+          Flow Only
         </button>
       </div>
 
-      <div class="w-px h-5 bg-border mx-1 flex-shrink-0" />
-
       <button
-        class="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-text-secondary hover:text-text-primary hover:bg-border/60 transition-colors flex-shrink-0"
-        :class="showCurves && 'text-accent bg-accent/10'"
+        class="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium border border-border/60 transition-colors flex-shrink-0"
+        :class="showCurves ? 'text-accent bg-accent/15 border-accent/40' : 'text-text-secondary hover:text-text-primary bg-[#1C1C28]'"
         @click="showCurves = !showCurves"
-        title="Toggle Animation Curves"
+        title="Toggle Fusion Spline / Keyframe Editor"
       >
-        <Zap :size="11" /> <span v-if="!isNarrowScreen">Curves</span>
+        <Zap :size="11" /> <span>Spline</span>
       </button>
     </div>
 
-    <!-- Main Content: Library | Graph | Inspector -->
+    <!-- Main Workspace Area -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- Left: Node Library -->
-      <div class="bg-panel border-r border-border flex flex-col flex-shrink-0" :style="{ width: libraryWidth + 'px' }">
-        <div class="flex items-center gap-0.5 p-1.5 border-b border-border">
+      <!-- Left Panel: Tools / Templates / Presets -->
+      <div class="bg-[#12121A] border-r border-border flex flex-col flex-shrink-0" :style="{ width: libraryWidth + 'px' }">
+        <div class="flex items-center gap-0.5 p-1 border-b border-border bg-[#161622]">
           <button
             v-for="t in tabs"
             :key="t.id"
-            class="flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded text-[10px] transition-colors min-w-0"
-            :class="activeTab === t.id ? 'bg-accent/10 text-accent' : 'text-text-secondary hover:text-text-primary hover:bg-border/50'"
+            class="flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded text-[9px] font-medium transition-colors"
+            :class="activeTab === t.id ? 'bg-accent/15 text-accent font-semibold' : 'text-text-secondary hover:text-text-primary'"
             @click="activeTab = t.id"
             :title="t.label"
           >
-            <component :is="t.icon" :size="11" class="flex-shrink-0" />
-            <span v-if="!isSmallScreen" class="leading-none truncate max-w-full">{{ t.label }}</span>
+            <component :is="t.icon" :size="11" />
+            <span>{{ t.label }}</span>
           </button>
         </div>
         <div class="flex-1 overflow-y-auto">
@@ -376,25 +322,15 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
                 <div class="text-[11px] text-text-primary font-medium">{{ p.name }}</div>
                 <div class="text-[9px] text-text-secondary mt-0.5">{{ p.nodes.length }} nodes</div>
               </div>
-              <div v-if="designStore.presets.length === 0" class="text-[10px] text-text-secondary text-center py-4">
-                No presets saved yet
-              </div>
             </div>
-            <button
-              v-if="designStore.selectedNodeId"
-              class="w-full mt-2 py-1.5 rounded border border-dashed border-border hover:border-accent/50 text-[10px] text-text-secondary hover:text-text-primary transition-colors"
-              @click="designStore.saveAsPreset()"
-            >
-              + Save current as preset
-            </button>
           </div>
         </div>
       </div>
 
       <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'library')" />
 
-      <!-- Center: Node Graph + Curves (or Onboarding when empty) -->
-      <div class="flex-1 flex flex-col overflow-hidden bg-bg">
+      <!-- Center: DaVinci Resolve Fusion Viewers (Top) + Node Graph & Spline (Bottom) -->
+      <div class="flex-1 flex flex-col overflow-hidden bg-[#0A0A10]">
         <DesignOnboarding
           v-if="showOnboarding"
           @start-template="startWithTemplate"
@@ -402,40 +338,72 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           @start-blank="startWithNodes"
         />
         <template v-else>
-          <!-- Split view: preview on top, graph on bottom -->
-          <template v-if="viewMode === 'split'">
-            <div class="flex-1 min-h-0 border-b border-border">
-              <CompositingCanvas ref="compositingRef" :playhead-time="playheadTime" :is-playing="isPlaying" />
-            </div>
-            <div class="flex-1 min-h-0">
-              <NodeGraph :playhead-time="playheadTime" :is-playing="isPlaying" />
-            </div>
-          </template>
-          <!-- Preview only -->
-          <template v-else-if="viewMode === 'preview'">
-            <div class="flex-1 overflow-hidden">
-              <CompositingCanvas ref="compositingRef" :playhead-time="playheadTime" :is-playing="isPlaying" />
-            </div>
-          </template>
-          <!-- Graph only (default) -->
-          <template v-else>
+          <!-- Top: Fusion Viewers (Dual or Single) -->
+          <div
+            v-if="viewMode !== 'graph'"
+            class="flex-shrink-0 border-b border-border flex overflow-hidden bg-black"
+            :style="{ height: viewerHeight + 'px' }"
+          >
+            <!-- Dual Viewers Mode -->
+            <template v-if="viewMode === 'dual'">
+              <!-- Viewer 1 (Left) -->
+              <div class="flex-1 min-w-0 border-r border-border/70 overflow-hidden">
+                <CompositingCanvas
+                  :playhead-time="playheadTime"
+                  :is-playing="isPlaying"
+                  :target-node-id="designStore.viewer1NodeId"
+                  viewer-label="Viewer 1 [1]"
+                />
+              </div>
+              <!-- Viewer 2 (Right) -->
+              <div class="flex-1 min-w-0 overflow-hidden">
+                <CompositingCanvas
+                  :playhead-time="playheadTime"
+                  :is-playing="isPlaying"
+                  :target-node-id="designStore.viewer2NodeId"
+                  viewer-label="Viewer 2 [2]"
+                />
+              </div>
+            </template>
+            <!-- Single Output Mode -->
+            <template v-else-if="viewMode === 'single'">
+              <div class="flex-1 min-w-0 overflow-hidden">
+                <CompositingCanvas
+                  :playhead-time="playheadTime"
+                  :is-playing="isPlaying"
+                  viewer-label="Final Output"
+                />
+              </div>
+            </template>
+          </div>
+
+          <div
+            v-if="viewMode !== 'graph'"
+            class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors"
+            @mousedown="(e) => startDrag(e, 'viewer')"
+          />
+
+          <!-- Bottom: Node Graph Flow Area -->
+          <div class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
             <div class="flex-1 overflow-hidden" :style="showCurves ? { height: `calc(100% - ${curvesHeight}px - 4px)` } : {}">
               <NodeGraph :playhead-time="playheadTime" :is-playing="isPlaying" />
             </div>
+
+            <!-- Spline / Curves Editor -->
             <template v-if="showCurves">
               <div class="h-1 cursor-row-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'curves')" />
               <div :style="{ height: curvesHeight + 'px' }" class="flex-shrink-0">
                 <AnimationCurves :playhead-time="playheadTime" @seek="(t) => playheadTime = t" />
               </div>
             </template>
-          </template>
+          </div>
         </template>
       </div>
 
       <div class="w-1 cursor-col-resize hover:bg-accent/50 active:bg-accent/80 z-20 transition-colors" @mousedown="(e) => startDrag(e, 'inspector')" />
 
-      <!-- Right: Node Inspector -->
-      <div class="bg-panel border-l border-border flex flex-col flex-shrink-0" :style="{ width: inspectorWidth + 'px' }">
+      <!-- Right: Fusion Inspector / Modifier Settings -->
+      <div class="bg-[#12121A] border-l border-border flex flex-col flex-shrink-0" :style="{ width: inspectorWidth + 'px' }">
         <NodeInspector :playhead-time="playheadTime" />
       </div>
     </div>

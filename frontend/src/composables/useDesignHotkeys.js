@@ -73,6 +73,20 @@ export function useDesignHotkeys() {
         designStore.removeSelectedNode()
         break
 
+      // DaVinci Resolve Fusion Viewers: 1 = Viewer 1 (Left), 2 = Viewer 2 (Right)
+      case '1':
+        if (designStore.selectedNodeId) {
+          e.preventDefault()
+          designStore.setViewer1(designStore.selectedNodeId)
+        }
+        break
+      case '2':
+        if (designStore.selectedNodeId) {
+          e.preventDefault()
+          designStore.setViewer2(designStore.selectedNodeId)
+        }
+        break
+
       // Zoom
       case 'ctrl+0':
         e.preventDefault()
