@@ -5,6 +5,7 @@ export {
   GetRecentProjects,
   ExportProjectFile,
   ImportMedia,
+  ImportLut,
   ExtractThumbnail,
   ExtractWaveform,
   GetMediaInfo,

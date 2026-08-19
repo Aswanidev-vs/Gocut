@@ -52,44 +52,6 @@ func BuildTransformFilters(clip project.Clip) string {
 	return strings.Join(parts, ",")
 }
 
-func BuildColorFilters(c project.ColorGrade) string {
-	var parts []string
-	if c.Brightness != 0 || c.Contrast != 0 || c.Saturation != 0 {
-		parts = append(parts, fmt.Sprintf("eq=brightness=%g:contrast=%g:saturation=%g",
-			float64(c.Brightness)/100.0,
-			1.0+float64(c.Contrast)/100.0,
-			float64(c.Saturation)/100.0))
-	}
-	if c.Hue != 0 {
-		parts = append(parts, fmt.Sprintf("hue=h=%d", c.Hue))
-	}
-	if c.Sharpness > 0 {
-		parts = append(parts, fmt.Sprintf("unsharp=5:5:%d", c.Sharpness))
-	}
-	if c.Vignette > 0 {
-		parts = append(parts, fmt.Sprintf("vignette=angle=PI/4*%d", c.Vignette))
-	}
-	if c.Grain > 0 {
-		parts = append(parts, fmt.Sprintf("noise=alls=%d", c.Grain))
-	}
-	if c.Blur > 0 {
-		parts = append(parts, fmt.Sprintf("boxblur=%d", c.Blur))
-	}
-	if c.ChromaKeyColor != "" {
-		similarity := c.ChromaKeySimilarity
-		if similarity <= 0 {
-			similarity = 0.01
-		}
-		blend := c.ChromaKeyBlend
-		color := c.ChromaKeyColor
-		if strings.HasPrefix(color, "#") {
-			color = "0x" + strings.TrimPrefix(color, "#")
-		}
-		parts = append(parts, fmt.Sprintf("chromakey=color=%s:similarity=%g:blend=%g", color, similarity, blend))
-	}
-	return strings.Join(parts, ",")
-}
-
 func BuildAudioFilters(volume float64, fadeIn, fadeOut bool, fadeDuration, endTime float64) string {
 	var parts []string
 	if volume != 1.0 {

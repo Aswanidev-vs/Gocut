@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
-import { useTimelineStore } from '../../stores/timelineStore'
+import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { ArrowRightLeft, Palette } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -52,12 +52,11 @@ function closeMenu() {
   showMenu.value = false
 }
 function splitClip() {
-  timelineStore.splitClipAt(props.clip.id, props.clip.startTime + props.clip.duration / 2)
+  timelineStore.splitClipAt(props.clip.id, timelineStore.currentTime)
   closeMenu()
 }
 function duplicateClip() {
-  const dup = { ...props.clip, id: undefined, startTime: props.clip.startTime + props.clip.duration + 0.1 }
-  timelineStore.addClipToTrack(props.clip._trackIndex, dup)
+  timelineStore.duplicateClip(props.clip.id)
   closeMenu()
 }
 function deleteClip() {
@@ -72,41 +71,80 @@ function setSpeed(s) {
 // ---- drag to move ----
 const dragState = ref(null)
 
+// Convert a clientX coordinate to a timeline time (seconds), accounting for
+// the horizontal scroll of the .timeline-content container (same math as the
+// asset drop handlers).
+function clientXToTime(clientX) {
+  const scrollContainer = document.querySelector('.timeline-content')
+  const rect = scrollContainer ? scrollContainer.getBoundingClientRect() : null
+  if (!rect) return null
+  const scrollLeft = scrollContainer.scrollLeft || 0
+  return (clientX - rect.left + scrollLeft) / timelineStore.zoom
+}
+
 function onMouseDown(e, mode) {
   e.stopPropagation()
   if (e.button !== 0) return
+
+  // Razor tool: a plain left-click on the clip body splits it at the click
+  // position. No selection, no drag.
+  if (mode === 'move' && timelineStore.activeTool === 'razor') {
+    const t = clientXToTime(e.clientX)
+    if (t !== null) timelineStore.splitClipAt(props.clip.id, t)
+    return
+  }
+
   timelineStore.selectClip(props.clip.id, e.shiftKey)
+
+  // Group drag: grabbing an already-selected clip while others are selected
+  // moves the whole selection together (no snapping during group moves).
+  const isGroupDrag = mode === 'move' &&
+    timelineStore.selectedClipIds.length > 1 &&
+    timelineStore.selectedClipIds.includes(props.clip.id)
 
   const startX = e.clientX
   const startStart = props.clip.startTime
   const startDuration = props.clip.duration
   const startTrimStart = props.clip.trimStart
+  let lastDt = 0 // incremental delta for group drags
 
   const onMove = (mv) => {
     const dx = mv.clientX - startX
     const dt = dx / props.zoom
     if (mode === 'move') {
-      const newStart = timelineStore.snapToClips(Math.max(0, startStart + dt), props.clip.id)
-      timelineStore.updateClip(props.clip.id, { startTime: newStart })
+      if (isGroupDrag) {
+        timelineStore.shiftSelection(dt - lastDt)
+        lastDt = dt
+        return
+      }
+      const raw = Math.max(0, startStart + dt)
+      const snapped = timelineStore.snapToClips(raw, props.clip.id)
+      timelineStore.setSnapGuide(snapped !== raw ? snapped : null)
+      timelineStore.updateClip(props.clip.id, { startTime: snapped })
     } else if (mode === 'left') {
-      const newStart = timelineStore.snapToClips(Math.max(0, startStart + dt), props.clip.id)
-      const delta = newStart - startStart
+      const raw = Math.max(0, startStart + dt)
+      const snapped = timelineStore.snapToClips(raw, props.clip.id)
+      timelineStore.setSnapGuide(snapped !== raw ? snapped : null)
+      const delta = snapped - startStart
       const newTrimStart = Math.max(0, startTrimStart + delta)
       const newDuration = Math.max(0.1, startDuration - delta)
       timelineStore.updateClip(props.clip.id, {
-        startTime: newStart,
+        startTime: snapped,
         trimStart: newTrimStart,
         duration: newDuration
       })
     } else if (mode === 'right') {
-      const newEnd = Math.max(props.clip.startTime + 0.1, startStart + startDuration + dt)
-      const newDuration = newEnd - props.clip.startTime
+      const rawEnd = startStart + startDuration + dt
+      const snappedEnd = timelineStore.snapToClips(rawEnd, props.clip.id)
+      const newEnd = Math.max(startStart + 0.1, snappedEnd)
+      const newDuration = newEnd - startStart
       timelineStore.updateClip(props.clip.id, { duration: newDuration })
     }
   }
   const onUp = () => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
+    timelineStore.setSnapGuide(null)
     projectStore.markDirty()
   }
   document.addEventListener('mousemove', onMove)
@@ -134,11 +172,31 @@ function onKeyframeMouseDown(e, kf) {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
+
+// Volume envelope preview: for audio-track clips with volume keyframes,
+// sample the shared interpolator 24x across the clip and map volume
+// 0..2 -> y 0..100% (inverted) for an SVG polyline overlay.
+const volumeEnvPoints = computed(() => {
+  if (props.trackType !== 'audio') return ''
+  const kfs = props.clip.keyframes
+  if (!kfs || !kfs.some(k => k.property === 'volume')) return ''
+  const N = 24
+  const pts = []
+  for (let i = 0; i < N; i++) {
+    const t = (i / (N - 1)) * props.clip.duration
+    const v = getInterpolatedProperty(props.clip, 'volume', t, props.clip.volume ?? 1)
+    const x = (i / (N - 1)) * 100
+    const y = Math.min(100, Math.max(0, (1 - (v / 2)) * 100))
+    pts.push(`${x.toFixed(2)},${y.toFixed(2)}`)
+  }
+  return pts.join(' ')
+})
 </script>
 
 <template>
   <div
-    class="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab active:cursor-grabbing select-none group"
+    class="absolute top-1 bottom-1 rounded overflow-hidden select-none group"
+    :class="[timelineStore.activeTool === 'razor' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing', { 'ring-2 ring-accent z-10': selected }]"
     :style="{
       left: leftPx + 'px',
       width: widthPx + 'px',
@@ -146,7 +204,6 @@ function onKeyframeMouseDown(e, kf) {
       borderLeft: '2px solid ' + trackColor,
       borderRight: '2px solid ' + trackColor,
     }"
-    :class="{ 'ring-2 ring-accent z-10': selected }"
     @mousedown="(e) => onMouseDown(e, 'move')"
     @dblclick.stop="timelineStore.selectClip(clip.id)"
     @contextmenu.prevent="onContextMenu"
@@ -182,6 +239,22 @@ function onKeyframeMouseDown(e, kf) {
     >
       <img :src="`data:image/jpeg;base64,${asset.thumbnail}`" class="w-full h-full object-cover" />
     </div>
+
+    <!-- Volume envelope (audio clips with volume keyframes) -->
+    <svg
+      v-if="volumeEnvPoints"
+      class="absolute inset-0 w-full h-full pointer-events-none opacity-70"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+    >
+      <polyline
+        :points="volumeEnvPoints"
+        fill="none"
+        stroke="#00D4FF"
+        stroke-width="1.5"
+        vector-effect="non-scaling-stroke"
+      />
+    </svg>
 
     <!-- Keyframes -->
     <div v-if="clip.keyframes && clip.keyframes.length" class="absolute left-0 right-0 bottom-0 top-0 pointer-events-none">

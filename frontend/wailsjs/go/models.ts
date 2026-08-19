@@ -189,6 +189,7 @@ export namespace project {
 	    chromaKeyColor: string;
 	    chromaKeySimilarity: number;
 	    chromaKeyBlend: number;
+	    lutPath?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ColorGrade(source);
@@ -221,6 +222,7 @@ export namespace project {
 	        this.chromaKeyColor = source["chromaKeyColor"];
 	        this.chromaKeySimilarity = source["chromaKeySimilarity"];
 	        this.chromaKeyBlend = source["chromaKeyBlend"];
+	        this.lutPath = source["lutPath"];
 	    }
 	}
 	export class Transform {

@@ -81,6 +81,18 @@ function onKeyDown(e) {
     timelineStore.snapEnabled = !timelineStore.snapEnabled
     uiStore.addToast(`Snap ${timelineStore.snapEnabled ? 'on' : 'off'}`, 'info', 1200)
   }
+  // C — razor tool, V / Escape — back to select tool
+  if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault()
+    timelineStore.setActiveTool('razor')
+    uiStore.addToast('Razor tool', 'info', 1200)
+  }
+  if ((e.key === 'v' || e.key === 'V' || e.key === 'Escape') && !e.ctrlKey && !e.metaKey) {
+    if (timelineStore.activeTool !== 'select') {
+      timelineStore.setActiveTool('select')
+      uiStore.addToast('Select tool', 'info', 1200)
+    }
+  }
   // Ctrl+S — save
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault()

@@ -129,6 +129,13 @@ type TextProps struct {
 	Align          string  `json:"align"`
 	LetterSpacing  int     `json:"letterSpacing"`
 	LineHeight     float64 `json:"lineHeight"`
+	// Animation is a text-entry preset id: "" (none) | fade_in | fade_out |
+	// typewriter | slide_left | slide_right | slide_top | slide_bottom |
+	// bounce | pop | zoom_in | wipe. Applied over AnimationDuration seconds
+	// at clip start; export falls back to fade_in for typewriter (preview
+	// keeps the true effect). See internal/ffmpeg/filters/text.go.
+	Animation         string  `json:"animation,omitempty"`
+	AnimationDuration float64 `json:"animationDuration,omitempty"`
 }
 
 type StickerProps struct {

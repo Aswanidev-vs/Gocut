@@ -14,6 +14,100 @@ function getParam(node, paramId, time, designStore) {
  * All node evaluators keyed by node type.
  */
 export const nodeEvaluators = {
+  // ============ FUSION CORE SOURCES ============
+
+  mediaIn(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'media',
+      assetId: node.params.assetId,
+      startTime: getParam(node, 'startTime', time, designStore),
+      duration: getParam(node, 'duration', time, designStore),
+      mask: inputs['mask'],
+    }
+  },
+
+  mediaOut(node, ctx, inputs) {
+    return {
+      type: 'output',
+      input: inputs['in'],
+    }
+  },
+
+  background(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'background',
+      bgType: node.params.type || 'solid',
+      color: node.params.color || '#000000',
+      color2: node.params.color2 || '#1e293b',
+      alpha: getParam(node, 'alpha', time, designStore) ?? 1,
+      width: getParam(node, 'width', time, designStore) || 1920,
+      height: getParam(node, 'height', time, designStore) || 1080,
+      mask: inputs['mask'],
+    }
+  },
+
+  fastNoise(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'fastNoise',
+      detail: getParam(node, 'detail', time, designStore) || 4,
+      contrast: getParam(node, 'contrast', time, designStore) || 1.5,
+      brightness: getParam(node, 'brightness', time, designStore) || 0,
+      scale: getParam(node, 'scale', time, designStore) || 15,
+      seethe: getParam(node, 'seethe', time, designStore) || 0.5,
+      color1: node.params.color1 || '#000000',
+      color2: node.params.color2 || '#FFFFFF',
+      mask: inputs['mask'],
+    }
+  },
+
+  textPlus(node, ctx, inputs, time, designStore) {
+    const rawText = node.params.text || 'Fusion Text+'
+    const writeOnStart = getParam(node, 'writeOnStart', time, designStore) ?? 0
+    const writeOnEnd = getParam(node, 'writeOnEnd', time, designStore) ?? 1
+    
+    // Calculate write-on substring
+    const len = rawText.length
+    const startIdx = Math.floor(len * Math.max(0, Math.min(1, writeOnStart)))
+    const endIdx = Math.ceil(len * Math.max(0, Math.min(1, writeOnEnd)))
+    const displayText = rawText.substring(startIdx, Math.max(startIdx, endIdx))
+
+    return {
+      type: 'text',
+      text: displayText,
+      fontSize: getParam(node, 'fontSize', time, designStore) || 64,
+      color: node.params.color || '#FFFFFF',
+      fontFamily: node.params.fontFamily || 'sans-serif',
+      tracking: getParam(node, 'tracking', time, designStore) || 0,
+      bold: node.params.bold,
+      italic: node.params.italic,
+      mask: inputs['mask'],
+    }
+  },
+
+  maskPolygon(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'maskPolygon',
+      invert: node.params.invert || false,
+      softEdge: getParam(node, 'softEdge', time, designStore) || 0,
+      borderWidth: getParam(node, 'borderWidth', time, designStore) || 0,
+      paintMode: node.params.paintMode || 'merge',
+    }
+  },
+
+  colorCorrector(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'colorCorrector',
+      input: inputs['in'],
+      mask: inputs['mask'],
+      lift: getParam(node, 'lift', time, designStore) || 0,
+      gamma: getParam(node, 'gamma', time, designStore) ?? 1,
+      gain: getParam(node, 'gain', time, designStore) ?? 1,
+      saturation: getParam(node, 'saturation', time, designStore) ?? 1,
+      tint: getParam(node, 'tint', time, designStore) || 0,
+      brightness: getParam(node, 'brightness', time, designStore) || 0,
+    }
+  },
+
   // ============ SOURCES ============
 
   media(node, ctx, inputs, time, designStore) {
@@ -23,6 +117,7 @@ export const nodeEvaluators = {
       assetId: node.params.assetId,
       startTime: getParam(node, 'startTime', time, designStore),
       duration: getParam(node, 'duration', time, designStore),
+      mask: inputs['mask'],
     }
   },
 

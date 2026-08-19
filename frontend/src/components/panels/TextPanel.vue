@@ -24,8 +24,13 @@ const presets = [
   { name: 'Spotlight',   text: 'SPOTLIGHT',    size: 54, weight: 'bold',   color: '#FFFDF6', bgColor: 'rgba(120,53,15,0.55)', effect: 'spotlight', animation: 'float' },
 ]
 
+// Map cosmetic preset-list animation keys to real text-animation preset ids:
+// pulse -> pop, float -> slide_top, none/missing -> '' (no animation).
+const ANIMATION_MAP = { pulse: 'pop', float: 'slide_top' }
+
 function addPreset(p) {
   const t = timelineStore.getTrackByType('text') || timelineStore.addTrack('text')
+  const animation = ANIMATION_MAP[p.animation] || ''
   const clip = timelineStore.addClip({
     assetId: '',
     trackId: t.id,
@@ -41,6 +46,8 @@ function addPreset(p) {
       color: p.color,
       bgColor: p.bgColor,
       align: 'center',
+      animation,
+      animationDuration: 0.5,
     },
   })
   timelineStore.selectClip(clip.id)

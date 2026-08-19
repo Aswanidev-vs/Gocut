@@ -78,6 +78,10 @@ export function GetRenderQueue() {
   return window['go']['app']['App']['GetRenderQueue']();
 }
 
+export function ImportLut(arg1) {
+  return window['go']['app']['App']['ImportLut'](arg1);
+}
+
 export function ImportMedia(arg1) {
   return window['go']['app']['App']['ImportMedia'](arg1);
 }

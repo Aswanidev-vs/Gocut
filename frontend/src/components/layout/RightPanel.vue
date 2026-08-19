@@ -129,6 +129,7 @@ function resetColor() {
     chromaKeyColor: '',
     chromaKeySimilarity: 0.01,
     chromaKeyBlend: 0.0,
+    lutPath: '',
   })
 }
 function resetVolume() {
@@ -189,7 +190,7 @@ const filterPresets = [
   { name: 'B&W',       color: { saturation: -100 } },
   { name: 'Vivid',     color: { brightness: 5,  contrast: 20,  saturation: 30 } },
   { name: 'Matte',     color: { brightness: 5,  contrast: -10, saturation: -15, hue: -5 } },
-  { name: 'Golden',    color: { brightness: 10, contrast: 0,   saturation: 15, hue: 8, temp: 20 } },
+  { name: 'Golden Hour', color: { brightness: 10, contrast: 0, saturation: 15, hue: 8, temp: 20 } },
   { name: 'Cyberpunk', color: { brightness: 0,  contrast: 20,  saturation: 25, hue: -15, temp: -20 } },
   { name: 'Soft',      color: { brightness: 8,  contrast: -10, saturation: -10 } },
   { name: 'Fade',      color: { brightness: 15, contrast: -20, saturation: -30 } },
@@ -849,6 +850,33 @@ function applyCustomAnimation() {
                 <label class="text-[10px] text-text-secondary">Y</label>
                 <input type="number" :value="selectedClip.textProps.shadowOffsetY" @input="(e) => setTextProp('shadowOffsetY', parseInt(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
               </div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Animation</h4>
+              <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="setTextProp('animation', '')" title="Reset"><RotateCcw :size="10" /></button>
+            </div>
+            <select :value="selectedClip.textProps?.animation || ''" @change="(e) => setTextProp('animation', e.target.value)"
+              class="w-full bg-bg border border-border rounded px-2 py-1 text-xs mb-2">
+              <option value="">None</option>
+              <option value="fade_in">Fade In</option>
+              <option value="fade_out">Fade Out</option>
+              <option value="typewriter">Typewriter</option>
+              <option value="slide_left">Slide from Left</option>
+              <option value="slide_right">Slide from Right</option>
+              <option value="slide_top">Slide from Top</option>
+              <option value="slide_bottom">Slide from Bottom</option>
+              <option value="bounce">Bounce</option>
+              <option value="pop">Pop</option>
+              <option value="zoom_in">Zoom In</option>
+              <option value="wipe">Wipe</option>
+            </select>
+            <div :class="{ 'opacity-40 pointer-events-none': !(selectedClip.textProps?.animation) }">
+              <label class="text-[10px] text-text-secondary">Duration (s)</label>
+              <input type="range" min="0.1" max="2" step="0.1" :value="selectedClip.textProps?.animationDuration || 0.5"
+                @input="(e) => setTextProp('animationDuration', parseFloat(e.target.value))" :disabled="!(selectedClip.textProps?.animation)" class="w-full accent-accent disabled:opacity-40 disabled:pointer-events-none" />
+              <div class="text-[10px] text-text-secondary text-right font-mono mt-1">{{ (selectedClip.textProps?.animationDuration || 0.5).toFixed(1) }}s</div>
             </div>
           </div>
         </template>
