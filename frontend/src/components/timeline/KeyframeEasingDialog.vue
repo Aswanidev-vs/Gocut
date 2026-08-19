@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useTimelineStore } from '../../stores/timelineStore'
+import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { X, Activity, Check } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -38,6 +38,8 @@ const easingOptions = [
   { id: 'easeIn', label: 'Ease In (Quadratic)' },
   { id: 'easeOut', label: 'Ease Out (Quadratic)' },
   { id: 'easeInOut', label: 'Ease In-Out (Smooth)' },
+  { id: 'bounce', label: 'Bounce' },
+  { id: 'elastic', label: 'Elastic' },
 ]
 
 function setEasing(keyframeId, easingMode) {
@@ -83,8 +85,19 @@ function drawCurve() {
   const tRange = Math.max(0.01, maxT - minT)
 
   const vals = kfs.map(k => parseFloat(k.value) || 0)
-  const minV = Math.min(...vals)
-  const maxV = Math.max(...vals)
+  let minV = Math.min(...vals)
+  let maxV = Math.max(...vals)
+
+  // Bounce/elastic overshoot past the keyframe values; sample the real
+  // interpolated property (same engine the preview uses) to include the
+  // extremes in the plot range.
+  const rangeSteps = 100
+  for (let i = 0; i <= rangeSteps; i++) {
+    const t = minT + (i / rangeSteps) * tRange
+    const v = getInterpolatedProperty(selectedClip.value, selectedProperty.value, t, minV)
+    if (v < minV) minV = v
+    if (v > maxV) maxV = v
+  }
   const vRange = Math.max(0.001, maxV - minV)
 
   const pad = 24
@@ -104,30 +117,9 @@ function drawCurve() {
   const steps = 100
   for (let i = 0; i <= steps; i++) {
     const t = minT + (i / steps) * tRange
-    let interpVal = minV
-    for (let j = 0; j < kfs.length - 1; j++) {
-      const k1 = kfs[j]
-      const k2 = kfs[j + 1]
-      if (t >= k1.time && t <= k2.time) {
-        if (k1.time === k2.time) {
-          interpVal = parseFloat(k2.value)
-        } else {
-          let u = (t - k1.time) / (k2.time - k1.time)
-          const easing = k1.easing || 'linear'
-          if (easing === 'easeIn' || easing === 'ease-in') {
-            u = u * u
-          } else if (easing === 'easeOut' || easing === 'ease-out') {
-            u = u * (2 - u)
-          } else if (easing === 'easeInOut' || easing === 'ease-in-out') {
-            u = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2
-          }
-          const v1 = parseFloat(k1.value) || 0
-          const v2 = parseFloat(k2.value) || 0
-          interpVal = v1 + (v2 - v1) * u
-        }
-        break
-      }
-    }
+    // Route through the shared interpolator so the drawn curve always
+    // matches the preview engine (including bounce/elastic).
+    const interpVal = getInterpolatedProperty(selectedClip.value, selectedProperty.value, t, minV)
 
     const pos = toScreen(t, interpVal)
     if (i === 0) ctx.moveTo(pos.x, pos.y)

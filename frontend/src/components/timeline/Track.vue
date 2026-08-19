@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
+import { useHistoryStore } from '../../stores/historyStore'
 import Clip from './Clip.vue'
 import { Volume2, VolumeX, Lock, Unlock, Trash2, Plus, Video, Music, Type, Smile, Sparkles } from 'lucide-vue-next'
 
@@ -103,6 +104,78 @@ function onDrop(e) {
   timelineStore.setCurrentTime(time)
   projectStore.markDirty()
 }
+
+// ---- marquee drag-select on empty track area ----
+const marquee = ref(null) // { startPx } | null
+
+function clientXToTime(clientX) {
+  const scrollContainer = document.querySelector('.timeline-content')
+  const rect = scrollContainer ? scrollContainer.getBoundingClientRect() : null
+  if (!rect) return null
+  const scrollLeft = scrollContainer.scrollLeft || 0
+  return Math.max(0, clientX - rect.left + scrollLeft) / timelineStore.zoom
+}
+
+function onTrackMouseDown(e) {
+  if (e.button !== 0) return
+  // Only act on the empty track area itself (clicks on clips
+  // stopPropagation and never reach here).
+  if (e.target !== e.currentTarget) return
+  e.preventDefault()
+  // Clicking empty track area clears selection immediately (drag then
+  // builds a new marquee selection from scratch). Remember the previous
+  // selection so a plain click that changes nothing doesn't dirty the
+  // project or push a redundant history checkpoint.
+  const selectionBefore = [...timelineStore.selectedClipIds].sort()
+  timelineStore.clearSelection()
+  const t = clientXToTime(e.clientX)
+  if (t === null) return
+  const startPx = Math.max(0, t * timelineStore.zoom)
+  marquee.value = { startPx }
+  let hadMove = false // distinguish click-to-deselect from a real drag
+
+  const updateMarquee = (mv) => {
+    hadMove = true
+    const mt = clientXToTime(mv.clientX)
+    if (mt === null || !marquee.value) return
+    const curPx = Math.max(0, mt * timelineStore.zoom)
+    const leftPx = Math.min(startPx, curPx)
+    const rightPx = Math.max(startPx, curPx)
+    marquee.value = { startPx, leftPx, rightPx }
+    // Live-update the selection while dragging.
+    const startTime = leftPx / timelineStore.zoom
+    const endTime = rightPx / timelineStore.zoom
+    const hits = timelineStore.clips
+      .filter(c => c.trackId === props.track.id)
+      .filter(c => c.startTime < endTime && c.startTime + c.duration > startTime)
+    timelineStore.selectedClipIds = hits.map(c => c.id)
+  }
+  const endMarquee = () => {
+    document.removeEventListener('mousemove', updateMarquee)
+    document.removeEventListener('mouseup', endMarquee)
+    marquee.value = null
+    // Commit once on mouseup (dirty flag + history checkpoint) only if this
+    // was a real drag AND the selection actually changed.
+    const selectionAfter = [...timelineStore.selectedClipIds].sort()
+    const changed = selectionAfter.length !== selectionBefore.length ||
+      selectionAfter.some((id, i) => id !== selectionBefore[i])
+    if (hadMove && changed) {
+      projectStore.markDirty()
+      const hs = useHistoryStore()
+      if (hs && typeof hs.pushSnapshot === 'function') hs.pushSnapshot()
+    }
+  }
+  document.addEventListener('mousemove', updateMarquee)
+  document.addEventListener('mouseup', endMarquee)
+}
+
+const marqueeStyle = computed(() => {
+  if (!marquee.value || marquee.value.leftPx === undefined) return {}
+  return {
+    left: marquee.value.leftPx + 'px',
+    width: Math.max(1, (marquee.value.rightPx || 0) - marquee.value.leftPx) + 'px',
+  }
+})
 </script>
 
 <template>
@@ -110,7 +183,7 @@ function onDrop(e) {
     v-if="track"
     class="h-14 relative"
     :class="{ 'bg-accent/10 border-accent/50 border-t border-b': isDragOver }"
-    @click.self="timelineStore.clearSelection()"
+    @mousedown="onTrackMouseDown"
     @dragover.prevent="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"
@@ -125,6 +198,13 @@ function onDrop(e) {
       :track-type="track.type"
       :track-color="trackMeta.color"
       :selected="clip.isSelected"
+    />
+
+    <!-- Marquee drag-select rectangle -->
+    <div
+      v-if="marquee && marquee.leftPx !== undefined"
+      class="absolute top-1 bottom-1 z-20 pointer-events-none border border-accent bg-accent/10 rounded-sm"
+      :style="marqueeStyle"
     />
   </div>
 </template>

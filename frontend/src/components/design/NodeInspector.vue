@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useDesignStore, getNodeType, EASING_TYPES } from '../../stores/designStore'
-import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-vue-next'
+import { Plus, Trash2, ChevronDown, ChevronRight, Sliders, Play, RotateCcw, Key } from 'lucide-vue-next'
 
 const props = defineProps({ playheadTime: { type: Number, default: 0 } })
 const designStore = useDesignStore()
@@ -27,7 +27,7 @@ function updateParam(paramId, value) {
 function addKeyframeForParam(paramId) {
   if (!node.value) return
   const value = localParams.value[paramId] ?? 0
-  designStore.addKeyframe(node.value.id, paramId, props.playheadTime, value, 'linear')
+  designStore.addKeyframe(node.value.id, paramId, props.playheadTime, value, 'smooth')
   activeKeyframeParam.value = paramId
 }
 
@@ -64,23 +64,58 @@ const keyframedParams = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full overflow-hidden">
-    <div class="p-2 border-b border-border">
-      <div class="text-[10px] text-text-secondary uppercase tracking-wider">Node Inspector</div>
-    </div>
-    <div v-if="!node" class="flex-1 flex items-center justify-center text-[11px] text-text-secondary">
-      <div class="text-center">
-        <div class="text-2xl mb-1">🔗</div>
-        Select a node on the canvas
+  <div class="flex flex-col h-full overflow-hidden bg-[#111119] select-none">
+    <!-- Header -->
+    <div class="h-8 px-3 border-b border-border/80 flex items-center justify-between bg-[#141420]">
+      <div class="flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider text-text-primary">
+        <Sliders :size="12" class="text-accent" />
+        <span>Fusion Inspector</span>
+      </div>
+      <div v-if="node" class="flex items-center gap-1 text-[9px] font-mono">
+        <button
+          class="px-1.5 py-0.5 rounded transition-colors"
+          :class="designStore.viewer1NodeId === node.id ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40' : 'text-text-secondary bg-[#1C1C28] hover:text-white'"
+          @click="designStore.setViewer1(node.id)"
+          title="Send to Viewer 1 (Key 1)"
+        >
+          [1]
+        </button>
+        <button
+          class="px-1.5 py-0.5 rounded transition-colors"
+          :class="designStore.viewer2NodeId === node.id ? 'bg-pink-500/20 text-pink-400 font-bold border border-pink-500/40' : 'text-text-secondary bg-[#1C1C28] hover:text-white'"
+          @click="designStore.setViewer2(node.id)"
+          title="Send to Viewer 2 (Key 2)"
+        >
+          [2]
+        </button>
       </div>
     </div>
-    <div v-else class="flex-1 overflow-y-auto p-2 space-y-2.5">
-      <!-- Node identity -->
-      <div class="flex items-center gap-2">
-        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ background: type?.color }" />
-        <div>
-          <div class="text-[12px] text-text-primary font-medium">{{ node.label }}</div>
-          <div class="text-[10px] text-text-secondary">{{ type?.category }} · {{ type?.label }}</div>
+
+    <!-- Empty State -->
+    <div v-if="!node" class="flex-1 flex flex-col items-center justify-center p-4 text-center">
+      <div class="w-10 h-10 rounded-xl bg-white/5 border border-border/60 flex items-center justify-center text-text-secondary/50 mb-2">
+        <Sliders :size="18" />
+      </div>
+      <div class="text-[11px] font-semibold text-text-primary mb-1">No Node Selected</div>
+      <p class="text-[10px] text-text-secondary max-w-[180px]">
+        Click any tool node in the flow graph to tweak its properties & keyframes.
+      </p>
+    </div>
+
+    <!-- Active Node Inspector -->
+    <div v-else class="flex-1 overflow-y-auto p-3 space-y-3">
+      <!-- Node Identity Banner -->
+      <div class="p-2.5 rounded-lg bg-[#181826] border border-border/70 flex items-center justify-between">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" :style="{ background: type?.color }" />
+          <div class="min-w-0">
+            <input
+              v-model="node.label"
+              class="text-[11px] font-bold text-text-primary bg-transparent outline-none border-b border-transparent focus:border-accent w-full"
+              placeholder="Node Name"
+            />
+            <div class="text-[9px] text-text-secondary font-mono">{{ type?.category }} / {{ type?.label }}</div>
+          </div>
         </div>
       </div>
 

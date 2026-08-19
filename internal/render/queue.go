@@ -477,8 +477,8 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
 						clipFilters = append(clipFilters, tf)
 					}
-					if clip.Opacity > 0 && clip.Opacity < 1.0 {
-						clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
+					if of := buildOpacityFilter(clip); of != "" {
+						clipFilters = append(clipFilters, of)
 					}
 					if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
 						trans := clip.Transition
@@ -547,8 +547,8 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
 					clipFilters = append(clipFilters, tf)
 				}
-				if clip.Opacity > 0 && clip.Opacity < 1.0 {
-					clipFilters = append(clipFilters, fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity))
+				if of := buildOpacityFilter(clip); of != "" {
+					clipFilters = append(clipFilters, of)
 				}
 				if clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0 {
 					trans := clip.Transition
@@ -669,6 +669,43 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			}
 		} else {
 			fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+		}
+
+		// Animated text: resolve the preset, then route through the layer
+		// builder. ResolveTextAnim returns "" for no/unknown-style static
+		// text AND maps typewriter -> fade_in (see filters/text.go header:
+		// drawtext cannot do per-char reveal). The static branch below is
+		// byte-identical to the pre-animation export for regression safety.
+		anim, animDur := filters.ResolveTextAnim(tc.tp.Animation, tc.tp.AnimationDuration)
+		if anim != "" {
+			spec := filters.AnimatedTextSpec{
+				Text:        tc.tp.Text,
+				FontFile:    fontFile,
+				FontSize:    fontSize,
+				FontColor:   fontColor,
+				X:           xExpr,
+				Y:           yExpr,
+				StrokeWidth: tc.tp.StrokeWidth,
+				BorderColor: hexToFFmpeg(tc.tp.StrokeColor, "black"),
+				HasShadow:   tc.tp.ShadowBlur > 0 || tc.tp.ShadowOffsetX != 0 || tc.tp.ShadowOffsetY != 0,
+				ShadowColor: hexToFFmpeg(tc.tp.ShadowColor, "black@0.5"),
+				ShadowX:     tc.tp.ShadowOffsetX,
+				ShadowY:     tc.tp.ShadowOffsetY,
+				Start:       startT,
+				End:         endT,
+				ClipDur:     tc.clip.Duration,
+				W:           w,
+				H:           h,
+				FPS:         fps,
+				InLabel:     lastV,
+				LayerName:   fmt.Sprintf("[tf%d]", ti),
+				OutName:     fmt.Sprintf("[txt%d]", ti),
+				Anim:        anim,
+				Dur:         animDur,
+			}
+			filterParts = append(filterParts, filters.BuildAnimatedTextLayers(spec)...)
+			lastV = spec.OutName
+			continue
 		}
 
 		drawtext := fmt.Sprintf("drawtext=text='%s':fontfile='%s':fontsize=%d:fontcolor=%s:x=%s:y=%s:enable='between(t\\,%.3f\\,%.3f)'",
@@ -849,4 +886,34 @@ func hasKeyframeProp(kfs []project.Keyframe, prop string) bool {
 		}
 	}
 	return false
+}
+
+// buildOpacityFilter returns the clip's opacity filter. With no opacity
+// keyframes it keeps the fast static path (colorchannelmixer is only ever
+// evaluated once, so it cannot express animation). With keyframes it uses
+// geq: the only route that accepts a runtime alpha expression. Empirically
+// verified (ffmpeg 2025-12-18 gyan.dev full build):
+//   - colorchannelmixer=aa='if(lt(t,0.5),0.2,0.8)'  -> "Unable to parse aa
+//     option value" (option is parsed at init time, no runtime exprs).
+//   - geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*if(...)'
+//     -> works, evaluated per frame. Note the details that differ from the
+//     docs: the alpha accessor is alpha(X,Y) (a(X,Y)/A(X,Y) are unknown
+//     functions), the per-frame time var is uppercase T (lowercase t is
+//     rejected at parse), and the filter has no eval option.
+//
+// Extracted alpha planes confirmed 0.2 before and 0.8 after T=0.5s.
+// geq runs before the setpts below, so T here is clip-local time, which is
+// what BuildAnimatedExpressionT emits.
+func buildOpacityFilter(clip project.Clip) string {
+	if !hasKeyframeProp(clip.Keyframes, "opacity") {
+		if clip.Opacity > 0 && clip.Opacity < 1.0 {
+			return fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity)
+		}
+		return ""
+	}
+	opExpr := ffmpeg.BuildAnimatedExpressionT(clip.Keyframes, "opacity", clip.Opacity)
+	aExpr := "alpha(X,Y)*" + opExpr
+	// Commas inside the single-quoted graph-level strings are safe, but the
+	// expression itself never contains quotes, so a plain quoting suffices.
+	return fmt.Sprintf("geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='%s'", aExpr)
 }

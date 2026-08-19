@@ -95,6 +95,17 @@ export function getInterpolatedProperty(clip, property, time, defaultValue) {
         u = u * (2 - u)
       } else if (easing === 'easeInOut' || easing === 'ease-in-out') {
         u = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2
+      } else if (easing === 'bounce' || easing === 'easeOutBounce') {
+        // Mirror designStore.js applyEasing 'bounce' (bounceOut) exactly.
+        const n1 = 7.5625, d1 = 2.75
+        if (u < 1 / d1) u = n1 * u * u
+        else if (u < 2 / d1) u = n1 * (u - 1.5 / d1) * (u - 1.5 / d1) + 0.75
+        else if (u < 2.5 / d1) u = n1 * (u - 2.25 / d1) * (u - 2.25 / d1) + 0.9375
+        else u = n1 * (u - 2.625 / d1) * (u - 2.625 / d1) + 0.984375
+      } else if (easing === 'elastic' || easing === 'elasticOut' || easing === 'easeOutElastic') {
+        // Mirror designStore.js applyEasing 'elastic' exactly.
+        if (u === 0 || u === 1) { /* endpoints stay exact */ }
+        else u = -Math.pow(2, 10 * u - 10) * Math.sin((u * 10 - 10.75) * (2 * Math.PI / 3))
       }
       return parseFloat(k1.value) + (parseFloat(k2.value) - parseFloat(k1.value)) * u
     }
@@ -118,6 +129,13 @@ export const useTimelineStore = defineStore('timeline', () => {
   const snapEnabled = ref(true)
   const currentTime = ref(0)
   const rippleDelete = ref(false)
+
+  // Active editing tool: 'select' (default pointer) or 'razor'
+  // (clicking a clip splits it at the click position).
+  const activeTool = ref('select')
+  // Time (seconds) at which a snap indicator line should be drawn while a
+  // clip move/trim drag is in progress. null = no guide.
+  const snapGuideTime = ref(null)
 
   const duration = computed(() => {
     let maxEnd = 0
@@ -206,21 +224,22 @@ export const useTimelineStore = defineStore('timeline', () => {
   }
 
   function removeSelected() {
-    if (rippleDelete.value) {
+    if (rippleDelete.value && selectedClipIds.value.length > 0) {
       const removed = selectedClips.value
-      const removedByTrack = {}
-      for (const c of removed) {
-        removedByTrack[c.trackId] = removedByTrack[c.trackId] || []
-        removedByTrack[c.trackId].push(c)
-      }
-      for (const [tid, list] of Object.entries(removedByTrack)) {
-        const totalRemoved = list.reduce((s, c) => s + c.duration, 0)
-        for (const c of clips.value) {
-          if (c.trackId !== tid) continue
-          if (removed.find(r => r.id === c.id)) continue
-          if (c.startTime >= Math.min(...list.map(r => r.startTime))) {
-            c.startTime = Math.max(0, c.startTime - totalRemoved)
+      // Ripple delete should only close gaps: a remaining clip shifts left
+      // by the total duration of removed clips that lie entirely before
+      // it (on the same track). Clips separated from the removed region by
+      // a gap stay put apart from the closed gap itself.
+      for (const c of clips.value) {
+        if (selectedClipIds.value.includes(c.id)) continue
+        let shift = 0
+        for (const r of removed) {
+          if (r.trackId === c.trackId && r.startTime + r.duration <= c.startTime) {
+            shift += r.duration
           }
+        }
+        if (shift > 0) {
+          c.startTime = Math.max(0, c.startTime - shift)
         }
       }
     }
@@ -281,17 +300,62 @@ export const useTimelineStore = defineStore('timeline', () => {
     const clip = clips.value.find(c => c.id === clipId)
     if (!clip) return
     if (time <= clip.startTime || time >= clip.startTime + clip.duration) return
-    const left = { ...clip, duration: time - clip.startTime }
+    const rel = time - clip.startTime
+    // Deep-copy mutable nested objects so the two halves don't share
+    // references. Keyframe `time` is relative to clip start, so the right
+    // half keeps only keyframes in its range, shifted and with fresh ids
+    // (the left half keeps the original ids).
+    const baseCopy = {
+      ...(clip.transform ? { transform: { ...clip.transform } } : {}),
+      ...(clip.color ? { color: { ...clip.color } } : {}),
+      ...(clip.textProps ? { textProps: { ...clip.textProps } } : {}),
+      ...(clip.stickerProps ? { stickerProps: { ...clip.stickerProps } } : {}),
+      ...(clip.transition ? { transition: { ...clip.transition } } : {}),
+    }
+    const leftKfs = (clip.keyframes || [])
+      .filter(k => k.time < rel)
+      .map(k => ({ ...k }))
+    const rightKfs = (clip.keyframes || [])
+      .filter(k => k.time >= rel)
+      .map(k => ({ ...k, id: generateId(), time: k.time - rel }))
+    const left = {
+      ...clip,
+      duration: time - clip.startTime,
+      keyframes: leftKfs,
+      ...baseCopy,
+    }
     const right = {
       ...clip,
       id: generateId(),
       startTime: time,
       duration: clip.startTime + clip.duration - time,
       trimStart: clip.trimStart + (time - clip.startTime),
+      keyframes: rightKfs,
+      ...baseCopy,
     }
     const idx = clips.value.findIndex(c => c.id === clipId)
     clips.value.splice(idx, 1, left, right)
     safeMarkDirty()
+  }
+
+  function duplicateClip(clipId) {
+    const clip = clips.value.find(c => c.id === clipId)
+    if (!clip) return null
+    const copy = {
+      ...clip,
+      id: generateId(),
+      startTime: clip.startTime + clip.duration,
+      transform: clip.transform ? { ...clip.transform } : DEFAULT_TRANSFORM(),
+      color: clip.color ? { ...clip.color } : DEFAULT_COLOR(),
+      keyframes: (clip.keyframes || []).map(k => ({ ...k, id: generateId() })),
+      ...(clip.textProps ? { textProps: { ...clip.textProps } } : {}),
+      ...(clip.stickerProps ? { stickerProps: { ...clip.stickerProps } } : {}),
+      ...(clip.transition ? { transition: { ...clip.transition } } : {}),
+    }
+    clips.value.push(copy)
+    selectedClipIds.value = [copy.id]
+    safeMarkDirty()
+    return copy
   }
 
   function addKeyframe(clipId, property, value, time) {
@@ -363,6 +427,21 @@ export const useTimelineStore = defineStore('timeline', () => {
     selectedClipIds.value = []
   }
 
+  // Move every selected clip by the same delta (group drag). No snapping —
+  // snapping individual clips during a group move would tear them apart.
+  function shiftSelection(deltaSeconds) {
+    let changed = false
+    for (const c of clips.value) {
+      if (!selectedClipIds.value.includes(c.id)) continue
+      const next = Math.max(0, c.startTime + deltaSeconds)
+      if (next !== c.startTime) {
+        c.startTime = next
+        changed = true
+      }
+    }
+    if (changed) safeMarkDirty()
+  }
+
   function setZoom(value) {
     zoom.value = Math.max(5, Math.min(400, value))
   }
@@ -374,6 +453,14 @@ export const useTimelineStore = defineStore('timeline', () => {
   function setCurrentTime(time) {
     if (typeof time !== 'number' || isNaN(time)) return
     currentTime.value = Math.max(0, time)
+  }
+
+  function setActiveTool(tool) {
+    activeTool.value = tool === 'razor' ? 'razor' : 'select'
+  }
+
+  function setSnapGuide(time) {
+    snapGuideTime.value = time === null || time === undefined ? null : time
   }
 
   function loadFromProject(p) {
@@ -471,6 +558,8 @@ export const useTimelineStore = defineStore('timeline', () => {
     snapEnabled,
     rippleDelete,
     currentTime,
+    activeTool,
+    snapGuideTime,
     duration,
     selectedClips,
     addTrack,
@@ -485,6 +574,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     moveClip,
     trimClip,
     splitClipAt,
+    duplicateClip,
     addKeyframe,
     removeKeyframeAtTime,
     removeKeyframe,
@@ -492,9 +582,12 @@ export const useTimelineStore = defineStore('timeline', () => {
     snapToClips,
     selectClip,
     clearSelection,
+    shiftSelection,
     setZoom,
     zoomBy,
     setCurrentTime,
+    setActiveTool,
+    setSnapGuide,
     loadFromProject,
     createSnapshot,
     restoreSnapshot,

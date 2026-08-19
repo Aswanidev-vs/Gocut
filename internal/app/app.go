@@ -813,3 +813,102 @@ func (a *App) ApplyStabilization(assetID string, trackingData tracking.TrackingD
 		})
 	})
 }
+
+// ============ LUT IMPORT ============
+
+// LutImportResult is returned to the frontend after successfully importing
+// and validating a .cube LUT file.
+type LutImportResult struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+	Size  int    `json:"size"`
+}
+
+// lutBaseDir resolves where imported LUTs are copied to. Preference order:
+// 1. the project's custom save directory (if configured),
+// 2. the directory containing the project file (.gocutproj),
+// 3. the user config dir under Gocut (with a ~/.gocut fallback).
+func (a *App) lutBaseDir() string {
+	if a.currentProject != nil {
+		if dir := strings.TrimSpace(a.currentProject.CustomSaveDirectory); dir != "" {
+			return dir
+		}
+		if p := strings.TrimSpace(a.currentProject.FilePath); p != "" {
+			if d := filepath.Dir(p); d != "" && d != "." {
+				return d
+			}
+		}
+	}
+	if cfg, err := os.UserConfigDir(); err == nil && cfg != "" {
+		return filepath.Join(cfg, "Gocut")
+	}
+	return appDataDir("")
+}
+
+// ImportLut validates a .cube 3D LUT and copies it next to the current
+// project so the path stays durable across machines. It returns the
+// absolute destination path plus the LUT title and grid size.
+func (a *App) ImportLut(srcPath string) (*LutImportResult, error) {
+	if strings.TrimSpace(srcPath) == "" {
+		return nil, fmt.Errorf("no LUT file selected")
+	}
+
+	lut, err := ffmpeg.ParseCubeFile(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid LUT file: %v", err)
+	}
+
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot access LUT file: %v", err)
+	}
+
+	destDir := filepath.Join(a.lutBaseDir(), "luts")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return nil, fmt.Errorf("cannot create LUT directory: %v", err)
+	}
+
+	base := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath)) + ".cube"
+	dest := filepath.Join(destDir, base)
+
+	// If a different file already occupies this name, keep both by suffixing.
+	if existing, statErr := os.Stat(dest); statErr == nil && existing.Size() != info.Size() {
+		for i := 2; ; i++ {
+			candidate := filepath.Join(destDir, fmt.Sprintf("%s_%d.cube", strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath)), i))
+			if fi, err := os.Stat(candidate); os.IsNotExist(err) || fi.Size() == info.Size() {
+				dest = candidate
+				break
+			}
+		}
+	}
+
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open LUT file: %v", err)
+	}
+	defer src.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return nil, fmt.Errorf("cannot write LUT copy: %v", err)
+	}
+	if _, err := io.Copy(out, src); err != nil {
+		out.Close()
+		_ = os.Remove(dest)
+		return nil, fmt.Errorf("failed to copy LUT file: %v", err)
+	}
+	if err := out.Close(); err != nil {
+		return nil, fmt.Errorf("failed to finalize LUT copy: %v", err)
+	}
+
+	absDest, err := filepath.Abs(dest)
+	if err != nil {
+		absDest = dest
+	}
+
+	return &LutImportResult{
+		Path:  absDest,
+		Title: lut.Title,
+		Size:  lut.Size,
+	}, nil
+}

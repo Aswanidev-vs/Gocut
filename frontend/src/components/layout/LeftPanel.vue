@@ -6,6 +6,7 @@ import AssetPool from '../panels/AssetPool.vue'
 import TextPanel from '../panels/TextPanel.vue'
 import StickerPanel from '../panels/StickerPanel.vue'
 import TransitionsPanel from '../panels/TransitionsPanel.vue'
+import FiltersPanel from '../panels/FiltersPanel.vue'
 import AudioPanel from '../panels/AudioPanel.vue'
 import DesignPanel from '../panels/DesignPanel.vue'
 
@@ -27,7 +28,7 @@ const activeComponent = computed(() => {
     case 'audio':       return AudioPanel
     case 'text':        return TextPanel
     case 'stickers':    return StickerPanel
-    case 'fx':          return TransitionsPanel
+    case 'fx':          return FiltersPanel
     case 'design':      return DesignPanel
     case 'transitions': return TransitionsPanel
     default:            return AssetPool

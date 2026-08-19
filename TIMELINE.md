@@ -60,6 +60,12 @@
 - 15 new types: solidColor, noise, crop, cornerPin, channelSplit/Merge, levels, invert, temperature, directionalBlur, mask, timeShift, expression
 - Total: 31 node types
 
+### Phase 13: v1.0 Timeline/Editing Feature Set (2026-08-19)
+- **Timeline niceties**: marquee drag-select, group-drag of multi-selection, razor tool (C/V hotkeys, cursor crosshair), right-trim snap, yellow snap guides, ripple-delete gap-closing fix, split-deep-copy fix, context-menu Split-at-Playhead / Duplicate fixes, ruler drag-seek.
+- **Keyframe system completion**: opacity keyframes exported via `geq` alpha route (colorchannelmixer is init-only); `bounce`/`elastic` easing parity across Go export, JS `getInterpolatedProperty`, and the easing dialog; SVG volume envelope on audio clips; volume keyframes already exported via `volume=eval=frame`.
+- **Color suite + LUT + 12 presets**: all 24 ColorGrade sliders end-to-end; Go `.cube` 3D-LUT parser (`internal/ffmpeg/lut.go`) + `ImportLut` binding (copy to project-relative `luts/`, validation); `FiltersPanel.vue` preset strip (renamed `Golden`→`Golden Hour`); dead `BuildColorFilters` removed.
+- **12 text-animation presets**: `TextProps.Animation`/`AnimationDuration`; `textAnimStyle()` preview engine (exact CSS for all 12); drawtext/geq/scale export layers (`internal/ffmpeg/filters/text.go` rewrote dead code); inspector Animation picker + duration slider; typewriter approximates to fade at export (preview is exact).
+
 ---
 
 ## Future Phases

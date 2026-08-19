@@ -446,6 +446,94 @@ const overlayItems = computed(() => {
   return items
 })
 
+// ---- Text entry animations (time-driven CSS, mirrors ffmpeg export) ----
+// Returns a partial style {opacity?, transform?, clipPath?} plus an optional
+// `text` override (typewriter reveal). Identity ({}) once the animation
+// window has elapsed so the rest of playback is unaffected.
+const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3)
+const clamp01 = (x) => Math.min(1, Math.max(0, x))
+
+function textAnimStyle(clip, tp, currentTime) {
+  const anim = tp?.animation
+  if (!anim || anim === 'none') return {}
+  const t = currentTime - clip.startTime
+  const D = (tp.animationDuration > 0 ? tp.animationDuration : 0.5)
+  const u = clamp01(t / D)
+  switch (anim) {
+    case 'fade_in':
+      return t >= D ? {} : { opacity: u }
+    case 'fade_out': {
+      // Animate the last D seconds before clip end: 1 -> 0.
+      const rem = (clip.startTime + clip.duration - currentTime) / D
+      return rem >= 1 ? {} : { opacity: clamp01(rem) }
+    }
+    case 'typewriter': {
+      const n = Math.ceil(u * String(tp.text || '').length)
+      return u >= 1 ? {} : { text: String(tp.text || '').slice(0, n) }
+    }
+    case 'slide_left':
+    case 'slide_right':
+    case 'slide_top':
+    case 'slide_bottom': {
+      if (t >= D) return {}
+      const off = (1 - easeOutCubic(u)) * 100
+      if (anim === 'slide_left') return { transform: `translateX(${off}%)` }
+      if (anim === 'slide_right') return { transform: `translateX(-${off}%)` }
+      if (anim === 'slide_top') return { transform: `translateY(-${off}%)` }
+      return { transform: `translateY(${off}%)` }
+    }
+    case 'bounce': {
+      if (t >= D) return {}
+      const hop = Math.abs(Math.sin(u * Math.PI * 3)) * (1 - u) * 40
+      return { transform: `translateY(-${hop}%)` }
+    }
+    case 'pop': {
+      if (t >= D) return {}
+      const s = u < 0.7 ? (u / 0.7) * 1.15 : 1.15 - ((u - 0.7) / 0.3) * 0.15
+      return { transform: `scale(${s})`, opacity: clamp01(u * 3) }
+    }
+    case 'zoom_in': {
+      if (t >= D) return {}
+      const s = 3 - 2 * easeOutCubic(u)
+      return { transform: `scale(${s})`, opacity: clamp01(u * 3) }
+    }
+    case 'wipe':
+      return t >= D ? {} : { clipPath: `inset(0 ${(1 - u) * 100}% 0 0)` }
+    default:
+      return {}
+  }
+}
+
+// Merge the static text style with the entry-animation style.
+function textItemStyle(it) {
+  const base = {
+    color: it.props.color || '#FFFFFF',
+    background: it.props.bgColor && it.props.bgColor !== 'transparent' ? it.props.bgColor : 'transparent',
+    fontSize: (it.props.fontSize || 32) * 0.5 + 'px',
+    fontWeight: it.props.bold ? 'bold' : it.props.fontWeight || 'normal',
+    fontStyle: it.props.italic ? 'italic' : 'normal',
+    textDecoration: it.props.underline ? 'underline' : 'none',
+    padding: it.props.bgColor && it.props.bgColor !== 'transparent' ? '4px 12px' : '0',
+    borderRadius: (it.props.bgBorderRadius || 0) + 'px',
+    fontFamily: it.props.fontFamily || 'DM Sans',
+    whiteSpace: 'pre',
+    textAlign: it.props.align || 'center',
+  }
+  const anim = textAnimStyle(it.clip, it.props, timelineStore.currentTime)
+  if (anim.transform) {
+    base.transform = (base.transform ? base.transform + ' ' : '') + anim.transform
+    base.transformOrigin = 'center'
+  }
+  const { text: _typewriterText, ...animStyle } = anim
+  return { ...base, ...animStyle }
+}
+
+// Typewriter reveal: shortened text while the anim window is active.
+function textItemContent(it) {
+  const anim = textAnimStyle(it.clip, it.props, timelineStore.currentTime)
+  return anim.text !== undefined ? anim.text : it.props.text
+}
+
 function toggleFullscreen() {
   const el = document.querySelector('.preview-frame')
   if (!el) return

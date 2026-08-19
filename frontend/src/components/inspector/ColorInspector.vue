@@ -2,12 +2,14 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useTimelineStore } from '../../stores/timelineStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { OpenFilePicker } from '../../lib/wails'
+import { useUiStore } from '../../stores/uiStore'
+import { OpenFilePicker, ImportLut } from '../../lib/wails'
 import { Minus, Plus, RotateCcw, BarChart2, FileText, Upload } from 'lucide-vue-next'
 import { computeSpline } from '../../lib/curves'
 
 const timelineStore = useTimelineStore()
 const playerStore = usePlayerStore()
+const uiStore = useUiStore()
 const activeTab = ref('basic')
 
 const clip = computed(() => timelineStore.selectedClips[0])
@@ -19,6 +21,10 @@ const lutFileName = computed(() => {
   if (!lutPath.value) return ''
   return lutPath.value.split(/[\\/]/).pop() || lutPath.value
 })
+const lutTitle = computed(() => {
+  if (!lutFileName.value) return ''
+  return lutFileName.value.replace(/\.cube$/i, '')
+})
 
 async function importLut() {
   if (!clip.value) return
@@ -26,12 +32,24 @@ async function importLut() {
     const files = await OpenFilePicker([
       { name: '3D LUT Files (*.cube)', extensions: ['cube'] }
     ])
-    if (files && files.length > 0) {
-      timelineStore.updateClipColor(clip.value.id, { lutPath: files[0] })
+    if (!files || files.length === 0) return
+    try {
+      const res = await ImportLut(files[0])
+      timelineStore.updateClipColor(clip.value.id, { lutPath: res.path })
+      uiStore.addToast(`LUT imported: ${res.title || lutTitleFromPath(res.path)} (${res.size}³)`, 'success', 2000)
+    } catch (err) {
+      console.error('Failed to import LUT:', err)
+      uiStore.addToast(`Failed to import LUT: ${typeof err === 'string' ? err : (err?.message || err)}`, 'error', 4000)
     }
   } catch (err) {
     console.error('Failed to import LUT:', err)
   }
+}
+
+function lutTitleFromPath(path) {
+  if (!path) return 'LUT'
+  const base = path.split(/[\\/]/).pop() || path
+  return base.replace(/\.cube$/i, '') || 'LUT'
 }
 
 function clearLut() {
@@ -459,7 +477,10 @@ onMounted(() => {
       <div v-else class="flex items-center justify-between bg-bg/80 border border-border rounded px-2.5 py-1.5">
         <div class="flex items-center gap-1.5 min-w-0">
           <FileText :size="12" class="text-accent shrink-0" />
-          <span class="text-xs font-mono text-text-primary truncate">{{ lutFileName }}</span>
+          <div class="flex flex-col min-w-0">
+            <span v-if="lutTitle" class="text-xs font-semibold text-text-primary truncate leading-tight">{{ lutTitle }}</span>
+            <span class="text-[10px] font-mono text-text-secondary truncate leading-tight">{{ lutFileName }}</span>
+          </div>
         </div>
         <button
           class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-red-400 hover:border-red-400 transition-colors shrink-0"

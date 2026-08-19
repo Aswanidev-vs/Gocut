@@ -44,18 +44,47 @@ function formatLabel(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function onClick(e) {
-  const rect = e.currentTarget.getBoundingClientRect()
-  const x = e.clientX - rect.left
+function seekFromClientX(clientX) {
+  // Anchor to the fixed-position scroll viewport (.timeline-content), which
+  // does NOT move with horizontal scroll, then add the scroll offset to land
+  // in content space. (Anchoring to the ruler element instead would already
+  // bake in the scroll and double-count it.)
+  const container = document.querySelector('.timeline-content')
+  const rect = container?.getBoundingClientRect()
+  if (!rect) return
+  const scrollLeft = container?.scrollLeft ?? 0
+  const x = clientX - rect.left + scrollLeft
   const t = Math.max(0, x / timelineStore.zoom)
   timelineStore.setCurrentTime(t)
+}
+
+// Press (or press + drag) on the ruler seeks continuously. Seek updates
+// are throttled to ~100ms so frame extraction isn't spammed.
+let lastSeekAt = 0
+function onMouseDown(e) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  seekFromClientX(e.clientX)
+  lastSeekAt = performance.now()
+  const onMove = (mv) => {
+    const now = performance.now()
+    if (now - lastSeekAt < 100) return
+    lastSeekAt = now
+    seekFromClientX(mv.clientX)
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 </script>
 
 <template>
   <div
     class="relative h-7 bg-bg/40 border-b border-border cursor-pointer select-none"
-    @click="onClick"
+    @mousedown="onMouseDown"
   >
     <div
       v-for="tick in ticks"

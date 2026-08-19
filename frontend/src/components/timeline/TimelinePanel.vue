@@ -180,6 +180,14 @@ const typeIcons = {
         <Scissors :size="11" /> Split
       </button>
       <button
+        class="flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors"
+        :class="timelineStore.activeTool === 'razor' ? 'text-accent bg-accent/10' : 'text-text-secondary hover:text-text-primary hover:bg-border'"
+        @click="timelineStore.setActiveTool(timelineStore.activeTool === 'razor' ? 'select' : 'razor')"
+        title="Razor Tool (C)"
+      >
+        <Scissors :size="11" /> Razor
+      </button>
+      <button
         class="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-text-secondary hover:text-text-primary hover:bg-border transition-colors"
         @click="deleteSelected"
         title="Delete (Del)"
@@ -305,6 +313,12 @@ const typeIcons = {
               </div>
             </div>
             <Playhead :duration="visibleDuration" />
+            <!-- Snap indicator shown while dragging a clip that snapped -->
+            <div
+              v-if="timelineStore.snapGuideTime !== null"
+              class="absolute top-0 bottom-0 z-30 pointer-events-none w-px bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.7)]"
+              :style="{ left: timelineStore.snapGuideTime * timelineStore.zoom + 'px' }"
+            />
           </div>
         </div>
       </div>
