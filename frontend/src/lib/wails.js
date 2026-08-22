@@ -3,6 +3,7 @@ export {
   SaveProject,
   LoadProject,
   GetRecentProjects,
+  GetSystemFonts,
   ExportProjectFile,
   ImportMedia,
   ImportLut,

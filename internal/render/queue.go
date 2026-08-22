@@ -458,6 +458,10 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 			if clip.Speed > 0 && clip.Speed != 1.0 {
 				dur = dur * clip.Speed
 			}
+			if clip.Loop {
+				args = append(args, "-stream_loop", "-1")
+				dur = duration
+			}
 			args = append(args, "-t", strconv.FormatFloat(dur, 'f', 3, 64))
 			args = append(args, "-i", assetPath)
 
@@ -509,7 +513,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					var aFilters []string
 					aFilters = append(aFilters, "asetpts=PTS-STARTPTS")
 					if clip.Speed > 0 && clip.Speed != 1.0 {
-						aFilters = append(aFilters, fmt.Sprintf("atempo=%g", clip.Speed))
+						aFilters = append(aFilters, ffmpeg.BuildAtempoChain(clip.Speed))
 					}
 					if hasKeyframeProp(clip.Keyframes, "volume") {
 						volExpr := ffmpeg.BuildAnimatedExpression(clip.Keyframes, "volume", clip.Volume)
@@ -540,6 +544,10 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
 				clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
 				clipFilters = append(clipFilters, "setsar=1")
+
+				if clip.Reversed {
+					clipFilters = append(clipFilters, "reverse")
+				}
 
 				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
 					clipFilters = append(clipFilters, cf)
@@ -577,7 +585,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				// Reset PTS first, then apply speed
 				clipFilters = append(clipFilters, "asetpts=PTS-STARTPTS")
 				if clip.Speed > 0 && clip.Speed != 1.0 {
-					clipFilters = append(clipFilters, fmt.Sprintf("atempo=%g", clip.Speed))
+					clipFilters = append(clipFilters, ffmpeg.BuildAtempoChain(clip.Speed))
 				}
 
 				fadeIn := clip.Transition != nil && clip.Transition.Type != "none" && clip.Transition.Duration > 0
@@ -597,12 +605,60 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if clip.NoiseReduction {
 					clipFilters = append(clipFilters, filters.BuildNoiseReductionFilter())
 				}
+				if track.Muted {
+					clipFilters = append(clipFilters, "volume=0")
+				}
+				if clip.Duck {
+					clipFilters = append(clipFilters, fmt.Sprintf("volume=%g", audioDuckFactor))
+				}
+				if clip.Reversed {
+					clipFilters = append(clipFilters, "areverse")
+				}
 
 				delayMs := int(clip.StartTime * 1000)
 				clipFilters = append(clipFilters, fmt.Sprintf("adelay=%d|%d", delayMs, delayMs))
 
 				filterParts = append(filterParts, fmt.Sprintf("[%d:a]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
 				audioLabels = append(audioLabels, label)
+			} else if track.Type == project.TrackSticker {
+				// Stickers are image/gif assets overlayed on the composition.
+				// Position/size/rotation/flip live on StickerProps; we map them
+				// onto Transform so the shared overlay loop places them.
+				if clip.StickerProps != nil {
+					clip.Transform.X = clip.StickerProps.X
+					clip.Transform.Y = clip.StickerProps.Y
+					clip.Transform.Rotation = clip.StickerProps.Rotation
+					clip.Transform.FlipH = clip.StickerProps.FlipH
+					clip.Transform.FlipV = clip.StickerProps.FlipV
+					if clip.StickerProps.Opacity > 0 && clip.StickerProps.Opacity < 1.0 {
+						clip.Opacity = clip.StickerProps.Opacity
+					}
+				}
+				label := fmt.Sprintf("[v%d]", inputIdx)
+				var clipFilters []string
+				clipFilters = append(clipFilters, "format=yuva420p")
+				if clip.StickerProps != nil && clip.StickerProps.Width > 0 && clip.StickerProps.Height > 0 {
+					clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", int(clip.StickerProps.Width), int(clip.StickerProps.Height)))
+				} else {
+					clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
+				}
+				clipFilters = append(clipFilters, "setsar=1")
+				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
+					clipFilters = append(clipFilters, tf)
+				}
+				if of := buildOpacityFilter(clip); of != "" {
+					clipFilters = append(clipFilters, of)
+				}
+				if clip.Reversed {
+					clipFilters = append(clipFilters, "reverse")
+				}
+				ptsExpr := "PTS-STARTPTS"
+				if clip.Speed > 0 && clip.Speed != 1.0 {
+					ptsExpr = fmt.Sprintf("(PTS-STARTPTS)/%g", clip.Speed)
+				}
+				clipFilters = append(clipFilters, fmt.Sprintf("setpts=%s+%.3f/TB", ptsExpr, clip.StartTime))
+				filterParts = append(filterParts, fmt.Sprintf("[%d:v]%s%s", inputIdx, strings.Join(clipFilters, ","), label))
+				videoOverlays = append(videoOverlays, videoOverlay{label: label, clip: clip})
 			}
 			inputIdx++
 		}
@@ -649,27 +705,18 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 
 		xExpr := "(w-text_w)/2"
 		yExpr := "(h-text_h)/2"
+		switch tc.tp.Align {
+		case "left":
+			xExpr = "0"
+		case "right":
+			xExpr = "w-text_w"
+		}
 		if tc.clip.Transform.X != 0 || tc.clip.Transform.Y != 0 {
 			xExpr = fmt.Sprintf("(w-text_w)/2+%.0f", tc.clip.Transform.X)
 			yExpr = fmt.Sprintf("(h-text_h)/2+%.0f", tc.clip.Transform.Y)
 		}
 
-		fontFile := ""
-		if runtime.GOOS == "windows" {
-			if tc.tp.Bold {
-				fontFile = "C\\:/Windows/Fonts/arialbd.ttf"
-			} else {
-				fontFile = "C\\:/Windows/Fonts/arial.ttf"
-			}
-		} else if runtime.GOOS == "darwin" {
-			if tc.tp.Bold {
-				fontFile = "/System/Library/Fonts/HelveticaNeue-Bold.ttc"
-			} else {
-				fontFile = "/System/Library/Fonts/Helvetica.ttc"
-			}
-		} else {
-			fontFile = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-		}
+		fontFile := resolveFontFile(tc.tp.FontFamily, tc.tp.Bold)
 
 		// Animated text: resolve the preset, then route through the layer
 		// builder. ResolveTextAnim returns "" for no/unknown-style static
@@ -737,6 +784,17 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	} else {
 		// Just use base audio if no audio clips
 		filterParts = append(filterParts, "[basea]anull[outa]")
+	}
+
+	// Partial export: drop the leading [StartTime, ...) seconds so the output
+	// begins at the in-point set on the timeline.
+	if settings.StartTime > 0 {
+		trimV := "[trimv]"
+		filterParts = append(filterParts, fmt.Sprintf("%strim=start=%g,setpts=PTS-STARTPTS%s", lastV, settings.StartTime, trimV))
+		lastV = trimV
+		trimA := "[trima]"
+		filterParts = append(filterParts, fmt.Sprintf("%satrim=start=%g,asetpts=PTS-STARTPTS%s", lastA, settings.StartTime, trimA))
+		lastA = trimA
 	}
 
 	audioBitrate := settings.AudioBitrate
@@ -916,4 +974,40 @@ func buildOpacityFilter(clip project.Clip) string {
 	// Commas inside the single-quoted graph-level strings are safe, but the
 	// expression itself never contains quotes, so a plain quoting suffices.
 	return fmt.Sprintf("geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='%s'", aExpr)
+}
+
+// audioDuckFactor attenuates a BGM clip's volume when ducking is enabled,
+// leaving headroom for dialogue/primary audio on other tracks.
+const audioDuckFactor = 0.3
+
+// resolveFontFile returns the fontfile path for drawtext. If the caller
+// supplied a path (a bundled or system font resolved via the font scanner),
+// it is used directly; otherwise a platform default is chosen.
+func resolveFontFile(family string, bold bool) string {
+	if isFontPath(family) {
+		return family
+	}
+	if runtime.GOOS == "windows" {
+		if bold {
+			return "C\\:/Windows/Fonts/arialbd.ttf"
+		}
+		return "C\\:/Windows/Fonts/arial.ttf"
+	} else if runtime.GOOS == "darwin" {
+		if bold {
+			return "/System/Library/Fonts/HelveticaNeue-Bold.ttc"
+		}
+		return "/System/Library/Fonts/Helvetica.ttc"
+	}
+	return "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+}
+
+func isFontPath(s string) bool {
+	if s == "" {
+		return false
+	}
+	if strings.ContainsAny(s, "/\\") {
+		return true
+	}
+	lower := strings.ToLower(s)
+	return strings.HasSuffix(lower, ".ttf") || strings.HasSuffix(lower, ".otf") || strings.HasSuffix(lower, ".ttc")
 }

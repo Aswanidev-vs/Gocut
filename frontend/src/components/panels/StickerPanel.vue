@@ -9,6 +9,7 @@ const timelineStore = useTimelineStore()
 const uiStore = useUiStore()
 
 // SVG stickers rendered inline so we don't need to ship PNG assets.
+// Open-licensed / public-domain style glyphs drawn as simple paths.
 const stickers = [
   { name: 'Heart',    svg: '<path d="M50 85 L20 55 a18 18 0 0 1 30 -10 a18 18 0 0 1 30 10 Z" fill="#EC4899" />' },
   { name: 'Star',     svg: '<polygon points="50,15 61,40 88,40 66,57 75,84 50,67 25,84 34,57 12,40 39,40" fill="#F59E0B" />' },
@@ -26,6 +27,23 @@ const stickers = [
   { name: 'Eye',      svg: '<ellipse cx="50" cy="50" rx="35" ry="20" fill="white" stroke="#888" stroke-width="3" /><circle cx="50" cy="50" r="10" fill="#0F0F0F" />' },
   { name: 'Bubble',   svg: '<path d="M15 20 h70 a8 8 0 0 1 8 8 v30 a8 8 0 0 1 -8 8 h-50 l-15 12 v-12 a8 8 0 0 1 -8 -8 v-30 a8 8 0 0 1 8 -8 z" fill="#00D4FF" />' },
   { name: '100',      svg: '<text x="50" y="62" text-anchor="middle" font-size="38" font-weight="900" fill="#FACC15">100</text>' },
+  { name: 'Moon',     svg: '<path d="M62 18 a38 38 0 1 0 20 64 a30 30 0 1 1 -20 -64 z" fill="#FBBF24" />' },
+  { name: 'Sun',      svg: '<circle cx="50" cy="50" r="18" fill="#F59E0B"/><g stroke="#F59E0B" stroke-width="6" stroke-linecap="round"><line x1="50" y1="8" x2="50" y2="22"/><line x1="50" y1="78" x2="50" y2="92"/><line x1="8" y1="50" x2="22" y2="50"/><line x1="78" y1="50" x2="92" y2="50"/><line x1="20" y1="20" x2="30" y2="30"/><line x1="70" y1="70" x2="80" y2="80"/><line x1="20" y1="80" x2="30" y2="70"/><line x1="70" y1="30" x2="80" y2="20"/></g>' },
+  { name: 'Drop',     svg: '<path d="M50 15 C50 15 25 45 25 62 a25 25 0 0 0 50 0 C75 45 50 15 50 15 Z" fill="#38BDF8" />' },
+  { name: 'Cloud',    svg: '<g fill="#94A3B8"><circle cx="38" cy="55" r="15"/><circle cx="62" cy="50" r="19"/><circle cx="70" cy="62" r="13"/><rect x="28" y="56" width="50" height="16" rx="8"/></g>' },
+  { name: 'Flower',   svg: '<g fill="#F472B6"><circle cx="50" cy="30" r="12"/><circle cx="31" cy="45" r="12"/><circle cx="69" cy="45" r="12"/><circle cx="39" cy="68" r="12"/><circle cx="61" cy="68" r="12"/></g><circle cx="50" cy="50" r="12" fill="#FACC15"/>' },
+  { name: 'Smile',    svg: '<circle cx="50" cy="50" r="38" fill="#FACC15"/><circle cx="38" cy="42" r="5" fill="#3F3F46"/><circle cx="62" cy="42" r="5" fill="#3F3F46"/><path d="M35 60 q15 15 30 0" stroke="#3F3F46" stroke-width="5" fill="none" stroke-linecap="round"/>' },
+  { name: 'Diamond',  svg: '<polygon points="50,12 82,50 50,88 18,50" fill="#22D3EE" />' },
+  { name: 'Hexagon',  svg: '<polygon points="50,12 85,32 85,68 50,88 15,68 15,32" fill="#A78BFA" />' },
+  { name: 'Question', svg: '<text x="50" y="68" text-anchor="middle" font-size="52" font-weight="900" fill="#38BDF8">?</text>' },
+  { name: 'Bang',     svg: '<text x="50" y="70" text-anchor="middle" font-size="56" font-weight="900" fill="#F87171">!</text>' },
+  { name: 'Music',    svg: '<g fill="#34D399"><rect x="40" y="24" width="7" height="44" rx="2"/><path d="M40 24 L70 18 L70 28 L47 33 Z"/><circle cx="38" cy="68" r="9"/><circle cx="68" cy="62" r="9"/></g>' },
+  { name: 'Leaf',     svg: '<path d="M25 75 C25 35 60 20 80 20 C80 60 45 75 25 75 Z" fill="#22C55E"/><path d="M30 70 C45 55 65 35 78 25" stroke="#15803D" stroke-width="3" fill="none"/>' },
+  { name: 'Bell',     svg: '<path d="M50 20 a18 18 0 0 1 18 18 v18 l8 10 h-52 l8 -10 v-18 a18 18 0 0 1 18 -18 Z" fill="#FB923C"/><circle cx="50" cy="80" r="6" fill="#FB923C"/>' },
+  { name: 'Camera',   svg: '<rect x="22" y="35" width="56" height="38" rx="6" fill="#64748B"/><rect x="38" y="28" width="24" height="10" rx="3" fill="#64748B"/><circle cx="50" cy="54" r="13" fill="#E2E8F0"/><circle cx="50" cy="54" r="7" fill="#64748B"/>' },
+  { name: 'Snow',     svg: '<g stroke="#7DD3FC" stroke-width="5" stroke-linecap="round"><line x1="50" y1="15" x2="50" y2="85"/><line x1="22" y1="32" x2="78" y2="68"/><line x1="78" y1="32" x2="22" y2="68"/></g>' },
+  { name: 'Target',   svg: '<g fill="none" stroke="#F43F5E" stroke-width="6"><circle cx="50" cy="50" r="35"/><circle cx="50" cy="50" r="20"/></g><circle cx="50" cy="50" r="7" fill="#F43F5E"/>' },
+  { name: 'Ghost',    svg: '<path d="M25 80 V45 a25 25 0 0 1 50 0 V80 l-8 -8 l-8 8 l-8 -8 l-8 8 l-8 -8 Z" fill="#E5E7EB"/><circle cx="40" cy="45" r="5" fill="#1F2937"/><circle cx="60" cy="45" r="5" fill="#1F2937"/>' },
 ]
 
 // Custom stickers imported by the user

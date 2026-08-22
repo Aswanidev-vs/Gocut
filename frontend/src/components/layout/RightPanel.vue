@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus, Activity } from 'lucide-vue-next'
+import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus, Activity, Smile } from 'lucide-vue-next'
 import ColorInspector from '../inspector/ColorInspector.vue'
 import KeyframeEasingDialog from '../timeline/KeyframeEasingDialog.vue'
+import StickerInspector from '../inspector/StickerInspector.vue'
+import { GetSystemFonts } from '../../lib/wails'
 
 const timelineStore = useTimelineStore()
 const projectStore = useProjectStore()
@@ -26,6 +28,7 @@ const isAudio = computed(() => {
   const track = timelineStore.tracks.find(t => t.id === selectedClip.value.trackId)
   return track?.type === 'audio'
 })
+const isSticker = computed(() => !!selectedClip.value?.stickerProps)
 
 const activeTab = computed({
   get: () => uiStore.activeInspectorTab,
@@ -114,6 +117,105 @@ function resetTransform() {
   timelineStore.updateClipTransform(selectedClip.value.id, {
     x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, flipH: false, flipV: false,
     cropX: 0, cropY: 0, cropW: 0, cropH: 0,
+  })
+}
+
+// --- Crop controls (video clips) ---
+// Source dimensions come from the underlying asset so aspect presets can
+// compute a centered crop rectangle that fits the original media.
+const sourceDims = computed(() => {
+  const a = asset.value
+  return { w: a?.width || 0, h: a?.height || 0 }
+})
+const cropPresets = [
+  { label: '1:1', ratio: 1 },
+  { label: '16:9', ratio: 16 / 9 },
+  { label: '9:16', ratio: 9 / 16 },
+  { label: '4:3', ratio: 4 / 3 },
+]
+function setCrop(key, val) {
+  if (!selectedClip.value) return
+  timelineStore.updateClipTransform(selectedClip.value.id, { [key]: val })
+}
+function applyCropPreset(ratio) {
+  if (!selectedClip.value) return
+  const { w, h } = sourceDims.value
+  if (!w || !h) {
+    uiStore.addToast('Source dimensions unavailable for crop', 'warning', 1500)
+    return
+  }
+  // Largest rectangle of the target aspect ratio that fits inside the source, centered.
+  let cw, ch
+  if (w / h > ratio) { ch = h; cw = Math.round(h * ratio) }
+  else { cw = w; ch = Math.round(w / ratio) }
+  const cx = Math.round((w - cw) / 2)
+  const cy = Math.round((h - ch) / 2)
+  timelineStore.updateClipTransform(selectedClip.value.id, { cropX: cx, cropY: cy, cropW: cw, cropH: ch })
+}
+function resetCrop() {
+  if (!selectedClip.value) return
+  timelineStore.updateClipTransform(selectedClip.value.id, { cropX: 0, cropY: 0, cropW: 0, cropH: 0 })
+}
+
+// --- System font picker (text clips) ---
+const systemFonts = ref([])
+const fontsLoading = ref(false)
+const fontsError = ref('')
+async function loadSystemFonts() {
+  if (fontsLoading.value) return
+  fontsLoading.value = true
+  fontsError.value = ''
+  try {
+    const list = await GetSystemFonts()
+    systemFonts.value = Array.isArray(list) ? list : []
+  } catch (e) {
+    fontsError.value = e?.message || String(e)
+  } finally {
+    fontsLoading.value = false
+  }
+}
+onMounted(() => { loadSystemFonts() })
+// Refresh whenever a text clip becomes selected (fonts may not be loaded yet).
+watch(() => isText.value, (v) => { if (v && systemFonts.value.length === 0) loadSystemFonts() })
+// Ensure the currently stored fontFamily is always selectable even if it was
+// set before the font list loaded (e.g. a preset name like "DM Sans").
+const fontOptions = computed(() => {
+  const list = systemFonts.value
+  const current = selectedClip.value?.textProps?.fontFamily
+  if (current && !list.some(f => f.path === current)) {
+    return [{ family: current, path: current, style: '' }, ...list]
+  }
+  return list
+})
+
+// --- Emoji picker (text clips) ---
+const showEmoji = ref(false)
+const textAreaRef = ref(null)
+const commonEmojis = [
+  '😀','😁','😂','🤣','😊','😍','😎','🤔','🤩','😅',
+  '😉','😘','😜','🤗','😇','🙃','😴','😭','😡','🥳',
+  '👍','👎','👏','🙌','🤝','💪','✌️','🤞','❤️','🔥',
+  '⭐','✨','💡','🎉','🎊','🎬','🎥','📹','🎵','🎶',
+  '🌟','💯','✅','❌','⚡','🌈','☀️','🌙','💎','🚀',
+]
+function insertEmoji(emoji) {
+  if (!selectedClip.value) return
+  const cur = selectedClip.value.textProps?.text || ''
+  let start = cur.length
+  let end = cur.length
+  const ta = textAreaRef.value
+  if (ta && typeof ta.selectionStart === 'number') {
+    start = ta.selectionStart
+    end = ta.selectionEnd ?? start
+  }
+  const next = cur.slice(0, start) + emoji + cur.slice(end)
+  setTextProp('text', next)
+  const caret = start + emoji.length
+  nextTick(() => {
+    if (ta) {
+      ta.focus()
+      try { ta.setSelectionRange(caret, caret) } catch (_) { /* ignore */ }
+    }
   })
 }
 function resetColor() {
@@ -564,6 +666,37 @@ function applyCustomAnimation() {
               <button class="px-2 py-1 rounded text-xs border" :class="selectedClip.transform.flipH ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary'" @click="setTransform('flipH', !selectedClip.transform.flipH)">Flip H</button>
               <button class="px-2 py-1 rounded text-xs border" :class="selectedClip.transform.flipV ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary'" @click="setTransform('flipV', !selectedClip.transform.flipV)">Flip V</button>
             </div>
+
+            <!-- Crop (video clips only) -->
+            <div v-if="isVideo" class="mt-3 pt-3 border-t border-border/60">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Crop</h4>
+                <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetCrop" title="Reset crop"><RotateCcw :size="10" /></button>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[10px] text-text-secondary">Crop X</label>
+                  <input type="number" :value="getPropValue('cropX', 0)" @input="(e) => setCrop('cropX', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="text-[10px] text-text-secondary">Crop Y</label>
+                  <input type="number" :value="getPropValue('cropY', 0)" @input="(e) => setCrop('cropY', parseFloat(e.target.value) || 0)" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="text-[10px] text-text-secondary">Crop W</label>
+                  <input type="number" min="0" :value="getPropValue('cropW', 0)" @input="(e) => setCrop('cropW', Math.max(0, parseFloat(e.target.value) || 0))" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="text-[10px] text-text-secondary">Crop H</label>
+                  <input type="number" min="0" :value="getPropValue('cropH', 0)" @input="(e) => setCrop('cropH', Math.max(0, parseFloat(e.target.value) || 0))" class="w-full bg-bg border border-border rounded px-2 py-1 text-xs font-mono" />
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                <button v-for="p in cropPresets" :key="p.label" class="px-2 py-1 rounded text-[10px] border transition-colors border-border text-text-secondary hover:border-accent/40" @click="applyCropPreset(p.ratio)">{{ p.label }}</button>
+              </div>
+              <div class="text-[9px] text-text-secondary mt-1.5" v-if="sourceDims.w && sourceDims.h">Source {{ sourceDims.w }}×{{ sourceDims.h }}px</div>
+            </div>
+              <StickerInspector v-if="isSticker" class="block mt-3 pt-3 border-t border-border/60" />
           </div>
 
           <hr class="border-border" />
@@ -792,8 +925,29 @@ function applyCustomAnimation() {
         <!-- ======== TEXT TAB ======== -->
         <template v-if="activeTab === 'text' && isText">
           <div>
-            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Content</h4>
-            <textarea :value="selectedClip.textProps.text" @input="(e) => setTextProp('text', e.target.value)" rows="3" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm resize-none focus:border-accent outline-none"></textarea>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Content</h4>
+              <button class="p-1 rounded text-text-secondary hover:text-accent" :class="{ 'text-accent bg-accent/10': showEmoji }" @click="showEmoji = !showEmoji" title="Insert emoji"><Smile :size="12" /></button>
+            </div>
+            <textarea ref="textAreaRef" :value="selectedClip.textProps.text" @input="(e) => setTextProp('text', e.target.value)" rows="3" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm resize-none focus:border-accent outline-none"></textarea>
+            <div v-if="showEmoji" class="mt-2 border border-border rounded-lg p-2 bg-bg/60">
+              <div class="grid grid-cols-8 gap-1">
+                <button v-for="(em, i) in commonEmojis" :key="i" class="text-base leading-none py-1 rounded hover:bg-accent/15 transition-colors" @click="insertEmoji(em)">{{ em }}</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Font</h4>
+            <select
+              :value="selectedClip.textProps.fontFamily"
+              @change="(e) => setTextProp('fontFamily', e.target.value)"
+              class="w-full bg-bg border border-border rounded px-2 py-1.5 text-[11px] text-text-primary outline-none"
+            >
+              <option v-if="fontsLoading" value="" disabled>Loading fonts…</option>
+              <option v-if="fontsError" value="" disabled>Fonts unavailable</option>
+              <option v-for="f in fontOptions" :key="f.path" :value="f.path">{{ f.family }}<template v-if="f.style"> ({{ f.style }})</template></option>
+            </select>
+            <div class="text-[9px] text-text-secondary mt-1">Exports use the selected font file path.</div>
           </div>
           <div>
             <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Size</h4>

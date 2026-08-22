@@ -329,8 +329,9 @@ belongs. No Electron, no Chromium-on-CI, ~10× smaller binaries.
 ### Export
 - `mp4` (H.264 + AAC) — primary format
 - `mp3` (MP3 audio-only) — supported with the `libmp3lame` encoder
-- `webm` (VP9) and `gif` are visible in the export UI but their dedicated
-  render paths are not complete yet.
+- `webm` (VP9, `libvpx-vp9`) — supported with `libopus` audio
+- `gif` — supported via FFmpeg `palettegen`/`paletteuse` optimization
+- `aac` (audio-only, ADTS) — supported with the native `aac` encoder
 
 > **Note:** Removing a video clip from the timeline invalidates in-flight and
 > cached preview frames, so the removed source is not reused by the preview.
@@ -383,12 +384,18 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [x] Frame-accurate preview (paused) + low-latency playback mode
 - [x] Text overlays with full styling
 - [x] Stickers & image overlays with transform
+- [x] Stickers export with transform (position, rotation, opacity, flip, scale)
 - [x] Color grading (brightness, contrast, saturation, hue, sharpness, vignette, grain, blur)
 - [x] 11 transitions via FFmpeg `xfade`
 - [x] **Live CSS transition preview** — fade, dissolve, wipe, slide, zoom, flip, circle, pixelize, and blur transitions animate in real-time during playback (no FFmpeg round-trip needed)
 - [x] **Visual clip indicators** — timeline clips display transition (↔) and effect (🎨) icons so users can see at a glance which clips have modifications applied
 - [x] Export to MP4 (H.264 + AAC) with background render, progress events, and cancel
 - [x] Export audio-only MP3 with background render, progress events, and cancel
+- [x] Export to WebM (VP9, `libvpx-vp9`) with background render, progress events, and cancel
+- [x] Export to GIF via `palettegen`/`paletteuse` with background render, progress events, and cancel
+- [x] Export audio-only AAC (ADTS) with background render, progress events, and cancel
+- [x] Audio controls — per-clip volume, mute, loudness normalization (`loudnorm`), noise reduction (`afftdn`), BGM loop, and ducking
+- [x] System font picker (`GetSystemFonts()` binding)
 - [x] Auto-save every 60 s
 - [x] Cross-platform: Windows, macOS, Linux
 - [x] In-app media HTTP server (audio extraction on demand, cached)
@@ -399,9 +406,8 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - Live transition preview uses CSS approximations (clip-path, opacity, transform). The final exported video uses FFmpeg's native `xfade` filter for pixel-accurate transitions.
 - True cross-fade transitions (overlapping two clips) require complex filter graph chaining — currently transitions apply as intro animations on the incoming clip.
 - Render queue is single-worker by design (avoids CPU contention with FFmpeg).
-- Some PRD features (chroma key, LUTs, audio keyframes, noise reduction,
-  multi-cam, plugin marketplace, AI effects) are intentionally **out of scope**
-  for v1.0.
+- Some PRD features (chroma key, LUTs, multi-cam, plugin marketplace, AI effects)
+  are intentionally **out of scope** for v1.0.
 
 ### 🛣️ v1.0 (planned)
 
@@ -409,15 +415,12 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [ ] Full keyframe animation system (transform / opacity / volume)
 - [ ] Complete color suite + LUT import + 12 filter presets
 - [ ] Text animations (12 presets)
-- [ ] Sticker track with GIF support
+- [ ] Built-in sticker library / asset pack
 - [ ] Audio waveform rendering in the timeline
-- [ ] Audio fade handles + per-clip volume keyframes
-- [ ] Noise reduction (`afftdn`) + loudness normalization (`loudnorm`)
+- [ ] Audio fade-out handles + per-clip volume keyframe envelope drawing (inspector UI)
 - [ ] Chroma key
-- [ ] Multi-format export: WebM (VP9), GIF, and audio-only AAC
 - [ ] Multi-job render queue
 - [ ] Multiple video + audio tracks
-- [ ] System font picker
 - [ ] Performance pass & cross-platform QA
 
 ---
@@ -457,8 +460,7 @@ git push origin v0.1.0
 
 A few candidates right now:
 
-- Add WebM / GIF / audio-only AAC export paths to `internal/render`
-- Wire the system font scanner into the text inspector
+- Add a built-in sticker library / asset pack
 - Add unit tests for `internal/ffmpeg/builder.go` filter chain output
 - Implement true cross-fade overlap logic between adjacent clips
 - Add transition duration slider to the Transitions panel

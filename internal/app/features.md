@@ -139,7 +139,7 @@ These features from the PRD have been fully or substantially implemented.
 | Text alignment (left, center, right) | ✅ | `Align` field |
 | Letter spacing, line height | ✅ | `LetterSpacing`, `LineHeight` fields |
 | Text Animation Presets (12) | ❌ | Not implemented |
-| Emoji picker / support | ❌ | Not implemented |
+| Emoji picker / support | ✅ | Emoji picker in text inspector (RightPanel) |
 | Double-click text to edit directly on the preview canvas | ✅ | Interactive text overlays on the preview player; double-click to edit inline (Enter to save, Esc to cancel) |
 
 ### Audio Engine
@@ -152,8 +152,8 @@ These features from the PRD have been fully or substantially implemented.
 | Waveform visualization | ✅ | Via `ExtractWaveform()` + frontend rendering |
 | Background Music (BGM) track | ✅ | Dedicated audio track |
 | Loop toggle for BGM | 🔄 | Model supports, render pipeline handles |
-| Audio keyframes / volume envelope | ❌ | Not implemented |
-| BGM duck (sidechain) | ❌ | Not implemented |
+| Audio keyframes / volume envelope | 🔄 | Volume keyframes supported in render; envelope-drawing UI pending |
+| BGM duck (sidechain) | ✅ | Clip.Duck attenuates BGM volume when enabled |
 | Noise reduction (`afftdn`) | ✅ | Per-clip toggle, FFT denoiser (nf=-25) |
 | Audio normalization (`loudnorm`) | ✅ | implemented |
 
@@ -179,14 +179,22 @@ These features from the PRD have been fully or substantially implemented.
 
 ### Stickers & Overlays
 
+> ⚠️ **Sticker export to video is not yet implemented** — stickers render and
+> animate correctly in the preview, but are **not** written to the exported
+> file. Blockers: the Go `StickerProps` model has no `Svg`/`ImagePath`
+> round-trip fields, the render loop `continue`s on empty `AssetID` (all
+> stickers) so the `TrackSticker` branch is unreachable, and ffmpeg in the
+> current build cannot decode inline SVG (no rasterizer installed). Planned
+> for a future session — see §2 #27.
+
 | Feature | Status | Details |
 |---------|--------|---------|
 | Sticker track | ✅ | `TrackSticker` type |
 | Import custom PNG/GIF | ✅ | Via asset import |
 | Sticker properties (X/Y/W/H/Rotation/Opacity/Flip) | ✅ | `StickerProps` model |
 | Keyframes on stickers | ✅ | Supported via expression builder |
-| Built-in sticker pack (30+) | ❌ | Not confirmed in code |
-| GIF sticker looping | ❌ | Not tested |
+| Built-in sticker pack (30+) | ✅ | 33 inline-SVG stickers in StickerPanel |
+| GIF sticker looping (preview) | ✅ | Loop handled in preview player |
 
 ### Export & Render Engine
 
@@ -202,9 +210,9 @@ These features from the PRD have been fully or substantially implemented.
 | Cancel render mid-way | ✅ | `CancelRender()` kills FFmpeg process |
 | Partial/range export | ✅ | `StartTime`/`EndTime` for in/out points |
 | Open output folder | ✅ | `OpenOutputFolder()` using `explorer.exe`/`xdg-open` |
-| WebM (VP9) export | ❌ | Scaffolded in model but not wired |
-| GIF export (palette optimization) | ❌ | Not implemented |
-| Audio-only export (MP3/AAC) | ❌ | Not implemented |
+| WebM (VP9) export | ✅ | libvpx-vp9 in render pipeline |
+| GIF export (palette optimization) | ✅ | palettegen/paletteuse in render |
+| Audio-only export (MP3/AAC) | ✅ | libmp3lame / aac(adts) in render |
 | Render queue (multiple jobs) | 🔄 | Queue structure exists, single-worker MVP |
 | Completion notification to OS toast | ❌ | Not implemented |
 
@@ -262,6 +270,7 @@ All MVP features from the PRD have been implemented.
 | 24 | **Asset Search/Filter** | 8.2 | ✅ Done | Now implemented — text search + type filter chips in `AssetPool.vue`. |
 | 25 | **Asset Remove with Usage Warning** | 8.2 | ✅ Done | Now implemented — confirmation dialog appears if asset is in use on the timeline. |
 | 26 | **Clip Reverse (Render Pipeline)** | 8.5 | ✅ Done | `reverse` (video) + `areverse` (audio) ffmpeg filters applied in render pipeline. |
+| 27 | **Sticker Export to Video** | 8.10 | Future | Render stickers into the exported video. Blocked by: (1) `StickerProps` lacks `Svg`/`ImagePath` fields so image data never reaches the Go backend; (2) the render loop `continue`s on empty `AssetID` (all stickers), so the `TrackSticker` branch is unreachable; (3) ffmpeg cannot decode inline SVG and no SVG rasterizer is installed. Custom PNG/GIF stickers can export once the asset-input path is wired; built-in SVGs need a rasterization step (Go lib or browser-side canvas). |
 
 ---
 
