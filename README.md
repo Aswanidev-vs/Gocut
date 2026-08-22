@@ -384,7 +384,7 @@ The full product spec lives in [`prd.md`](../prd.md) at the repo root.
 - [x] Frame-accurate preview (paused) + low-latency playback mode
 - [x] Text overlays with full styling
 - [x] Stickers & image overlays with transform
-- [x] Stickers export with transform (position, rotation, opacity, flip, scale)
+- [ ] Stickers export to video (renders correctly in preview; export blocked — see `features.md` §2 #27)
 - [x] Color grading (brightness, contrast, saturation, hue, sharpness, vignette, grain, blur)
 - [x] 11 transitions via FFmpeg `xfade`
 - [x] **Live CSS transition preview** — fade, dissolve, wipe, slide, zoom, flip, circle, pixelize, and blur transitions animate in real-time during playback (no FFmpeg round-trip needed)
