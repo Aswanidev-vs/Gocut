@@ -52,6 +52,35 @@ func BuildTransformFilters(clip project.Clip) string {
 	return strings.Join(parts, ",")
 }
 
+// BuildAtempoChain returns atempo filter(s) for a playback speed factor.
+// FFmpeg's atempo only accepts 0.5–2.0 per instance, so rates outside that
+// range are expressed as a chain of segments (e.g. 4x -> atempo=2.0,atempo=2.0).
+// Returns "" when speed is 0 (no change) or ~1.0 (identity).
+func BuildAtempoChain(speed float64) string {
+	if speed <= 0 || (speed >= 0.9999 && speed <= 1.0001) {
+		return ""
+	}
+	remaining := speed
+	var parts []string
+	for remaining > 1.0001 {
+		step := remaining
+		if step > 2.0 {
+			step = 2.0
+		}
+		parts = append(parts, fmt.Sprintf("atempo=%g", step))
+		remaining /= step
+	}
+	for remaining < 0.9999 {
+		step := remaining
+		if step < 0.5 {
+			step = 0.5
+		}
+		parts = append(parts, fmt.Sprintf("atempo=%g", step))
+		remaining /= step
+	}
+	return strings.Join(parts, ",")
+}
+
 func BuildAudioFilters(volume float64, fadeIn, fadeOut bool, fadeDuration, endTime float64) string {
 	var parts []string
 	if volume != 1.0 {

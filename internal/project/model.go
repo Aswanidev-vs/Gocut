@@ -180,6 +180,8 @@ type Clip struct {
 	Transition     *Transition   `json:"transition,omitempty"`
 	Normalize      bool          `json:"normalize"`
 	NoiseReduction bool          `json:"noiseReduction"`
+	Loop           bool          `json:"loop,omitempty"`
+	Duck           bool          `json:"duck,omitempty"`
 	TextProps      *TextProps    `json:"textProps,omitempty"`
 	StickerProps   *StickerProps `json:"stickerProps,omitempty"`
 }

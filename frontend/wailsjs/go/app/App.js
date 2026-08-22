@@ -78,6 +78,10 @@ export function GetRenderQueue() {
   return window['go']['app']['App']['GetRenderQueue']();
 }
 
+export function GetSystemFonts() {
+  return window['go']['app']['App']['GetSystemFonts']();
+}
+
 export function ImportLut(arg1) {
   return window['go']['app']['App']['ImportLut'](arg1);
 }

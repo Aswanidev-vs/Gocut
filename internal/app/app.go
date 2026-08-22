@@ -509,6 +509,25 @@ func (a *App) GetAppVersion() string {
 	return Version
 }
 
+// GetSystemFonts returns font files discovered on the host so the text
+// inspector can offer a real font picker. Each entry's Path is a valid
+// fontfile argument for FFmpeg's drawtext filter.
+func (a *App) GetSystemFonts() []project.FontInfo {
+	if a.fontScanner == nil {
+		return []project.FontInfo{}
+	}
+	scanned := a.fontScanner.Scan()
+	out := make([]project.FontInfo, 0, len(scanned))
+	for _, f := range scanned {
+		out = append(out, project.FontInfo{
+			Family: f.Family,
+			Path:   f.Path,
+			Style:  f.Style,
+		})
+	}
+	return out
+}
+
 func (a *App) Minimise() {
 	if a.ctx != nil {
 		runtime.WindowMinimise(a.ctx)
@@ -781,9 +800,9 @@ func (a *App) AnalyzeMotion(settings tracking.TrackingSettings) (*tracking.Track
 	}
 
 	runtime.EventsEmit(a.ctx, "tracking:complete", map[string]interface{}{
-		"assetId":     settings.AssetID,
-		"frameCount":  result.FrameCount,
-		"confidence":  result.Confidence,
+		"assetId":    settings.AssetID,
+		"frameCount": result.FrameCount,
+		"confidence": result.Confidence,
 	})
 
 	return result, nil
