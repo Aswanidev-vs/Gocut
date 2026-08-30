@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -394,19 +395,28 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	// skipped: FFmpeg aborts with "has output N unconnected" if the
 	// filtergraph produces labelled video pads that no -map consumes.
 	audioOnly := settings.Format == "mp3" || settings.Format == "aac" || settings.Format == "m4a"
+	// GIF has no audio stream. Do not build the base-audio/mix branch for GIF,
+	// otherwise FFmpeg rejects the graph because [outa] is never consumed.
+	videoOnly := settings.Format == "gif"
 
 	filterParts := []string{}
 
-	// Create base video and base audio
+	// Create base video and base audio. Audio-only exports intentionally omit
+	// the video base; GIF exports intentionally omit the audio base.
 	if !audioOnly {
 		filterParts = append(filterParts, fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=%.3f[basev]", w, h, fps, duration))
 	}
-	// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
-	// than the 'd' parameter which some builds don't recognise on anullsrc.
-	filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo,atrim=duration=%.3f[basea]", duration))
+	if !videoOnly {
+		// Use atrim to limit anullsrc duration — more compatible across FFmpeg versions
+		// than the 'd' parameter which some builds don't recognise on anullsrc.
+		filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=48000:cl=stereo,atrim=duration=%.3f[basea]", duration))
+	}
 
 	inputIdx := 0
-	audioLabels := []string{"[basea]"}
+	var audioLabels []string
+	if !videoOnly {
+		audioLabels = []string{"[basea]"}
+	}
 
 	type textOverlay struct {
 		clip project.Clip
@@ -421,6 +431,9 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	var videoOverlays []videoOverlay
 
 	for _, track := range p.Timeline.Tracks {
+		if videoOnly && track.Type == project.TrackAudio {
+			continue
+		}
 		for _, clip := range track.Clips {
 			if audioOnly && track.Type != project.TrackAudio && track.Type != project.TrackVideo {
 				continue
@@ -455,12 +468,21 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				args = append(args, "-ss", strconv.FormatFloat(clip.TrimStart, 'f', 3, 64))
 			}
 			dur := clip.Duration
+			if clip.Loop {
+				// Still images and GIFs already have demuxer-specific loop
+				// options above. -stream_loop is for finite media streams.
+				if !isStaticImage && ext != ".gif" {
+					args = append(args, "-stream_loop", "-1")
+				}
+				// BGM Loop fills the remaining project duration after the
+				// clip's timeline start. Media clips loop only for their own
+				// placed duration.
+				if track.Type == project.TrackAudio {
+					dur = math.Max(0, duration-clip.StartTime)
+				}
+			}
 			if clip.Speed > 0 && clip.Speed != 1.0 {
 				dur = dur * clip.Speed
-			}
-			if clip.Loop {
-				args = append(args, "-stream_loop", "-1")
-				dur = duration
 			}
 			args = append(args, "-t", strconv.FormatFloat(dur, 'f', 3, 64))
 			args = append(args, "-i", assetPath)
@@ -471,6 +493,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					var clipFilters []string
 
 					clipFilters = append(clipFilters, "format=yuva420p")
+					if asset != nil {
+						if crop := ffmpeg.BuildSourceCropFilter(clip, asset.Width, asset.Height); crop != "" {
+							clipFilters = append(clipFilters, crop)
+						}
+					}
 					clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
 					clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
 					clipFilters = append(clipFilters, "setsar=1")
@@ -478,7 +505,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 					if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
 						clipFilters = append(clipFilters, cf)
 					}
-					if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
+					if tf := ffmpeg.BuildTransformFiltersWithoutCrop(clip); tf != "" {
 						clipFilters = append(clipFilters, tf)
 					}
 					if of := buildOpacityFilter(clip); of != "" {
@@ -508,7 +535,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				// Only extract audio if the source actually has an audio
 				// stream; referencing '[i:a]' on a silent clip makes FFmpeg
 				// abort the whole render with "Stream specifier matches no streams".
-				if asset != nil && asset.HasAudio {
+				if !videoOnly && asset != nil && asset.HasAudio {
 					aLabel := fmt.Sprintf("[va%d]", inputIdx)
 					var aFilters []string
 					aFilters = append(aFilters, "asetpts=PTS-STARTPTS")
@@ -541,6 +568,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				var clipFilters []string
 
 				clipFilters = append(clipFilters, "format=yuva420p")
+				if asset != nil {
+					if crop := ffmpeg.BuildSourceCropFilter(clip, asset.Width, asset.Height); crop != "" {
+						clipFilters = append(clipFilters, crop)
+					}
+				}
 				clipFilters = append(clipFilters, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
 				clipFilters = append(clipFilters, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
 				clipFilters = append(clipFilters, "setsar=1")
@@ -552,7 +584,7 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 				if cf := filters.BuildColorFilterChain(clip.Color); cf != "" {
 					clipFilters = append(clipFilters, cf)
 				}
-				if tf := ffmpeg.BuildTransformFilters(clip); tf != "" {
+				if tf := ffmpeg.BuildTransformFiltersWithoutCrop(clip); tf != "" {
 					clipFilters = append(clipFilters, tf)
 				}
 				if of := buildOpacityFilter(clip); of != "" {
@@ -774,16 +806,19 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 	}
 
 	// Mix all audio clips together
-	lastA := "[outa]"
-	if len(audioLabels) > 1 {
-		mixIn := ""
-		for _, l := range audioLabels {
-			mixIn += l
+	lastA := ""
+	if !videoOnly {
+		lastA = "[outa]"
+		if len(audioLabels) > 1 {
+			mixIn := ""
+			for _, l := range audioLabels {
+				mixIn += l
+			}
+			filterParts = append(filterParts, fmt.Sprintf("%samix=inputs=%d:duration=first:dropout_transition=0[outa]", mixIn, len(audioLabels)))
+		} else {
+			// Just use base audio if no audio clips
+			filterParts = append(filterParts, "[basea]anull[outa]")
 		}
-		filterParts = append(filterParts, fmt.Sprintf("%samix=inputs=%d:duration=first:dropout_transition=0[outa]", mixIn, len(audioLabels)))
-	} else {
-		// Just use base audio if no audio clips
-		filterParts = append(filterParts, "[basea]anull[outa]")
 	}
 
 	// Partial export: drop the leading [StartTime, ...) seconds so the output
@@ -792,9 +827,11 @@ func buildSimpleFFmpegArgs(p project.Project, settings project.RenderSettings, o
 		trimV := "[trimv]"
 		filterParts = append(filterParts, fmt.Sprintf("%strim=start=%g,setpts=PTS-STARTPTS%s", lastV, settings.StartTime, trimV))
 		lastV = trimV
-		trimA := "[trima]"
-		filterParts = append(filterParts, fmt.Sprintf("%satrim=start=%g,asetpts=PTS-STARTPTS%s", lastA, settings.StartTime, trimA))
-		lastA = trimA
+		if !videoOnly {
+			trimA := "[trima]"
+			filterParts = append(filterParts, fmt.Sprintf("%satrim=start=%g,asetpts=PTS-STARTPTS%s", lastA, settings.StartTime, trimA))
+			lastA = trimA
+		}
 	}
 
 	audioBitrate := settings.AudioBitrate

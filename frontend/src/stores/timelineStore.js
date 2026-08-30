@@ -205,6 +205,8 @@ export const useTimelineStore = defineStore('timeline', () => {
       opacity: 1.0,
       normalize: false,
       noiseReduction: false,
+      loop: false,
+      duck: false,
       transform: DEFAULT_TRANSFORM(),
       color: DEFAULT_COLOR(),
       keyframes: [],

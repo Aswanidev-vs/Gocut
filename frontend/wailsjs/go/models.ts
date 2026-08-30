@@ -1,3 +1,24 @@
+export namespace app {
+	
+	export class LutImportResult {
+	    path: string;
+	    title: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LutImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.title = source["title"];
+	        this.size = source["size"];
+	    }
+	}
+
+}
+
 export namespace project {
 	
 	export class Asset {
@@ -101,6 +122,8 @@ export namespace project {
 	    align: string;
 	    letterSpacing: number;
 	    lineHeight: number;
+	    animation?: string;
+	    animationDuration?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TextProps(source);
@@ -127,6 +150,8 @@ export namespace project {
 	        this.align = source["align"];
 	        this.letterSpacing = source["letterSpacing"];
 	        this.lineHeight = source["lineHeight"];
+	        this.animation = source["animation"];
+	        this.animationDuration = source["animationDuration"];
 	    }
 	}
 	export class Transition {
@@ -275,6 +300,8 @@ export namespace project {
 	    transition?: Transition;
 	    normalize: boolean;
 	    noiseReduction: boolean;
+	    loop?: boolean;
+	    duck?: boolean;
 	    textProps?: TextProps;
 	    stickerProps?: StickerProps;
 	
@@ -301,6 +328,8 @@ export namespace project {
 	        this.transition = this.convertValues(source["transition"], Transition);
 	        this.normalize = source["normalize"];
 	        this.noiseReduction = source["noiseReduction"];
+	        this.loop = source["loop"];
+	        this.duck = source["duck"];
 	        this.textProps = this.convertValues(source["textProps"], TextProps);
 	        this.stickerProps = this.convertValues(source["stickerProps"], StickerProps);
 	    }
@@ -336,6 +365,22 @@ export namespace project {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.extensions = source["extensions"];
+	    }
+	}
+	export class FontInfo {
+	    family: string;
+	    path: string;
+	    style: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FontInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.family = source["family"];
+	        this.path = source["path"];
+	        this.style = source["style"];
 	    }
 	}
 	

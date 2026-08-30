@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -25,7 +26,39 @@ func (g *FilterGraph) Build() string {
 	return strings.Join(g.parts, ";")
 }
 
+// BuildSourceCropFilter creates a crop filter in the source media's pixel
+// space. It must run before the render pipeline scales and pads a clip to the
+// project resolution; otherwise cropX/Y/W/H would point at the padded canvas
+// instead of the imported media.
+func BuildSourceCropFilter(clip project.Clip, sourceW, sourceH int) string {
+	if sourceW <= 0 || sourceH <= 0 || clip.Transform.CropW <= 0 || clip.Transform.CropH <= 0 {
+		return ""
+	}
+
+	x := math.Max(0, math.Min(clip.Transform.CropX, float64(sourceW-1)))
+	y := math.Max(0, math.Min(clip.Transform.CropY, float64(sourceH-1)))
+	w := math.Min(clip.Transform.CropW, float64(sourceW)-x)
+	h := math.Min(clip.Transform.CropH, float64(sourceH)-y)
+	if w < 1 || h < 1 {
+		return ""
+	}
+
+	return fmt.Sprintf("crop=%g:%g:%g:%g", w, h, x, y)
+}
+
+// BuildTransformFilters keeps the legacy all-in-one transform chain for
+// callers that do not have source dimensions. The render queue uses
+// BuildSourceCropFilter followed by BuildTransformFiltersWithoutCrop so crop
+// coordinates stay in source pixels.
 func BuildTransformFilters(clip project.Clip) string {
+	return buildTransformFilters(clip, true)
+}
+
+func BuildTransformFiltersWithoutCrop(clip project.Clip) string {
+	return buildTransformFilters(clip, false)
+}
+
+func buildTransformFilters(clip project.Clip, includeCrop bool) string {
 	var parts []string
 	t := clip.Transform
 
@@ -40,7 +73,7 @@ func BuildTransformFilters(clip project.Clip) string {
 		parts = append(parts, fmt.Sprintf("scale=w='iw*%s':h='ih*%s':eval=frame", scaleXExpr, scaleYExpr))
 	}
 
-	if t.CropW > 0 && t.CropH > 0 {
+	if includeCrop && t.CropW > 0 && t.CropH > 0 {
 		parts = append(parts, fmt.Sprintf("crop=%g:%g:%g:%g", t.CropW, t.CropH, t.CropX, t.CropY))
 	}
 	if t.FlipH {

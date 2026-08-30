@@ -32,6 +32,14 @@ const progress = ref(0)
 const status = ref('idle') // idle | queued | rendering | done | error | cancelled
 const errorMessage = ref('')
 const finalOutputPath = ref('')
+let progressPollTimer = null
+
+function stopProgressPolling() {
+  if (progressPollTimer !== null) {
+    clearInterval(progressPollTimer)
+    progressPollTimer = null
+  }
+}
 
 const formats = [
   { id: 'mp4',  label: 'MP4 (H.264)', codec: 'h264' },
@@ -88,6 +96,7 @@ async function startExport() {
     return
   }
   const res = getResolution()
+  stopProgressPolling()
   isRendering.value = true
   status.value = 'queued'
   progress.value = 0
@@ -114,7 +123,9 @@ async function startExport() {
     const jobId = await StartRender(JSON.parse(JSON.stringify(projectStore.project)), settings)
     currentJobId.value = jobId
     status.value = 'rendering'
+    startProgressPolling(jobId)
   } catch (e) {
+    stopProgressPolling()
     isRendering.value = false
     status.value = 'error'
     errorMessage.value = e?.message || String(e)
@@ -126,6 +137,7 @@ async function cancelExport() {
   if (!currentJobId.value) return
   try {
     await CancelRender(currentJobId.value)
+    stopProgressPolling()
     status.value = 'cancelled'
     isRendering.value = false
     uiStore.addToast('Render cancelled', 'info')
@@ -141,12 +153,38 @@ function handleProgressEvent(ev) {
   if (ev.error) errorMessage.value = ev.error
   if (ev.outputPath) finalOutputPath.value = ev.outputPath
   if (ev.status === 'done' || ev.status === 'error' || ev.status === 'cancelled') {
+    stopProgressPolling()
     isRendering.value = false
   }
 }
 
+async function pollRenderProgress(jobId) {
+  if (!jobId || jobId !== currentJobId.value) return
+
+  try {
+    const ev = await GetRenderProgress(jobId)
+    if (jobId === currentJobId.value) {
+      handleProgressEvent(ev)
+    }
+  } catch (e) {
+    // The event stream is still the primary path. Ignore a transient poll
+    // failure so it cannot replace a useful FFmpeg error event.
+  }
+}
+
+function startProgressPolling(jobId) {
+  stopProgressPolling()
+  // Events can be emitted before StartRender resolves. Polling closes that
+  // small race and also handles very fast FFmpeg failures reliably.
+  pollRenderProgress(jobId)
+  progressPollTimer = setInterval(() => pollRenderProgress(jobId), 300)
+}
+
 onWailsEvent('render:progress', handleProgressEvent)
-onUnmounted(() => offWailsEvent('render:progress', handleProgressEvent))
+onUnmounted(() => {
+  stopProgressPolling()
+  offWailsEvent('render:progress', handleProgressEvent)
+})
 
 watch(() => props.isOpen, (open) => {
   if (open) {
@@ -164,6 +202,8 @@ watch(() => props.isOpen, (open) => {
       const sep = navigator.platform.includes('Win') ? '\\' : '/'
       outputPath.value = '~' + sep + 'Desktop' + sep + (projectStore.projectName || 'export') + '.' + format.value
     }
+  } else {
+    stopProgressPolling()
   }
 })
 </script>

@@ -3,7 +3,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUiStore } from '../../stores/uiStore'
-import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus, Activity, Smile } from 'lucide-vue-next'
+import { ChevronRight, Trash2, Copy, RotateCcw, Diamond, Star, RefreshCw, Wand2, Plus, Activity, Smile, Repeat } from 'lucide-vue-next'
 import ColorInspector from '../inspector/ColorInspector.vue'
 import KeyframeEasingDialog from '../timeline/KeyframeEasingDialog.vue'
 import StickerInspector from '../inspector/StickerInspector.vue'
@@ -27,6 +27,12 @@ const isAudio = computed(() => {
   if (!selectedClip.value) return false
   const track = timelineStore.tracks.find(t => t.id === selectedClip.value.trackId)
   return track?.type === 'audio'
+})
+const isImage = computed(() => {
+  if (!selectedClip.value) return false
+  const track = timelineStore.tracks.find(t => t.id === selectedClip.value.trackId)
+  const t = track?.type
+  return t === 'image' || t === 'pip'
 })
 const isSticker = computed(() => !!selectedClip.value?.stickerProps)
 
@@ -667,12 +673,13 @@ function applyCustomAnimation() {
               <button class="px-2 py-1 rounded text-xs border" :class="selectedClip.transform.flipV ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary'" @click="setTransform('flipV', !selectedClip.transform.flipV)">Flip V</button>
             </div>
 
-            <!-- Crop (video clips only) -->
-            <div v-if="isVideo" class="mt-3 pt-3 border-t border-border/60">
+            <!-- Crop (image & video clips) -->
+            <div v-if="isVideo || isImage" class="mt-3 pt-3 border-t border-border/60">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Crop</h4>
                 <button class="p-0.5 rounded text-text-secondary hover:text-accent" @click="resetCrop" title="Reset crop"><RotateCcw :size="10" /></button>
               </div>
+              <div class="text-[9px] text-text-secondary mb-2">{{ uiStore.cropMode ? 'Drag the preview handles · Esc to finish' : 'Click the preview to crop' }}</div>
               <div class="grid grid-cols-2 gap-2">
                 <div>
                   <label class="text-[10px] text-text-secondary">Crop X</label>
@@ -695,6 +702,14 @@ function applyCustomAnimation() {
                 <button v-for="p in cropPresets" :key="p.label" class="px-2 py-1 rounded text-[10px] border transition-colors border-border text-text-secondary hover:border-accent/40" @click="applyCropPreset(p.ratio)">{{ p.label }}</button>
               </div>
               <div class="text-[9px] text-text-secondary mt-1.5" v-if="sourceDims.w && sourceDims.h">Source {{ sourceDims.w }}×{{ sourceDims.h }}px</div>
+            </div>
+
+            <!-- Loop (image & video media) -->
+            <div v-if="isVideo || isImage" class="mt-3 pt-3 border-t border-border/60">
+              <button class="flex items-center justify-center gap-1 px-2 py-1.5 rounded text-[11px] font-medium border transition-all w-full" :class="selectedClip.loop ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary'" @click="updateClipField('loop', !selectedClip.loop)">
+                <Repeat :size="12" /> Loop Media
+              </button>
+              <div class="text-[9px] text-text-secondary mt-1.5">Repeats the source for the clip's full placed duration on export.</div>
             </div>
               <StickerInspector v-if="isSticker" class="block mt-3 pt-3 border-t border-border/60" />
           </div>

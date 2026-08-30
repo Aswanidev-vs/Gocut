@@ -176,3 +176,80 @@ func TestBuildSimpleFFmpegArgsMP4KeepsVideo(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildSimpleFFmpegArgsGIFDoesNotBuildAudioGraph(t *testing.T) {
+	p := mixedProject("v.mp4", "a.mp3", "i.png")
+	settings := project.RenderSettings{Format: "gif", Codec: "gif", EndTime: 2}
+
+	args := buildSimpleFFmpegArgs(p, settings, "out.gif", "ffmpeg")
+	graph := argValue(args, "-filter_complex")
+	for _, banned := range []string{"[basea]", "amix=", "[outa]", "[va0]"} {
+		if strings.Contains(graph, banned) {
+			t.Errorf("GIF filtergraph must not contain %q, got: %s", banned, graph)
+		}
+	}
+	if got := argValue(args, "-map"); got != "[gifout]" {
+		t.Errorf("GIF map = %q, want [gifout]", got)
+	}
+	if !hasFlag(args, "-an") {
+		t.Errorf("GIF export must disable audio, got args: %v", args)
+	}
+}
+
+func TestBuildSimpleFFmpegArgsLoopUsesClipDuration(t *testing.T) {
+	p := mixedProject("v.mp4", "a.mp3", "i.png")
+	p.Duration = 10
+	p.Timeline.Tracks[0].Clips[0].Loop = true
+	p.Timeline.Tracks[0].Clips[0].Duration = 2
+	settings := project.RenderSettings{Format: "mp4", Codec: "h264", EndTime: 10}
+
+	args := buildSimpleFFmpegArgs(p, settings, "out.mp4", "ffmpeg")
+	if got := argValue(args, "-stream_loop"); got != "-1" {
+		t.Errorf("looped media must use -stream_loop -1, got args: %v", args)
+	}
+	if got := argValue(args, "-t"); got != "2.000" {
+		t.Errorf("looped media input duration = %q, want clip duration 2.000", got)
+	}
+}
+
+func TestGIFExportRunsFFmpegWithoutAudioGraph(t *testing.T) {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	dir := t.TempDir()
+	videoPath := filepath.Join(dir, "v.mp4")
+	outputPath := filepath.Join(dir, "out.gif")
+
+	fixtureArgs := []string{
+		"-y", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:d=1",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", videoPath,
+	}
+	if out, err := exec.Command(ffmpegPath, fixtureArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("GIF fixture generation failed: %v\n%s", err, out)
+	}
+
+	p := project.Project{
+		Duration:   1,
+		Resolution: project.Resolution{Width: 160, Height: 120},
+		FPS:        10,
+		Assets: []project.Asset{{
+			ID: "vid", Path: videoPath, Type: project.AssetVideo,
+			Width: 160, Height: 120, Duration: 1,
+		}},
+		Timeline: project.Timeline{Tracks: []project.Track{{
+			ID: "video", Type: project.TrackVideo, Volume: 1,
+			Clips: []project.Clip{{
+				ID: "clip", AssetID: "vid", TrackID: "video",
+				Duration: 1, Speed: 1, Volume: 1, Opacity: 1,
+				Transform: project.Transform{ScaleX: 1, ScaleY: 1},
+			}},
+		}}},
+	}
+	settings := project.RenderSettings{Format: "gif", Codec: "gif", Width: 160, Height: 120, FPS: 10, EndTime: 1}
+
+	args := buildSimpleFFmpegArgs(p, settings, outputPath, ffmpegPath)
+	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+		t.Fatalf("GIF render failed: %v\nargs: %v\n%s", err, args, out)
+	}
+}
