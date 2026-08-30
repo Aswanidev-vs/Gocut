@@ -11,6 +11,7 @@ export const useUiStore = defineStore('ui', () => {
   const isNewProjectDialogOpen = ref(false)
   const isSettingsDialogOpen = ref(false)
   const snapIndicatorTime = ref(null)
+  const cropMode = ref(false)
 
   const panelTabs = [
     { id: 'media', label: 'Media', icon: 'Image' },
@@ -92,6 +93,14 @@ export const useUiStore = defineStore('ui', () => {
     }, 200)
   }
 
+  function toggleCropMode() {
+    cropMode.value = !cropMode.value
+  }
+
+  function setCropMode(enabled) {
+    cropMode.value = !!enabled
+  }
+
   return {
     activePanelTab,
     activeInspectorTab,
@@ -102,6 +111,9 @@ export const useUiStore = defineStore('ui', () => {
     isNewProjectDialogOpen,
     isSettingsDialogOpen,
     snapIndicatorTime,
+    cropMode,
+    toggleCropMode,
+    setCropMode,
     panelTabs,
     inspectorTabs,
     addToast,

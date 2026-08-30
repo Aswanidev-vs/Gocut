@@ -1,14 +1,16 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
 import { useProjectStore } from '../../stores/projectStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTimelineStore, getInterpolatedProperty } from '../../stores/timelineStore'
+import { useUiStore } from '../../stores/uiStore'
 import { Play, Pause, SkipBack, SkipForward, Maximize2, Minimize2, Volume2, VolumeX, Repeat, Loader2, ImageOff } from 'lucide-vue-next'
 import { getCombinedTables } from '../../lib/curves'
 
 const projectStore = useProjectStore()
 const playerStore = usePlayerStore()
 const timelineStore = useTimelineStore()
+const uiStore = useUiStore()
 
 const isFullscreen = ref(false)
 const playInterval = ref(null)
@@ -138,6 +140,30 @@ const videoSrc = computed(() => {
   return playerStore.getMediaUrl(currentVisualAsset.value.path)
 })
 
+// Convert a timeline position into the source position used by a media
+// element. A looped clip wraps inside its trimmed source range; a non-looped
+// clip is clamped to the last usable source frame instead of seeking past the
+// end and freezing the preview.
+function getClipSourceTime(clip, asset, timelineTime, mediaDuration = 0) {
+  if (!clip) return 0
+  const speed = Math.max(0.001, Number(clip.speed) || 1)
+  const start = Number(clip.startTime) || 0
+  const trimStart = Math.max(0, Number(clip.trimStart) || 0)
+  const trimEnd = Math.max(0, Number(clip.trimEnd) || 0)
+  const elapsed = Math.max(0, (Number(timelineTime) || 0) - start) * speed
+  const totalDuration = Math.max(0, Number(asset?.duration) || Number(mediaDuration) || 0)
+  const sourceEnd = totalDuration > trimStart
+    ? Math.max(trimStart, totalDuration - trimEnd)
+    : 0
+  const sourceSpan = sourceEnd - trimStart
+
+  if (clip.loop && sourceSpan > 0) {
+    return trimStart + (elapsed % sourceSpan)
+  }
+  if (sourceSpan > 0) return Math.min(trimStart + elapsed, sourceEnd)
+  return trimStart + elapsed
+}
+
 const currentAudioClips = computed(() => {
   const t = timelineStore.currentTime
   return timelineStore.clips.filter(c => {
@@ -169,8 +195,14 @@ function syncAudioElements() {
         if (entry) { entry.audio.pause(); entry.audio.src = '' }
         const audio = new Audio(proxyUrl)
         audio.preload = 'auto'
+        audio.loop = !!clip.loop && !(clip.trimStart > 0 || clip.trimEnd > 0)
         // Preserve pitch when changing playback rate to avoid chipmunk effect
         audio.preservesPitch = true
+        audio.addEventListener('ended', () => {
+          if (!clip.loop || !playerStore.isPlaying) return
+          audio.currentTime = getClipSourceTime(clip, asset, timelineStore.currentTime, audio.duration)
+          audio.play().catch(() => {})
+        })
         // Fallback: if proxy fails (no audio track, ffmpeg error), try raw media
         audio.addEventListener('error', () => {
           const rawUrl = playerStore.getMediaUrl(asset.path, false)
@@ -190,8 +222,9 @@ function syncAudioElements() {
       if (entry.audio.playbackRate !== targetPlaybackRate) {
         entry.audio.playbackRate = targetPlaybackRate
       }
+      entry.audio.loop = !!clip.loop && !(clip.trimStart > 0 || clip.trimEnd > 0)
 
-      const clipTime = (clip.trimStart || 0) + (t - clip.startTime) * speed
+      const clipTime = getClipSourceTime(clip, asset, t, entry.audio.duration)
       const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
       const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
       entry.audio.volume = Math.max(0, Math.min(1, playerStore.volume * trackVol * (clip.volume ?? 1)))
@@ -244,9 +277,10 @@ watch(() => playerStore.isPlaying, (playing) => {
         const clip = currentVisualClip.value
         if (clip) {
           const speed = clip.speed || 1.0
-          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
+          const clipTime = getClipSourceTime(clip, currentVisualAsset.value, timelineStore.currentTime, v.duration)
           v.currentTime = clipTime
           v.playbackRate = speed
+          v.loop = !!clip.loop && !(clip.trimStart > 0 || clip.trimEnd > 0)
           v.preservesPitch = true
           const track = timelineStore.tracks.find(tr => tr.id === clip.trackId)
           const trackVol = (track?.muted) ? 0 : (track?.volume ?? 1)
@@ -260,7 +294,7 @@ watch(() => playerStore.isPlaying, (playing) => {
       if (v) v.pause()
       // Switch back to ffmpeg frame after short delay so we show precise frame
       playerStore.refreshPreview(true, timelineStore.currentTime).catch(() => {})
-      setTimeout(() => { useVideoElement.value = false }, 50)
+      if (!uiStore.cropMode) setTimeout(() => { useVideoElement.value = false }, 50)
       syncAudioElements()
     }
   } catch (err) {
@@ -275,7 +309,8 @@ function syncVideoElement(force = false) {
     const clip = currentVisualClip.value
     if (!clip) return
     const speed = clip.speed || 1.0
-    const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
+    const clipTime = getClipSourceTime(clip, currentVisualAsset.value, timelineStore.currentTime, v.duration)
+    v.loop = !!clip.loop && !(clip.trimStart > 0 || clip.trimEnd > 0)
     
     // Set speed
     if (v.playbackRate !== speed) {
@@ -293,6 +328,18 @@ function syncVideoElement(force = false) {
     }
   } catch (err) {
     console.error('Error syncing video element:', err)
+  }
+}
+
+// Native HTML media looping always restarts at source time 0. For a looped
+// clip with a trim-in/out, restart at the trimmed in-point instead.
+function onVideoEnded() {
+  const v = videoRef.value
+  const clip = currentVisualClip.value
+  if (!v || !clip?.loop || !playerStore.isPlaying) return
+  if (clip.trimStart > 0 || clip.trimEnd > 0) {
+    v.currentTime = getClipSourceTime(clip, currentVisualAsset.value, timelineStore.currentTime, v.duration)
+    v.play().catch(() => {})
   }
 }
 
@@ -318,9 +365,10 @@ watch(videoSrc, (newSrc, oldSrc) => {
         const clip = currentVisualClip.value
         if (clip) {
           const speed = clip.speed || 1.0
-          const clipTime = (clip.trimStart || 0) + (timelineStore.currentTime - clip.startTime) * speed
+          const clipTime = getClipSourceTime(clip, currentVisualAsset.value, timelineStore.currentTime, v.duration)
           v.currentTime = clipTime
           v.playbackRate = speed
+          v.loop = !!clip.loop && !(clip.trimStart > 0 || clip.trimEnd > 0)
         }
         v.play().catch(() => {})
       }
@@ -675,6 +723,345 @@ const curvesSvgTables = computed(() => {
 function exitFullscreen() {
   document.exitFullscreen?.().catch(() => {})
 }
+
+// ---- Interactive crop overlay ----
+// Lets the user drag a crop rectangle directly on the preview. The rectangle
+// is stored on clip.transform.crop* in source pixels (consumed by the export
+// pipeline); here we map it to the on-screen fitted media box and back.
+const previewFrameRef = ref(null)
+const frameSize = reactive({ w: 0, h: 0 })
+let frameObserver = null
+
+function measureFrame() {
+  const el = previewFrameRef.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  frameSize.w = r.width
+  frameSize.h = r.height
+}
+
+onMounted(() => {
+  measureFrame()
+  if (previewFrameRef.value && typeof ResizeObserver !== 'undefined') {
+    frameObserver = new ResizeObserver(() => measureFrame())
+    frameObserver.observe(previewFrameRef.value)
+  }
+  window.addEventListener('resize', measureFrame)
+})
+onUnmounted(() => {
+  frameObserver?.disconnect()
+  window.removeEventListener('resize', measureFrame)
+})
+watch(() => uiStore.cropMode, (enabled, wasEnabled) => {
+  nextTick(() => {
+    measureFrame()
+    // Cropping uses the direct video element so the handles stay aligned with
+    // the media. Return to the normal still-frame preview when editing ends.
+    if (!enabled && wasEnabled && !playerStore.isPlaying && videoSrc.value) {
+      setTimeout(() => { useVideoElement.value = false }, 50)
+    }
+  })
+})
+
+function onCropKeydown(e) {
+  if (e.key === 'Escape' && uiStore.cropMode) {
+    uiStore.setCropMode(false)
+  }
+}
+window.addEventListener('keydown', onCropKeydown)
+onUnmounted(() => window.removeEventListener('keydown', onCropKeydown))
+
+const cropClip = computed(() => {
+  const sel = timelineStore.selectedClips[0]
+  if (!sel) return null
+  const t = timelineStore.tracks.find(tr => tr.id === sel.trackId)
+  if (!t) return null
+  if (t.type !== 'video' && t.type !== 'image' && t.type !== 'pip') return null
+  if (currentVisualClip.value?.id !== sel.id) return null
+  return sel
+})
+const cropAsset = computed(() => (cropClip.value ? projectStore.getAsset(cropClip.value.assetId) : null))
+const cropActive = computed(() =>
+  uiStore.cropMode && !!cropClip.value && !!cropAsset.value &&
+  cropAsset.value.width > 0 && cropAsset.value.height > 0
+)
+const cropIsSet = computed(() => {
+  const tf = cropClip.value?.transform || {}
+  return Number(tf.cropW) > 0 && Number(tf.cropH) > 0
+})
+const cropHint = computed(() => {
+  if (!uiStore.cropMode) return null
+  const sel = timelineStore.selectedClips[0]
+  if (!sel) return 'Select an image or video clip to crop'
+  const t = timelineStore.tracks.find(tr => tr.id === sel.trackId)
+  if (!t || (t.type !== 'video' && t.type !== 'image' && t.type !== 'pip')) return 'Crop works on image or video clips'
+  if (currentVisualClip.value?.id !== sel.id) return 'Scrub the playhead onto the clip to crop it'
+  return 'Drag corners to crop · Esc to finish'
+})
+
+// Source crop rect (px); defaults to the full media when none is set.
+const cropSourceRect = computed(() => {
+  const clip = cropClip.value
+  const a = cropAsset.value
+  if (!clip || !a) return { x: 0, y: 0, w: 0, h: 0 }
+  const tf = clip.transform || {}
+  let x = tf.cropX || 0, y = tf.cropY || 0, w = tf.cropW || 0, h = tf.cropH || 0
+  if (w <= 0 || h <= 0) { x = 0; y = 0; w = a.width; h = a.height }
+  w = Math.min(a.width, Math.max(1, w))
+  h = Math.min(a.height, Math.max(1, h))
+  x = Math.max(0, Math.min(a.width - w, x))
+  y = Math.max(0, Math.min(a.height - h, y))
+  return { x, y, w, h }
+})
+
+function clipTransformParams() {
+  const tf = cropClip.value?.transform || {}
+  return {
+    tx: tf.x || 0, ty: tf.y || 0,
+    sx: tf.scaleX !== undefined ? tf.scaleX : 1,
+    sy: tf.scaleY !== undefined ? tf.scaleY : 1,
+    flipH: !!tf.flipH, flipV: !!tf.flipV,
+    rot: (tf.rotation || 0) * Math.PI / 180,
+  }
+}
+
+// Map a source-pixel point to on-screen frame pixels, mirroring the
+// object-contain fit + the clip transform applied by livePreviewStyle.
+function sourceToFrame(p) {
+  const a = cropAsset.value, FW = frameSize.w, FH = frameSize.h
+  if (!a || !FW || !FH) return { x: 0, y: 0 }
+  const k = Math.min(FW / a.width, FH / a.height)
+  const ox = (FW - a.width * k) / 2, oy = (FH - a.height * k) / 2
+  let mx = ox + p.x * k, my = oy + p.y * k
+  const C = { x: FW / 2, y: FH / 2 }
+  let cx = mx - C.x, cy = my - C.y
+  const P = clipTransformParams()
+  if (P.flipH) cx = -cx
+  if (P.flipV) cy = -cy
+  const cos = Math.cos(P.rot), sin = Math.sin(P.rot)
+  const rx = cx * cos - cy * sin, ry = cx * sin + cy * cos
+  cx = rx * P.sx; cy = ry * P.sy
+  cx += P.tx; cy += P.ty
+  return { x: C.x + cx, y: C.y + cy }
+}
+
+function frameToSource(p) {
+  const a = cropAsset.value, FW = frameSize.w, FH = frameSize.h
+  if (!a || !FW || !FH) return { x: 0, y: 0 }
+  const k = Math.min(FW / a.width, FH / a.height)
+  const ox = (FW - a.width * k) / 2, oy = (FH - a.height * k) / 2
+  const C = { x: FW / 2, y: FH / 2 }
+  let cx = p.x - C.x, cy = p.y - C.y
+  const P = clipTransformParams()
+  cx -= P.tx; cy -= P.ty
+  cx /= Math.abs(P.sx) > 0.001 ? P.sx : 1
+  cy /= Math.abs(P.sy) > 0.001 ? P.sy : 1
+  const cos = Math.cos(-P.rot), sin = Math.sin(-P.rot)
+  const rx = cx * cos - cy * sin, ry = cx * sin + cy * cos
+  cx = rx; cy = ry
+  if (P.flipH) cx = -cx
+  if (P.flipV) cy = -cy
+  return { x: (C.x + cx - ox) / k, y: (C.y + cy - oy) / k }
+}
+
+// Crop rect on screen (axis-aligned bounding box of the transformed source rect).
+const cropRectPx = computed(() => {
+  if ((!cropActive.value && !cropIsSet.value) || !cropClip.value || !cropAsset.value) return null
+  const r = cropSourceRect.value
+  const pts = [
+    sourceToFrame({ x: r.x, y: r.y }),
+    sourceToFrame({ x: r.x + r.w, y: r.y }),
+    sourceToFrame({ x: r.x, y: r.y + r.h }),
+    sourceToFrame({ x: r.x + r.w, y: r.y + r.h }),
+  ]
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+  return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }
+})
+
+const cropRenderGeometry = computed(() => {
+  const r = cropRectPx.value
+  if (!r || !cropIsSet.value || uiStore.cropMode || !frameSize.w || !frameSize.h || r.w <= 0 || r.h <= 0) return null
+
+  // The source crop is currently displayed at the fitted-media scale. Fit
+  // that selected rectangle back into the project frame, just as the render
+  // pipeline does after its source-space crop filter runs.
+  const fit = Math.min(frameSize.w / r.w, frameSize.h / r.h)
+  const centerX = frameSize.w / 2
+  const centerY = frameSize.h / 2
+  const cropCenterX = r.x + r.w / 2
+  const cropCenterY = r.y + r.h / 2
+  const viewport = {
+    x: centerX - r.w * fit / 2,
+    y: centerY - r.h * fit / 2,
+    w: r.w * fit,
+    h: r.h * fit,
+  }
+
+  return {
+    fit,
+    viewport,
+    offsetX: centerX - (centerX + (cropCenterX - centerX) * fit),
+    offsetY: centerY - (centerY + (cropCenterY - centerY) * fit),
+  }
+})
+
+// Once crop editing is finished, keep the cropped media centred and fitted in
+// the project frame, matching the render pipeline's centred overlay behavior.
+// During editing the full image remains visible under the dimmed mask so the
+// user can position the crop against surrounding context.
+const cropViewportStyle = computed(() => {
+  const geometry = cropRenderGeometry.value
+  if (!geometry) return {}
+  const r = geometry.viewport
+  const right = frameSize.w - r.x - r.w
+  const bottom = frameSize.h - r.y - r.h
+  return {
+    clipPath: `inset(${Math.max(0, r.y)}px ${Math.max(0, right)}px ${Math.max(0, bottom)}px ${Math.max(0, r.x)}px)`,
+  }
+})
+
+const cropMediaOffsetStyle = computed(() => {
+  const geometry = cropRenderGeometry.value
+  if (!geometry) return {}
+  return { transform: `translate(${geometry.offsetX}px, ${geometry.offsetY}px) scale(${geometry.fit})` }
+})
+
+const cropHandles = ['nw', 'ne', 'sw', 'se']
+function handleStyle(h) {
+  const m = { nw: ['0%', '0%'], ne: ['100%', '0%'], sw: ['0%', '100%'], se: ['100%', '100%'] }[h]
+  return { left: m[0], top: m[1], cursor: (h === 'nw' || h === 'se') ? 'nwse-resize' : 'nesw-resize' }
+}
+
+// ---- Drag interaction ----
+let drag = null
+function clampSrc(p) {
+  const a = cropAsset.value
+  if (!a) return { x: 0, y: 0 }
+  return { x: Math.max(0, Math.min(a.width, p.x)), y: Math.max(0, Math.min(a.height, p.y)) }
+}
+function beginCropDrag(mode, e, sourceStart = null) {
+  if (!cropActive.value) return
+  e.preventDefault(); e.stopPropagation()
+  measureFrame()
+  const r = cropSourceRect.value
+  const fr = previewFrameRef.value.getBoundingClientRect()
+  const start = sourceStart || frameToSource({ x: e.clientX - fr.left, y: e.clientY - fr.top })
+  drag = {
+    mode,
+    fr,
+    corners: {
+      nw: { x: r.x, y: r.y }, ne: { x: r.x + r.w, y: r.y },
+      sw: { x: r.x, y: r.y + r.h }, se: { x: r.x + r.w, y: r.y + r.h },
+    },
+    start: { x: e.clientX, y: e.clientY },
+    startSource: clampSrc(start),
+    moved: false,
+  }
+  window.addEventListener('pointermove', onCropPointerMove)
+  window.addEventListener('pointerup', onCropPointerUp)
+  window.addEventListener('pointercancel', onCropPointerUp)
+}
+
+function onCropPointerDown(mode, e) {
+  beginCropDrag(mode, e)
+}
+
+function onCropCanvasPointerDown(e) {
+  // The selection and handles stop propagation. A press on the remaining
+  // preview starts a brand-new free-form crop rectangle from that point.
+  if (e.target !== e.currentTarget) return
+  const fr = previewFrameRef.value?.getBoundingClientRect()
+  if (!fr) return
+  const start = clampSrc(frameToSource({ x: e.clientX - fr.left, y: e.clientY - fr.top }))
+  beginCropDrag('create', e, start)
+}
+
+function onPreviewPointerDown(e) {
+  if (e.target.closest?.('button, input')) return
+  if (!cropClip.value || uiStore.cropMode) return
+  e.preventDefault()
+  uiStore.setCropMode(true)
+}
+function onCropPointerMove(e) {
+  if (!drag) return
+  const cur = { x: e.clientX - drag.fr.left, y: e.clientY - drag.fr.top }
+  const a = cropAsset.value
+  if (!a) return
+  const c = drag.corners
+  let nw, se
+  if (drag.mode === 'move') {
+    const startSrc = frameToSource({ x: drag.start.x - drag.fr.left, y: drag.start.y - drag.fr.top })
+    const curSrc = frameToSource(cur)
+    const dx = curSrc.x - startSrc.x, dy = curSrc.y - startSrc.y
+    nw = { x: c.nw.x + dx, y: c.nw.y + dy }
+    se = { x: c.se.x + dx, y: c.se.y + dy }
+    const w = se.x - nw.x, h = se.y - nw.y
+    nw.x = Math.max(0, Math.min(a.width - w, nw.x))
+    nw.y = Math.max(0, Math.min(a.height - h, nw.y))
+    se = { x: nw.x + w, y: nw.y + h }
+  } else if (drag.mode === 'create') {
+    const cp = clampSrc(frameToSource(cur))
+    nw = { x: Math.min(drag.startSource.x, cp.x), y: Math.min(drag.startSource.y, cp.y) }
+    se = { x: Math.max(drag.startSource.x, cp.x), y: Math.max(drag.startSource.y, cp.y) }
+  } else {
+    const cp = clampSrc(frameToSource(cur))
+    const opp = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw' }[drag.mode]
+    const fixed = c[opp]
+    const minW = Math.min(2, a.width)
+    const minH = Math.min(2, a.height)
+    if (drag.mode === 'nw') {
+      nw = {
+        x: Math.max(0, Math.min(cp.x, fixed.x - minW)),
+        y: Math.max(0, Math.min(cp.y, fixed.y - minH)),
+      }
+      se = { ...fixed }
+    } else if (drag.mode === 'ne') {
+      nw = {
+        x: fixed.x,
+        y: Math.max(0, Math.min(cp.y, fixed.y - minH)),
+      }
+      se = {
+        x: Math.min(a.width, Math.max(cp.x, fixed.x + minW)),
+        y: fixed.y,
+      }
+    } else if (drag.mode === 'sw') {
+      nw = {
+        x: Math.max(0, Math.min(cp.x, fixed.x - minW)),
+        y: fixed.y,
+      }
+      se = {
+        x: fixed.x,
+        y: Math.min(a.height, Math.max(cp.y, fixed.y + minH)),
+      }
+    } else {
+      nw = { ...fixed }
+      se = {
+        x: Math.min(a.width, Math.max(cp.x, fixed.x + minW)),
+        y: Math.min(a.height, Math.max(cp.y, fixed.y + minH)),
+      }
+    }
+  }
+  drag.moved = true
+  timelineStore.updateClipTransform(cropClip.value.id, {
+    cropX: Math.round(nw.x), cropY: Math.round(nw.y),
+    cropW: Math.max(1, Math.round(se.x - nw.x)), cropH: Math.max(1, Math.round(se.y - nw.y)),
+  })
+}
+function onCropPointerUp() {
+  drag = null
+  window.removeEventListener('pointermove', onCropPointerMove)
+  window.removeEventListener('pointerup', onCropPointerUp)
+  window.removeEventListener('pointercancel', onCropPointerUp)
+}
+
+// Force the direct <video> element (single clip) while cropping so the
+// overlay aligns with the fitted media box rather than the ffmpeg composite.
+watch(cropActive, (on) => {
+  if (on && isVideoPlaybackAsset.value) {
+    useVideoElement.value = true
+    nextTick(() => { if (videoRef.value) videoRef.value.pause() })
+  }
+})
 </script>
 
 <template>
@@ -692,41 +1079,88 @@ function exitFullscreen() {
     <!-- Aspect-ratio preview frame -->
     <div class="flex-1 flex items-center justify-center p-4 min-h-0">
       <div
+        ref="previewFrameRef"
         class="preview-frame relative bg-black rounded-md overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-border max-h-full"
         :style="{ ...aspectStyle, maxWidth: '100%', maxHeight: '100%', width: '100%' }"
+        @pointerdown="onPreviewPointerDown"
       >
-        <!-- Direct <img> for still image clips: served straight from
-             the media server so it does not require an ffmpeg roundtrip. -->
-        <img
-          v-show="isImageAsset && imageSrc && !useVideoElement"
-          :src="imageSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
-          :style="livePreviewStyle"
-          alt="image preview"
-        />
+        <!-- The crop viewport clips the visible media after editing. During
+             editing it remains transparent so the dimmed crop mask can show
+             the surrounding image for accurate framing. -->
+        <div class="absolute inset-0" :style="cropViewportStyle">
+          <div class="absolute inset-0" :style="cropMediaOffsetStyle">
+            <!-- Direct <img> for still image clips: served straight from
+                 the media server so it does not require an ffmpeg roundtrip. -->
+            <img
+              v-show="isImageAsset && imageSrc && !useVideoElement"
+              :src="imageSrc"
+              class="absolute inset-0 w-full h-full object-contain bg-black"
+              :style="livePreviewStyle"
+              alt="image preview"
+            />
 
-        <!-- Live <video> element for playback (video only, audio proxy handles sound) -->
-        <video
-          v-show="useVideoElement && videoSrc"
-          ref="videoRef"
-          :src="videoSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
-          :style="livePreviewStyle"
-          preload="auto"
-          playsinline
-          @error="() => { /* fallback to ffmpeg frame on error */ useVideoElement = false }"
-        />
+            <!-- Live <video> element for playback (video only, audio proxy handles sound) -->
+            <video
+              v-show="useVideoElement && videoSrc"
+              ref="videoRef"
+              :src="videoSrc"
+              class="absolute inset-0 w-full h-full object-contain bg-black"
+              :style="livePreviewStyle"
+              preload="auto"
+              playsinline
+              @ended="onVideoEnded"
+              @error="() => { /* fallback to ffmpeg frame on error */ useVideoElement = false }"
+            />
 
-        <!-- Static frame from ffmpeg (shown when paused or no video element) -->
-        <!-- For non-image assets, this is the ffmpeg-extracted frame. -->
-        <!-- For image assets, the direct <img> above is preferred. -->
-        <img
-          v-show="!useVideoElement && previewSrc"
-          :src="previewSrc"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
-          :style="livePreviewStyle"
-          alt="preview"
-        />
+            <!-- Static frame from ffmpeg (shown when paused or no video element) -->
+            <!-- For non-image assets, this is the ffmpeg-extracted frame. -->
+            <!-- For image assets, the direct <img> above is preferred. -->
+            <img
+              v-show="!useVideoElement && previewSrc"
+              :src="previewSrc"
+              class="absolute inset-0 w-full h-full object-contain bg-black"
+              :style="livePreviewStyle"
+              alt="preview"
+            />
+          </div>
+        </div>
+
+        <!-- Interactive crop overlay (image & video clips) -->
+        <div v-if="cropActive" class="absolute inset-0 z-30" style="touch-action: none;" @pointerdown="onCropCanvasPointerDown">
+          <div
+            v-if="cropRectPx"
+            class="absolute pointer-events-none"
+            :style="{ left: cropRectPx.x + 'px', top: cropRectPx.y + 'px', width: cropRectPx.w + 'px', height: cropRectPx.h + 'px', boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }"
+          ></div>
+          <div
+            v-if="cropRectPx"
+            data-crop-selection
+            class="absolute cursor-move border-2 border-accent"
+            :style="{ left: cropRectPx.x + 'px', top: cropRectPx.y + 'px', width: cropRectPx.w + 'px', height: cropRectPx.h + 'px' }"
+            @pointerdown="onCropPointerDown('move', $event)"
+          >
+            <div
+              v-for="h in cropHandles"
+              :key="h"
+              class="absolute w-3 h-3 bg-accent border border-white rounded-sm -translate-x-1/2 -translate-y-1/2"
+              :style="handleStyle(h)"
+              @pointerdown.stop="onCropPointerDown(h, $event)"
+            ></div>
+          </div>
+        </div>
+        <div
+          v-if="cropHint"
+          class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-black/70 text-white text-[11px] flex items-center gap-2"
+        >
+          <span>{{ cropHint }}</span>
+          <button
+            v-if="cropActive"
+            class="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px]"
+            @pointerdown.stop
+            @click.stop="uiStore.setCropMode(false)"
+          >Done</button>
+        </div>
+
         <div
           v-show="!useVideoElement && !previewSrc && !imageSrc"
           class="absolute inset-0 flex flex-col items-center justify-center text-text-secondary text-sm gap-2"
