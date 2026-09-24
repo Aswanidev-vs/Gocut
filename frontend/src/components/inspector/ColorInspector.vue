@@ -59,12 +59,14 @@ function clearLut() {
 
 function updateChromaKey(key, value) {
   if (!clip.value) return
-  timelineStore.updateClip(clip.value.id, {
-    color: {
-      ...clip.value.color,
-      [key]: value,
-    },
-  })
+  const color = { ...clip.value.color, [key]: value }
+  // When enabling chroma key, seed a usable default similarity so real
+  // footage actually keys (the 0.01 floor is effectively off).
+  if (key === 'chromaKeyColor' && value && !clip.value.color?.chromaKeyColor) {
+    color.chromaKeySimilarity = 0.1
+  }
+  timelineStore.updateClip(clip.value.id, { color })
+  playerStore.invalidatePreview()
 }
 
 const channelColors = {

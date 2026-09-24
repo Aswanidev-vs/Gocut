@@ -225,6 +225,14 @@ type RenderSettings struct {
 	Preset       string  `json:"preset"`
 	StartTime    float64 `json:"startTime"`
 	EndTime      float64 `json:"endTime"`
+
+	// GIF-only compression controls. A GIF is palette based and has no
+	// inter-frame compression, so frame rate, palette size, dithering and a
+	// downscale cap decide the file size far more than any encoder knob.
+	GifFPS      float64 `json:"gifFps,omitempty"`
+	GifColors   int     `json:"gifColors,omitempty"`
+	GifDither   string  `json:"gifDither,omitempty"`
+	GifMaxWidth int     `json:"gifMaxWidth,omitempty"`
 }
 
 type RenderStatus string

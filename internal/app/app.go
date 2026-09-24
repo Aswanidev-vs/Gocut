@@ -12,12 +12,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"Gocut/internal/cache"
 	"Gocut/internal/ffmpeg"
+	"Gocut/internal/ffmpeg/filters"
 	"Gocut/internal/fonts"
 	"Gocut/internal/media"
 	"Gocut/internal/project"
@@ -311,35 +313,164 @@ func (a *App) resolveVisualAsset(p project.Project, t float64) (*project.Asset, 
 }
 
 func (a *App) GetPreviewFrame(p project.Project, timeSeconds float64, width int, height int) (string, error) {
-	asset, sourceTime := a.resolveVisualAsset(p, timeSeconds)
-	if asset == nil {
-		return "", fmt.Errorf("no asset at time %.2fs", timeSeconds)
+	if width <= 0 {
+		width = p.Resolution.Width
+	}
+	if width <= 0 {
+		width = 1920
+	}
+	if height <= 0 {
+		height = p.Resolution.Height
+	}
+	if height <= 0 {
+		height = 1080
 	}
 
-	// Image assets are single-frame stills; cache by asset only.
-	cacheKey := fmt.Sprintf("preview/%s/%.3f.jpg", asset.ID, sourceTime)
-	if asset.Type == project.AssetImage {
-		cacheKey = fmt.Sprintf("preview/%s/img.jpg", asset.ID)
+	layers := visualLayersAtTime(p, timeSeconds)
+	if len(layers) == 0 {
+		return "", fmt.Errorf("no visual clip at time %.2fs", timeSeconds)
 	}
 
+	cacheKey := previewCacheKey(layers, width, height, timeSeconds)
 	if cached, ok := a.thumbCache.Get(cacheKey); ok {
 		return base64.StdEncoding.EncodeToString(cached), nil
 	}
 
-	var data []byte
-	var err error
-	if asset.Type == project.AssetImage {
-		data, err = a.executor.ExtractImageThumbnailPipe(a.ctx, asset.Path)
-	} else {
-		data, err = a.executor.ExtractThumbnailPipe(a.ctx, asset.Path, sourceTime)
-	}
+	args, err := buildPreviewArgs(p, layers, width, height, timeSeconds)
 	if err != nil {
-		return "", fmt.Errorf("thumbnail extraction failed: %w", err)
+		return "", err
+	}
+	data, err := a.executor.RunOut(a.ctx, args...)
+	if err != nil {
+		return "", fmt.Errorf("preview render failed: %w", err)
 	}
 
 	_ = a.thumbCache.Put(cacheKey, data)
 
 	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+// previewLayer is a single visual clip active at the preview time.
+type previewLayer struct {
+	clip       project.Clip
+	asset      project.Asset
+	sourceTime float64
+}
+
+// visualLayersAtTime returns the visual clips active at time t, ordered from
+// bottom to top. This matches the render queue's overlay order: earlier tracks
+// are composited first and therefore sit underneath later tracks.
+func visualLayersAtTime(p project.Project, t float64) []previewLayer {
+	var layers []previewLayer
+	for ti := range p.Timeline.Tracks {
+		tr := &p.Timeline.Tracks[ti]
+		if tr.Type != project.TrackVideo && tr.Type != project.TrackImage && tr.Type != project.TrackPIP {
+			continue
+		}
+		for ci := range tr.Clips {
+			c := tr.Clips[ci]
+			if t < c.StartTime || t >= c.StartTime+c.Duration {
+				continue
+			}
+			var asset project.Asset
+			found := false
+			for ai := range p.Assets {
+				if p.Assets[ai].ID == c.AssetID {
+					asset = p.Assets[ai]
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+			sourceTime := 0.0
+			if asset.Type != project.AssetImage {
+				sourceTime = c.TrimStart + (t - c.StartTime)
+			}
+			layers = append(layers, previewLayer{clip: c, asset: asset, sourceTime: sourceTime})
+			// One clip per track can be active at a given time, so stop
+			// scanning this track once we have its contribution.
+			break
+		}
+	}
+	return layers
+}
+
+// buildPreviewArgs assembles a single-frame ffmpeg command that applies each
+// visual clip's filter chain (color grade incl. chroma key, transform,
+// opacity) and overlays the layers over a black base — the same graph the
+// export renderer uses, so the preview reflects chroma key removal.
+func buildPreviewArgs(p project.Project, layers []previewLayer, w, h int, t float64) ([]string, error) {
+	rate := p.FPS
+	if rate <= 0 {
+		rate = 30
+	}
+
+	var args []string
+	// Base canvas: opaque black. Chroma-keyed transparency composites over it.
+	args = append(args, "-f", "lavfi", "-i",
+		fmt.Sprintf("color=c=black:s=%dx%d:r=%.0f:d=0.2", w, h, rate))
+
+	var parts []string
+	lastV := "[0:v]"
+	for i, ly := range layers {
+		inIdx := i + 1
+		if ly.asset.Type == project.AssetImage {
+			args = append(args, "-loop", "1")
+		}
+		if ly.sourceTime > 0 {
+			args = append(args, "-ss", strconv.FormatFloat(ly.sourceTime, 'f', 3, 64))
+		}
+		args = append(args, "-i", ly.asset.Path)
+
+		var cf []string
+		cf = append(cf, "format=yuva420p")
+		if crop := ffmpeg.BuildSourceCropFilter(ly.clip, ly.asset.Width, ly.asset.Height); crop != "" {
+			cf = append(cf, crop)
+		}
+		cf = append(cf, fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", w, h))
+		cf = append(cf, fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", w, h))
+		cf = append(cf, "setsar=1")
+		if cchain := filters.BuildColorFilterChain(ly.clip.Color); cchain != "" {
+			cf = append(cf, cchain)
+		}
+		if tf := ffmpeg.BuildTransformFiltersWithoutCrop(ly.clip); tf != "" {
+			cf = append(cf, tf)
+		}
+		if of := ffmpeg.BuildOpacityFilter(ly.clip); of != "" {
+			cf = append(cf, of)
+		}
+		cf = append(cf, "setpts=PTS-STARTPTS")
+
+		vLabel := fmt.Sprintf("[v%d]", inIdx)
+		parts = append(parts, fmt.Sprintf("[%d:v]%s%s", inIdx, strings.Join(cf, ","), vLabel))
+
+		xExpr := fmt.Sprintf("(W-w)/2+%g", ly.clip.Transform.X)
+		yExpr := fmt.Sprintf("(H-h)/2+%g", ly.clip.Transform.Y)
+		ovLabel := fmt.Sprintf("[ov%d]", i)
+		parts = append(parts,
+			fmt.Sprintf("%s%soverlay=x='%s':y='%s':eof_action=pass%s", lastV, vLabel, xExpr, yExpr, ovLabel))
+		lastV = ovLabel
+	}
+
+	args = append(args, "-filter_complex", strings.Join(parts, ";"))
+	args = append(args, "-map", lastV, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-")
+	return args, nil
+}
+
+// previewCacheKey encodes the compositing inputs so that editing a clip's
+// color/transform/opacity (which the frontend re-fetches via invalidatePreview)
+// yields a fresh frame instead of a stale cached one.
+func previewCacheKey(layers []previewLayer, w, h int, t float64) string {
+	hsh := sha256.New()
+	fmt.Fprintf(hsh, "preview|%dx%d|%.3f|", w, h, t)
+	for _, ly := range layers {
+		fmt.Fprintf(hsh, "%s|%.3f|%v|%v|%g|%g|%v|",
+			ly.asset.ID, ly.sourceTime, ly.clip.Color, ly.clip.Transform,
+			ly.clip.Opacity, ly.clip.Speed, ly.clip.Reversed)
+	}
+	return fmt.Sprintf("preview/%x", hsh.Sum(nil))
 }
 
 func (a *App) PreloadFrames(p project.Project, startTime float64, count int) error {

@@ -1,22 +1,28 @@
 <script setup>
+// Parameter panel for the selected node. In Simple mode the workspace supplies
+// the header, so `embedded` drops this component's own chrome.
 import { ref, computed, watch } from 'vue'
 import { useDesignStore, getNodeType, EASING_TYPES } from '../../stores/designStore'
-import { Plus, Trash2, ChevronDown, ChevronRight, Sliders, Play, RotateCcw, Key } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-vue-next'
 
-const props = defineProps({ playheadTime: { type: Number, default: 0 } })
+const props = defineProps({
+  playheadTime: { type: Number, default: 0 },
+  embedded: { type: Boolean, default: false },
+})
+
 const designStore = useDesignStore()
 
 const node = computed(() => designStore.selectedNode)
-const type = computed(() => node.value ? getNodeType(node.value.type) : null)
+const type = computed(() => (node.value ? getNodeType(node.value.type) : null))
 const localParams = ref({})
-const activeKeyframeParam = ref(null)
 const expandedKeyframes = ref(new Set())
 
 watch(node, (n) => {
   localParams.value = n ? JSON.parse(JSON.stringify(n.params)) : {}
-  activeKeyframeParam.value = null
   expandedKeyframes.value = new Set()
 }, { immediate: true })
+
+const animatedParams = computed(() => (node.value && node.value.keyframes) || {})
 
 function updateParam(paramId, value) {
   if (!node.value) return
@@ -24,16 +30,24 @@ function updateParam(paramId, value) {
   designStore.updateNodeParam(node.value.id, paramId, value)
 }
 
+function renameNode(event) {
+  if (!node.value) return
+  node.value.label = event.target.value || node.value.label
+}
+
 function addKeyframeForParam(paramId) {
   if (!node.value) return
   const value = localParams.value[paramId] ?? 0
   designStore.addKeyframe(node.value.id, paramId, props.playheadTime, value, 'smooth')
-  activeKeyframeParam.value = paramId
+  const next = new Set(expandedKeyframes.value)
+  next.add(paramId)
+  expandedKeyframes.value = next
 }
 
 function hasKeyframeAtTime(paramId) {
-  if (!node.value || !node.value.keyframes[paramId]) return false
-  return node.value.keyframes[paramId].some(k => Math.abs(k.time - props.playheadTime) < 0.02)
+  const list = animatedParams.value[paramId]
+  if (!list) return false
+  return list.some(k => Math.abs(k.time - props.playheadTime) < 0.02)
 }
 
 function removeKeyframe(paramId, kfId) {
@@ -43,174 +57,162 @@ function removeKeyframe(paramId, kfId) {
 
 function updateKeyframeEasing(paramId, kfId, easing) {
   if (!node.value) return
-  const kfs = node.value.keyframes[paramId]
-  if (!kfs) return
-  const kf = kfs.find(k => k.id === kfId)
+  const kf = (animatedParams.value[paramId] || []).find(k => k.id === kfId)
   if (kf) kf.easing = easing
 }
 
 function toggleKeyframeExpand(paramId) {
-  if (expandedKeyframes.value.has(paramId)) {
-    expandedKeyframes.value.delete(paramId)
-  } else {
-    expandedKeyframes.value.add(paramId)
-  }
+  const next = new Set(expandedKeyframes.value)
+  if (next.has(paramId)) next.delete(paramId)
+  else next.add(paramId)
+  expandedKeyframes.value = next
 }
 
-const keyframedParams = computed(() => {
-  if (!node.value) return {}
-  return node.value.keyframes || {}
-})
+// Live value at the playhead: amber whenever the parameter is animated, which
+// is the one thing worth shouting about in this panel.
+function liveValue(paramId) {
+  if (!node.value) return ''
+  const v = designStore.getParamValue(node.value.id, paramId, props.playheadTime)
+  return typeof v === 'number' ? Number(v.toFixed(3)) : v
+}
+
+function isAnimated(paramId) {
+  return (animatedParams.value[paramId] || []).length > 0
+}
 </script>
 
 <template>
-  <div class="flex flex-col h-full overflow-hidden bg-[#111119] select-none">
-    <!-- Header -->
-    <div class="h-8 px-3 border-b border-border/80 flex items-center justify-between bg-[#141420]">
-      <div class="flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider text-text-primary">
-        <Sliders :size="12" class="text-accent" />
-        <span>Fusion Inspector</span>
-      </div>
-      <div v-if="node" class="flex items-center gap-1 text-[9px] font-mono">
+  <div class="flex flex-col h-full bg-cr-panel select-none min-h-0">
+    <div v-if="!embedded" class="h-8 flex-shrink-0 px-3 border-b border-cr-line flex items-center justify-between bg-cr-raise">
+      <span class="text-[9px] uppercase tracking-[0.14em] text-ink-faint">Parameters</span>
+      <div v-if="node" class="flex items-center gap-px">
         <button
-          class="px-1.5 py-0.5 rounded transition-colors"
-          :class="designStore.viewer1NodeId === node.id ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40' : 'text-text-secondary bg-[#1C1C28] hover:text-white'"
+          class="px-1.5 py-0.5 text-[9px] font-jetbrains-mono border transition-colors"
+          :class="designStore.viewer1NodeId === node.id ? 'border-accent/40 bg-accent/10 text-accent' : 'border-cr-line text-ink-faint hover:text-ink'"
+          title="Send to viewer A"
           @click="designStore.setViewer1(node.id)"
-          title="Send to Viewer 1 (Key 1)"
-        >
-          [1]
-        </button>
+        >A</button>
         <button
-          class="px-1.5 py-0.5 rounded transition-colors"
-          :class="designStore.viewer2NodeId === node.id ? 'bg-pink-500/20 text-pink-400 font-bold border border-pink-500/40' : 'text-text-secondary bg-[#1C1C28] hover:text-white'"
+          class="px-1.5 py-0.5 text-[9px] font-jetbrains-mono border transition-colors"
+          :class="designStore.viewer2NodeId === node.id ? 'border-signal/40 bg-signal/10 text-signal' : 'border-cr-line text-ink-faint hover:text-ink'"
+          title="Send to viewer B"
           @click="designStore.setViewer2(node.id)"
-          title="Send to Viewer 2 (Key 2)"
-        >
-          [2]
-        </button>
+        >B</button>
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div v-if="!node" class="flex-1 flex flex-col items-center justify-center p-4 text-center">
-      <div class="w-10 h-10 rounded-xl bg-white/5 border border-border/60 flex items-center justify-center text-text-secondary/50 mb-2">
-        <Sliders :size="18" />
-      </div>
-      <div class="text-[11px] font-semibold text-text-primary mb-1">No Node Selected</div>
-      <p class="text-[10px] text-text-secondary max-w-[180px]">
-        Click any tool node in the flow graph to tweak its properties & keyframes.
+    <div v-if="!node" class="flex-1 flex items-center justify-center px-4 text-center">
+      <p class="text-[10px] text-ink-faint leading-relaxed">
+        No node selected.<br />Pick a move on the left, then click a node in Flow to tune it.
       </p>
     </div>
 
-    <!-- Active Node Inspector -->
-    <div v-else class="flex-1 overflow-y-auto p-3 space-y-3">
-      <!-- Node Identity Banner -->
-      <div class="p-2.5 rounded-lg bg-[#181826] border border-border/70 flex items-center justify-between">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" :style="{ background: type?.color }" />
-          <div class="min-w-0">
-            <input
-              v-model="node.label"
-              class="text-[11px] font-bold text-text-primary bg-transparent outline-none border-b border-transparent focus:border-accent w-full"
-              placeholder="Node Name"
-            />
-            <div class="text-[9px] text-text-secondary font-mono">{{ type?.category }} / {{ type?.label }}</div>
-          </div>
-        </div>
+    <div v-else class="flex-1 overflow-y-auto">
+      <!-- Identity -->
+      <div class="px-3 py-2 border-b border-cr-line flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="{ background: type?.color }" />
+        <input
+          :value="node.label"
+          class="flex-1 min-w-0 bg-transparent text-[11px] text-ink outline-none border-b border-transparent focus:border-accent"
+          @change="renameNode"
+        />
+        <span class="text-[9px] font-jetbrains-mono text-ink-faint flex-shrink-0">{{ type?.label }}</span>
       </div>
 
-      <!-- Params -->
-      <div v-for="p in type?.params" :key="p.id" class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label class="text-[11px] text-text-secondary">{{ p.label }}</label>
-          <button
-            class="p-1 rounded text-[9px] transition-colors"
-            :class="hasKeyframeAtTime(p.id) ? 'text-amber-400 bg-amber-500/10' : 'text-text-secondary/40 hover:text-amber-400 hover:bg-amber-500/10'"
-            @click="addKeyframeForParam(p.id)"
-            title="Add keyframe at current time"
-          >
-            ◆
-          </button>
-        </div>
+      <div v-if="!type?.params?.length" class="px-3 py-3 text-[10px] text-ink-faint">
+        This node has nothing to tune.
+      </div>
 
-        <!-- Text -->
-        <input v-if="p.type === 'text'"
-          :value="localParams[p.id]"
-          @input="updateParam(p.id, $event.target.value)"
-          class="w-full bg-bg border border-border rounded px-2 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent"
-        />
-
-        <!-- Number -->
-        <div v-else-if="p.type === 'number'" class="flex items-center gap-2">
-          <input
-            type="range"
-            :min="p.min ?? 0"
-            :max="p.max ?? (p.id === 'opacity' ? 1 : p.id === 'scaleX' || p.id === 'scaleY' ? 10 : 1000)"
-            :step="p.step ?? 0.01"
-            :value="localParams[p.id] ?? p.def ?? 0"
-            @input="updateParam(p.id, parseFloat($event.target.value))"
-            class="flex-1 h-1 accent-accent"
-          />
-          <div class="text-[10px] text-text-secondary font-mono w-12 text-right">
-            {{ typeof localParams[p.id] === 'number' ? localParams[p.id].toFixed(2) : localParams[p.id] }}{{ p.suffix || '' }}
+      <!-- Parameters -->
+      <div v-for="p in type?.params" :key="p.id" class="px-3 py-2 border-b border-cr-line-soft">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <label class="text-[10px] text-ink-dim truncate">{{ p.label }}</label>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <span
+              class="text-[9px] font-jetbrains-mono tabular-nums"
+              :class="isAnimated(p.id) ? 'text-signal' : 'text-ink-faint'"
+            >{{ liveValue(p.id) }}</span>
+            <button
+              class="text-[10px] leading-none transition-colors"
+              :class="hasKeyframeAtTime(p.id) ? 'text-signal' : 'text-ink-faint hover:text-signal'"
+              :title="hasKeyframeAtTime(p.id) ? 'Keyframe already set at the playhead' : 'Set a keyframe at the playhead'"
+              @click="addKeyframeForParam(p.id)"
+            >◆</button>
           </div>
         </div>
 
-        <!-- Color -->
-        <input v-else-if="p.type === 'color'"
-          :value="localParams[p.id] || '#FFFFFF'"
-          @input="updateParam(p.id, $event.target.value)"
-          type="color"
-          class="w-full h-6 bg-bg border border-border rounded cursor-pointer"
+        <input
+          v-if="p.type === 'number'"
+          type="number"
+          :min="p.min"
+          :max="p.max"
+          :step="p.step || 0.01"
+          :value="localParams[p.id] ?? p.def ?? 0"
+          class="w-full bg-cr-void border border-cr-line px-2 py-1 text-[11px] font-jetbrains-mono tabular-nums text-ink outline-none focus:border-accent"
+          @input="updateParam(p.id, Number($event.target.value))"
         />
 
-        <!-- Select -->
-        <select v-else-if="p.type === 'select'"
+        <input
+          v-else-if="p.type === 'color'"
+          type="color"
+          :value="localParams[p.id] || '#000000'"
+          class="w-full h-6 bg-cr-void border border-cr-line cursor-pointer"
+          @input="updateParam(p.id, $event.target.value)"
+        />
+
+        <select
+          v-else-if="p.type === 'select'"
           :value="localParams[p.id] ?? p.def ?? ''"
+          class="w-full bg-cr-void border border-cr-line px-2 py-1 text-[11px] text-ink outline-none focus:border-accent"
           @change="updateParam(p.id, $event.target.value)"
-          class="w-full bg-bg border border-border rounded px-2 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent"
         >
           <option v-for="opt in p.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
 
-        <!-- Toggle -->
-        <button v-else-if="p.type === 'toggle'"
-          class="px-2 py-1 rounded text-[10px] border transition-colors"
-          :class="localParams[p.id] ? 'bg-accent/10 text-accent border-accent/30' : 'bg-bg text-text-secondary border-border'"
+        <button
+          v-else-if="p.type === 'toggle'"
+          class="px-2 py-1 text-[10px] uppercase tracking-[0.14em] border transition-colors"
+          :class="localParams[p.id] ? 'bg-accent/10 text-accent border-accent/40' : 'bg-cr-void text-ink-dim border-cr-line'"
           @click="updateParam(p.id, !localParams[p.id])"
-        >
-          {{ localParams[p.id] ? 'ON' : 'OFF' }}
-        </button>
+        >{{ localParams[p.id] ? 'On' : 'Off' }}</button>
 
-        <!-- Keyframe list for this param -->
-        <div v-if="keyframedParams[p.id]?.length" class="mt-1">
+        <!-- Text, font family and asset ids all edit as free text -->
+        <input
+          v-else
+          type="text"
+          :value="localParams[p.id] ?? p.def ?? ''"
+          class="w-full bg-cr-void border border-cr-line px-2 py-1 text-[11px] text-ink outline-none focus:border-accent"
+          @input="updateParam(p.id, $event.target.value)"
+        />
+
+        <!-- Keyframes for this parameter -->
+        <div v-if="animatedParams[p.id]?.length" class="mt-1.5">
           <button
-            class="flex items-center gap-1 text-[9px] text-amber-500/70 hover:text-amber-400 transition-colors"
+            class="flex items-center gap-1 text-[9px] uppercase tracking-[0.14em] text-signal/80 hover:text-signal transition-colors"
             @click="toggleKeyframeExpand(p.id)"
           >
-            <ChevronRight v-if="!expandedKeyframes.has(p.id)" :size="10" />
-            <ChevronDown v-else :size="10" />
-            {{ keyframedParams[p.id].length }} keyframe(s)
+            <ChevronDown v-if="expandedKeyframes.has(p.id)" :size="10" />
+            <ChevronRight v-else :size="10" />
+            {{ animatedParams[p.id].length }} keyframes
           </button>
-          <div v-if="expandedKeyframes.has(p.id)" class="mt-1 space-y-1 pl-2">
+          <div v-if="expandedKeyframes.has(p.id)" class="mt-1 space-y-px">
             <div
-              v-for="kf in keyframedParams[p.id]"
+              v-for="kf in animatedParams[p.id]"
               :key="kf.id"
-              class="flex items-center gap-1.5 text-[9px] bg-bg/60 rounded px-1.5 py-1"
+              class="flex items-center gap-1.5 text-[9px] bg-cr-void border-l-2 border-signal/60 px-1.5 py-1"
             >
-              <span class="text-text-secondary font-mono w-8">{{ kf.time.toFixed(1) }}s</span>
-              <span class="text-text-primary font-mono flex-1">{{ typeof kf.value === 'number' ? kf.value.toFixed(2) : kf.value }}</span>
+              <span class="font-jetbrains-mono tabular-nums text-ink-dim w-10">{{ kf.time.toFixed(2) }}s</span>
+              <span class="font-jetbrains-mono tabular-nums text-ink flex-1 truncate">
+                {{ typeof kf.value === 'number' ? Number(kf.value.toFixed(3)) : kf.value }}
+              </span>
               <select
                 :value="kf.easing"
+                class="bg-transparent text-[9px] text-ink-dim border border-cr-line outline-none px-1 py-0.5"
                 @change="updateKeyframeEasing(p.id, kf.id, $event.target.value)"
-                class="bg-transparent text-[8px] text-text-secondary border border-border/60 rounded px-1 py-0.5 outline-none"
               >
                 <option v-for="e in EASING_TYPES" :key="e.id" :value="e.id">{{ e.label }}</option>
               </select>
-              <button
-                class="text-text-secondary/40 hover:text-red-400 transition-colors"
-                @click="removeKeyframe(p.id, kf.id)"
-              >
+              <button class="text-ink-faint hover:text-red-400 transition-colors" @click="removeKeyframe(p.id, kf.id)">
                 <Trash2 :size="9" />
               </button>
             </div>
@@ -218,16 +220,16 @@ const keyframedParams = computed(() => {
         </div>
       </div>
 
-      <!-- Connections info -->
-      <div class="pt-2 border-t border-border space-y-1">
-        <div class="text-[10px] text-text-secondary uppercase tracking-wider">Connections</div>
-        <div v-if="type?.inputs.length" class="text-[10px] text-text-secondary">
-          Inputs: {{ type.inputs.join(', ') }}
-          <span v-if="!designStore.connections.find(c => c.toNode === node.id)" class="text-text-secondary/50"> (none connected)</span>
+      <!-- Wiring -->
+      <div v-if="type?.inputs?.length || type?.outputs?.length" class="px-3 py-2">
+        <div class="text-[9px] uppercase tracking-[0.14em] text-ink-faint mb-1">Wiring</div>
+        <div v-if="type.inputs.length" class="text-[10px] text-ink-dim">
+          In: <span class="font-jetbrains-mono">{{ type.inputs.join(', ') }}</span>
+          <span v-if="!designStore.connections.find(c => c.toNode === node.id)" class="text-ink-faint"> · nothing connected</span>
         </div>
-        <div v-if="type?.outputs.length" class="text-[10px] text-text-secondary">
-          Outputs: {{ type.outputs.join(', ') }}
-          <span v-if="!designStore.connections.find(c => c.fromNode === node.id)" class="text-text-secondary/50"> (not connected)</span>
+        <div v-if="type.outputs.length" class="text-[10px] text-ink-dim">
+          Out: <span class="font-jetbrains-mono">{{ type.outputs.join(', ') }}</span>
+          <span v-if="!designStore.connections.find(c => c.fromNode === node.id)" class="text-ink-faint"> · not wired onward</span>
         </div>
       </div>
     </div>

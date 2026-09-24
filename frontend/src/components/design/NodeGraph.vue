@@ -111,7 +111,7 @@ function draw() {
   c2d.clearRect(0, 0, W, H)
 
   // Background grid
-  c2d.strokeStyle = '#1a1a1a'
+  c2d.strokeStyle = '#141418'
   c2d.lineWidth = 1
   const gridSize = 30 * designStore.zoom
   const ox = designStore.panX * designStore.zoom % gridSize
@@ -139,7 +139,7 @@ function draw() {
 
     const isInsertionHovered = hoveredConnection.value && hoveredConnection.value.id === conn.id
 
-    c2d.strokeStyle = isInsertionHovered ? '#00D4FF' : '#4a4a4a'
+    c2d.strokeStyle = isInsertionHovered ? '#00D4FF' : '#2E2E36'
     c2d.lineWidth = isInsertionHovered ? 4 : 2
     
     // Marching ants animation
@@ -180,13 +180,13 @@ function draw() {
     const isSelected = designStore.selectedNodeId === node.id || designStore.selectedNodeIds.has(node.id)
 
     // Shadow
-    c2d.shadowColor = isSelected ? type.color + '40' : 'rgba(0,0,0,0.3)'
-    c2d.shadowBlur = isSelected ? 16 : 6
+    c2d.shadowColor = isSelected ? type.color + '40' : 'transparent'
+    c2d.shadowBlur = isSelected ? 16 : 0
 
     // Node bg
-    c2d.fillStyle = '#1E1E2E'
-    c2d.strokeStyle = isSelected ? type.color : '#3a3a4a'
-    c2d.lineWidth = isSelected ? 2 : 1
+    c2d.fillStyle = '#131318'
+    c2d.strokeStyle = isSelected ? type.color : '#26262D'
+    c2d.lineWidth = isSelected ? 1.5 : 1
     c2d.beginPath()
     c2d.roundRect(pos.x, pos.y, nw, nh, 6)
     c2d.fill()
@@ -194,14 +194,14 @@ function draw() {
     c2d.shadowBlur = 0
 
     // Header bar
-    c2d.fillStyle = type.color + '30'
+    c2d.fillStyle = type.color + '22'
     c2d.beginPath()
     c2d.roundRect(pos.x, pos.y, nw, 20, { upperLeft: 6, upperRight: 6 })
     c2d.fill()
 
     // Title & Type
-    c2d.fillStyle = '#E8E8E8'
-    c2d.font = 'bold 10px DM Sans, sans-serif'
+    c2d.fillStyle = '#EDEDF0'
+    c2d.font = 'bold 10px "JetBrains Mono", monospace'
     c2d.fillText(node.label || type.label, pos.x + 8, pos.y + 14)
 
     // Fusion Viewer Indicator Dots ([1] [2]) on top-right of node header
@@ -211,14 +211,14 @@ function draw() {
     // Viewer 1 dot
     const v1X = pos.x + nw - 28
     const v1Y = pos.y + 10
-    c2d.fillStyle = v1Active ? '#00D4FF' : 'rgba(255,255,255,0.15)'
-    c2d.strokeStyle = v1Active ? '#FFFFFF' : 'rgba(255,255,255,0.3)'
+    c2d.fillStyle = v1Active ? '#00D4FF' : 'rgba(255,255,255,0.10)'
+    c2d.strokeStyle = v1Active ? '#FFFFFF' : 'rgba(255,255,255,0.22)'
     c2d.lineWidth = 1
     c2d.beginPath()
     c2d.arc(v1X, v1Y, 5, 0, Math.PI * 2)
     c2d.fill()
     c2d.stroke()
-    c2d.fillStyle = v1Active ? '#000000' : '#888888'
+    c2d.fillStyle = v1Active ? '#000000' : '#54545C'
     c2d.font = 'bold 7px sans-serif'
     c2d.textAlign = 'center'
     c2d.textBaseline = 'middle'
@@ -227,13 +227,13 @@ function draw() {
     // Viewer 2 dot
     const v2X = pos.x + nw - 12
     const v2Y = pos.y + 10
-    c2d.fillStyle = v2Active ? '#EC4899' : 'rgba(255,255,255,0.15)'
-    c2d.strokeStyle = v2Active ? '#FFFFFF' : 'rgba(255,255,255,0.3)'
+    c2d.fillStyle = v2Active ? '#FFB020' : 'rgba(255,255,255,0.10)'
+    c2d.strokeStyle = v2Active ? '#FFFFFF' : 'rgba(255,255,255,0.22)'
     c2d.beginPath()
     c2d.arc(v2X, v2Y, 5, 0, Math.PI * 2)
     c2d.fill()
     c2d.stroke()
-    c2d.fillStyle = v2Active ? '#000000' : '#888888'
+    c2d.fillStyle = v2Active ? '#000000' : '#54545C'
     c2d.fillText('2', v2X, v2Y)
 
     // Reset alignment for other text
@@ -273,7 +273,7 @@ function draw() {
       }
 
       c2d.fillStyle = isHovered ? '#FFFFFF' : socketColor
-      c2d.strokeStyle = '#1E1E2E'
+      c2d.strokeStyle = '#131318'
       c2d.lineWidth = 1.5
       c2d.beginPath()
       c2d.arc(socketScreen.x, socketScreen.y, 5 * designStore.zoom, 0, Math.PI * 2)
@@ -286,7 +286,7 @@ function draw() {
                                   hoveredSocket.value.portType === 'in' && 
                                   hoveredSocket.value.portName === portName) || isHovered
       if (isCurrentlyHovered) {
-        c2d.fillStyle = 'rgba(15, 15, 25, 0.95)'
+        c2d.fillStyle = 'rgba(8, 8, 10, 0.95)'
         c2d.strokeStyle = socketColor
         c2d.lineWidth = 1
         const text = portName.toUpperCase()
@@ -296,7 +296,7 @@ function draw() {
         c2d.roundRect(socketScreen.x - tw - 16, socketScreen.y - 8, tw + 8, 16, 3)
         c2d.fill()
         c2d.stroke()
-        c2d.fillStyle = '#E2E8F0'
+        c2d.fillStyle = '#EDEDF0'
         c2d.fillText(text, socketScreen.x - tw - 12, socketScreen.y + 3)
       }
     }
@@ -326,7 +326,7 @@ function draw() {
       }
       
       c2d.fillStyle = isHovered ? '#FFFFFF' : '#00D4FF'
-      c2d.strokeStyle = '#1E1E2E'
+      c2d.strokeStyle = '#131318'
       c2d.lineWidth = 1.5
       c2d.beginPath()
       c2d.arc(socketScreen.x, socketScreen.y, 5 * designStore.zoom, 0, Math.PI * 2)
@@ -339,7 +339,7 @@ function draw() {
                                   hoveredSocket.value.portType === 'out' && 
                                   hoveredSocket.value.portName === type.outputs[i]) || isHovered
       if (isCurrentlyHovered) {
-        c2d.fillStyle = 'rgba(15, 15, 25, 0.9)'
+        c2d.fillStyle = 'rgba(8, 8, 10, 0.92)'
         c2d.strokeStyle = '#00D4FF'
         c2d.lineWidth = 1
         const text = type.outputs[i].toUpperCase()
@@ -349,7 +349,7 @@ function draw() {
         c2d.roundRect(socketScreen.x + 8, socketScreen.y - 8, tw + 8, 16, 3)
         c2d.fill()
         c2d.stroke()
-        c2d.fillStyle = '#E2E8F0'
+        c2d.fillStyle = '#EDEDF0'
         c2d.fillText(text, socketScreen.x + 12, socketScreen.y + 3)
       }
     }
@@ -357,7 +357,7 @@ function draw() {
     // Keyframe indicator
     const hasKeyframes = Object.keys(node.keyframes).length > 0 && Object.values(node.keyframes).some(k => k.length > 0)
     if (hasKeyframes) {
-      c2d.fillStyle = '#F59E0B'
+      c2d.fillStyle = '#FFB020'
       c2d.font = '9px sans-serif'
       c2d.fillText('◆', pos.x + nw - 22, pos.y + 15)
     }
@@ -398,7 +398,7 @@ function draw() {
 
     // Group label
     c2d.fillStyle = 'rgba(0, 212, 255, 0.6)'
-    c2d.font = '10px DM Sans, sans-serif'
+    c2d.font = '10px "JetBrains Mono", monospace'
     c2d.fillText(group.name, pos.x + 8, pos.y - 4)
   }
 }
@@ -926,7 +926,7 @@ function addNodeFromPalette(type) {
 </script>
 
 <template>
-  <div class="relative w-full h-full overflow-hidden bg-[#0F0F0F]">
+  <div class="relative w-full h-full overflow-hidden bg-cr-void">
     <canvas
       ref="canvasRef"
       class="w-full h-full cursor-grab active:cursor-grabbing"
@@ -951,7 +951,7 @@ function addNodeFromPalette(type) {
       @close="showSearchPalette = false"
       @select="addNodeFromPalette"
     />
-    <div class="absolute bottom-2 left-2 text-[10px] text-text-secondary/40 font-mono max-w-[calc(100%-180px)] truncate">
+    <div class="absolute bottom-2 left-2 text-[9px] font-jetbrains-mono tabular-nums text-ink-faint max-w-[calc(100%-180px)] truncate">
       {{ designStore.nodes.length }} nodes · {{ designStore.connections.length }} connections
       · Shift+Drag to detach/heal · Drag lines to connect · Hover lines to insert
     </div>
