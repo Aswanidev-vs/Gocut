@@ -676,6 +676,10 @@ export namespace project {
 	    preset: string;
 	    startTime: number;
 	    endTime: number;
+	    gifFps?: number;
+	    gifColors?: number;
+	    gifDither?: string;
+	    gifMaxWidth?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new RenderSettings(source);
@@ -696,6 +700,10 @@ export namespace project {
 	        this.preset = source["preset"];
 	        this.startTime = source["startTime"];
 	        this.endTime = source["endTime"];
+	        this.gifFps = source["gifFps"];
+	        this.gifColors = source["gifColors"];
+	        this.gifDither = source["gifDither"];
+	        this.gifMaxWidth = source["gifMaxWidth"];
 	    }
 	}
 	

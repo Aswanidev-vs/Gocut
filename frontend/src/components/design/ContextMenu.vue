@@ -51,23 +51,23 @@ function handleAction(item) {
 <template>
   <div
     ref="menuRef"
-    class="fixed z-50 min-w-[180px] bg-[#1E1E2E] border border-[#3a3a4a] rounded-lg shadow-2xl shadow-black/50 py-1 overflow-hidden"
+    class="fixed z-50 min-w-[180px] bg-cr-panel border border-cr-line rounded-none py-1 overflow-hidden"
     :style="{ left: adjustedPos.x + 'px', top: adjustedPos.y + 'px' }"
     @mousedown.stop
   >
     <template v-for="(item, i) in items" :key="i">
-      <div v-if="item.separator" class="h-px bg-[#3a3a4a] my-1" />
+      <div v-if="item.separator" class="h-px bg-cr-line my-1" />
       <button
         v-else
-        class="w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] transition-colors text-left"
+        class="w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] transition-colors text-left bg-cr-raise"
         :class="item.disabled
-          ? 'text-text-secondary/40 cursor-not-allowed'
-          : 'text-text-primary hover:bg-accent/10 hover:text-accent'"
+          ? 'text-ink-faint cursor-not-allowed'
+          : 'text-ink hover:bg-white/5 hover:text-accent'"
         @click="handleAction(item)"
       >
         <component v-if="item.icon" :is="item.icon" :size="12" class="flex-shrink-0" />
         <span class="flex-1">{{ item.label }}</span>
-        <span v-if="item.shortcut" class="text-[9px] text-text-secondary/60 font-mono ml-4">{{ item.shortcut }}</span>
+        <span v-if="item.shortcut" class="text-[9px] text-ink-faint font-jetbrains-mono tabular-nums ml-4">{{ item.shortcut }}</span>
       </button>
     </template>
   </div>

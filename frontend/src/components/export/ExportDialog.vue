@@ -5,7 +5,7 @@ import { useTimelineStore } from '../../stores/timelineStore'
 import { useUiStore } from '../../stores/uiStore'
 import { StartRender, GetRenderProgress, CancelRender, SaveFilePicker } from '../../lib/wails'
 import { onWailsEvent, offWailsEvent } from '../../lib/wailsEvents'
-import { X, FileDown, Loader2, CheckCircle2, AlertCircle, FolderOpen, XCircle } from 'lucide-vue-next'
+import { X, FileDown, Loader2, CheckCircle2, AlertCircle, FolderOpen, XCircle, Minimize2 } from 'lucide-vue-next'
 
 const props = defineProps({ isOpen: Boolean })
 const emit = defineEmits(['close'])
@@ -22,6 +22,12 @@ const useProjectFps = ref(true)
 const crf = ref(23)
 const preset = ref('ultrafast')
 const audioBitrate = ref('192k')
+// GIF is palette based, so these four knobs are what "compression" means for
+// it: fewer frames, fewer colors, ordered dithering, smaller frame.
+const gifFps = ref(15)
+const gifColors = ref(128)
+const gifDither = ref('bayer')
+const gifMaxWidth = ref(640)
 const includeIn = ref(0)
 const includeOut = ref(0)
 const outputPath = ref('')
@@ -55,6 +61,38 @@ const resolutions = [
   { id: '4K',    label: '4K',    w: 3840, h: 2160 },
 ]
 const presets = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
+
+const gifPresets = [
+  { id: 'high',     label: 'High',     hint: 'Best looking, largest file', fps: 24, colors: 256, dither: 'sierra2_4a', maxWidth: 0 },
+  { id: 'balanced', label: 'Balanced', hint: 'Recommended everyday GIF',   fps: 15, colors: 128, dither: 'bayer',      maxWidth: 640 },
+  { id: 'tiny',     label: 'Smallest', hint: 'Chat and mobile friendly',   fps: 10, colors: 64,  dither: 'bayer',      maxWidth: 480 },
+]
+const gifColorsOptions = [256, 128, 64, 32]
+const gifMaxWidthOptions = [
+  { value: 0,   label: 'Export size' },
+  { value: 640, label: '640 px' },
+  { value: 480, label: '480 px' },
+  { value: 320, label: '320 px' },
+]
+
+const activeGifPreset = computed(() => gifPresets.find(p =>
+  p.fps === gifFps.value && p.colors === gifColors.value &&
+  p.dither === gifDither.value && p.maxWidth === gifMaxWidth.value)?.id)
+
+// Mirrors the backend's downscale rule so the dialog can show the real output
+// size rather than an estimate.
+const gifOutputSize = computed(() => {
+  const res = getResolution()
+  if (!gifMaxWidth.value || res.w <= gifMaxWidth.value) return `${res.w}×${res.h}`
+  return `${gifMaxWidth.value}×${Math.round(res.h * gifMaxWidth.value / res.w)}`
+})
+
+function applyGifPreset(p) {
+  gifFps.value = p.fps
+  gifColors.value = p.colors
+  gifDither.value = p.dither
+  gifMaxWidth.value = p.maxWidth
+}
 
 function applyFormat() {
   const f = formats.find(f => f.id === format.value)
@@ -115,6 +153,10 @@ async function startExport() {
     audioBitrate: audioBitrate.value,
     crf: crf.value,
     preset: preset.value,
+    gifFps: gifFps.value,
+    gifColors: gifColors.value,
+    gifDither: gifDither.value,
+    gifMaxWidth: gifMaxWidth.value,
     startTime: includeIn.value,
     endTime: includeOut.value || timelineStore.duration,
   }
@@ -275,7 +317,65 @@ watch(() => props.isOpen, (open) => {
             <option v-for="r in resolutions" :key="r.id" :value="r.id">{{ r.label }} ({{ r.w }}×{{ r.h }})</option>
           </select>
         </div>
-        <div>
+        <!-- GIF is palette based and has no inter-frame compression, so frame
+             rate, palette size, dithering and frame width are the only levers
+             that actually shrink the file. -->
+        <div v-if="format === 'gif'" class="col-span-2 rounded-lg border border-border bg-bg/40 p-3 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-text-primary">
+              <Minimize2 :size="12" class="text-accent" /> GIF Compression
+            </div>
+            <div class="text-[10px] font-mono text-text-secondary truncate">
+              {{ gifOutputSize }} · {{ gifFps }} fps · {{ gifColors }} colors
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <button
+              v-for="p in gifPresets"
+              :key="p.id"
+              :title="p.hint"
+              class="flex-1 px-2 py-1 rounded text-[10px] font-medium border transition-colors"
+              :class="activeGifPreset === p.id
+                ? 'bg-accent/15 text-accent border-accent/30'
+                : 'text-text-secondary border-border hover:text-text-primary hover:bg-border/60'"
+              @click="applyGifPreset(p)"
+            >
+              {{ p.label }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1 uppercase tracking-wider">Frame Rate</label>
+              <select v-model.number="gifFps" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent">
+                <option v-for="f in [24, 20, 15, 12, 10]" :key="f" :value="f">{{ f }} fps</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1 uppercase tracking-wider">Colors</label>
+              <select v-model.number="gifColors" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent">
+                <option v-for="c in gifColorsOptions" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1 uppercase tracking-wider">Dither</label>
+              <select v-model="gifDither" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent">
+                <option value="bayer">Bayer (smallest)</option>
+                <option value="none">None (banding)</option>
+                <option value="sierra2_4a">Sierra (smoothest)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-text-secondary block mb-1 uppercase tracking-wider">Max Width</label>
+              <select v-model.number="gifMaxWidth" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent">
+                <option v-for="o in gifMaxWidthOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="format !== 'gif'">
           <label class="text-[11px] text-text-secondary block mb-1 uppercase tracking-wider">FPS</label>
           <div class="flex items-center gap-2">
             <label class="flex items-center gap-1 text-xs text-text-secondary">
@@ -289,12 +389,12 @@ watch(() => props.isOpen, (open) => {
             </select>
           </div>
         </div>
-        <div>
+        <div v-if="format !== 'gif'">
           <label class="text-[11px] text-text-secondary block mb-1 uppercase tracking-wider">Quality (CRF)</label>
           <input type="range" min="0" max="51" v-model.number="crf" class="w-full accent-accent" />
           <div class="text-[10px] text-text-secondary text-right font-mono">{{ crf }}</div>
         </div>
-        <div>
+        <div v-if="format !== 'gif'">
           <label class="text-[11px] text-text-secondary block mb-1 uppercase tracking-wider">Preset</label>
           <select v-model="preset" class="w-full bg-bg border border-border rounded px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent">
             <option v-for="p in presets" :key="p" :value="p">{{ p }}</option>

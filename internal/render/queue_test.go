@@ -57,6 +57,19 @@ func hasFlag(args []string, flag string) bool {
 	return false
 }
 
+// lastArgValue returns the value of the final occurrence of flag. Static-image
+// inputs are opened with "-loop 1" long before the GIF muxer's own "-loop"
+// option lands at the end of the argument list, so those two must not be
+// confused.
+func lastArgValue(args []string, flag string) string {
+	for i := len(args) - 2; i >= 0; i-- {
+		if args[i] == flag {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 func TestBuildSimpleFFmpegArgsMP3IsAudioOnly(t *testing.T) {
 	p := mixedProject("v.mp4", "a.mp3", "i.png")
 	settings := project.RenderSettings{Format: "mp3", Codec: "mp3", AudioBitrate: "192k", EndTime: 2}
@@ -209,6 +222,67 @@ func TestBuildSimpleFFmpegArgsLoopUsesClipDuration(t *testing.T) {
 	}
 	if got := argValue(args, "-t"); got != "2.000" {
 		t.Errorf("looped media input duration = %q, want clip duration 2.000", got)
+	}
+}
+
+func TestBuildSimpleFFmpegArgsGIFCompresses(t *testing.T) {
+	p := mixedProject("v.mp4", "a.mp3", "i.png")
+	settings := project.RenderSettings{
+		Format: "gif", Codec: "gif", EndTime: 2,
+		Width: 1280, Height: 720, FPS: 30,
+		GifFPS: 15, GifColors: 64, GifDither: "bayer", GifMaxWidth: 480,
+	}
+
+	args := buildSimpleFFmpegArgs(p, settings, "out.gif", "ffmpeg")
+	graph := argValue(args, "-filter_complex")
+
+	for _, want := range []string{
+		"palettegen=max_colors=64:stats_mode=diff",
+		"paletteuse=dither=bayer:bayer_scale=5",
+		"scale=480:270:flags=lanczos",
+	} {
+		if !strings.Contains(graph, want) {
+			t.Errorf("compressed GIF filtergraph missing %q, got: %s", want, graph)
+		}
+	}
+
+	// gifFps has to drive the base source rate: generating frames at the
+	// project rate only to drop them again wastes the whole encode.
+	if !strings.Contains(graph, "color=c=black:s=1280x720:r=15") {
+		t.Errorf("GIF base source must use the GIF frame rate, got: %s", graph)
+	}
+	if got := lastArgValue(args, "-loop"); got != "0" {
+		t.Errorf("-loop = %q, want 0 (infinite)", got)
+	}
+	// Encoder-side frame differencing must be explicit: without
+	// offsetting+transdiff every frame re-encodes the whole image —
+	// measured 5.2x larger on a static-bars fixture (540KB vs 104KB).
+	if got := argValue(args, "-gifflags"); got != "offsetting+transdiff" {
+		t.Errorf("-gifflags = %q, want offsetting+transdiff", got)
+	}
+}
+
+func TestBuildSimpleFFmpegArgsGIFDefaultsToCompressedPalette(t *testing.T) {
+	p := mixedProject("v.mp4", "a.mp3", "i.png")
+	settings := project.RenderSettings{
+		Format: "gif", Codec: "gif", EndTime: 2,
+		Width: 640, Height: 360, FPS: 30,
+	}
+
+	graph := argValue(buildSimpleFFmpegArgs(p, settings, "out.gif", "ffmpeg"), "-filter_complex")
+
+	if !strings.Contains(graph, "palettegen=max_colors=128:stats_mode=diff") {
+		t.Errorf("GIF default must quantise the palette, got: %s", graph)
+	}
+	if !strings.Contains(graph, "paletteuse=dither=bayer:bayer_scale=5") {
+		t.Errorf("GIF default must use compression-friendly dithering, got: %s", graph)
+	}
+	// No GIF frame rate requested: the project rate must win.
+	if !strings.Contains(graph, "color=c=black:s=640x360:r=30") {
+		t.Errorf("GIF without gifFps must keep the project rate, got: %s", graph)
+	}
+	if strings.Contains(graph, "flags=lanczos") {
+		t.Error("GIF without gifMaxWidth must not downscale")
 	}
 }
 

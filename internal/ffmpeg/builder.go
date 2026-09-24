@@ -197,3 +197,37 @@ func escapeText(s string) string {
 func FloatToStr(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
+
+// HasKeyframeProp reports whether any keyframe animates the given property.
+func HasKeyframeProp(kfs []project.Keyframe, prop string) bool {
+	for _, kf := range kfs {
+		if kf.Property == prop {
+			return true
+		}
+	}
+	return false
+}
+
+// BuildOpacityFilter returns the clip's opacity filter. With no opacity
+// keyframes it keeps the fast static path (colorchannelmixer is only ever
+// evaluated once, so it cannot express animation). With keyframes it uses
+// geq: the only route that accepts a runtime alpha expression. Empirically
+// verified (ffmpeg 2025-12-18 gyan.dev full build):
+//   - colorchannelmixer=aa='if(lt(t,0.5),0.2,0.8)'  -> "Unable to parse aa
+//     option value" (option is parsed at init time, no runtime exprs).
+//   - geq:a='alpha(X,Y)*if(...)' -> works, evaluated per frame. Note the
+//     details that differ from the docs: the alpha accessor is alpha(X,Y)
+//     (a(X,Y)/A(X,Y) are unknown functions), the per-frame time var is
+//     uppercase T (lowercase t is rejected at parse), and the filter has no
+//     eval option. geq runs before setpts, so T here is clip-local time.
+func BuildOpacityFilter(clip project.Clip) string {
+	if !HasKeyframeProp(clip.Keyframes, "opacity") {
+		if clip.Opacity > 0 && clip.Opacity < 1.0 {
+			return fmt.Sprintf("colorchannelmixer=aa=%g", clip.Opacity)
+		}
+		return ""
+	}
+	opExpr := BuildAnimatedExpressionT(clip.Keyframes, "opacity", clip.Opacity)
+	aExpr := "alpha(X,Y)*" + opExpr
+	return fmt.Sprintf("geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='%s'", aExpr)
+}

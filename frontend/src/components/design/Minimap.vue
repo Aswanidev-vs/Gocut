@@ -47,7 +47,7 @@ const nodeColorMap = {
 </script>
 
 <template>
-  <div class="bg-[#0a0a0a] border border-[#3a3a4a] rounded-lg overflow-hidden" :style="{ width: width + 'px', height: height + 'px' }">
+  <div class="bg-cr-void border border-cr-line rounded-none overflow-hidden" :style="{ width: width + 'px', height: height + 'px' }">
     <svg :width="width" :height="height" class="w-full h-full">
       <!-- Connections -->
       <line
@@ -57,7 +57,7 @@ const nodeColorMap = {
         :y1="toMinimap(designStore.nodes.find(n => n.id === conn.fromNode)?.x + 160 || 0, designStore.nodes.find(n => n.id === conn.fromNode)?.y + 30 || 0).y"
         :x2="toMinimap(designStore.nodes.find(n => n.id === conn.toNode)?.x || 0, designStore.nodes.find(n => n.id === conn.toNode)?.y + 30 || 0).x"
         :y2="toMinimap(designStore.nodes.find(n => n.id === conn.toNode)?.x || 0, designStore.nodes.find(n => n.id === conn.toNode)?.y + 30 || 0).y"
-        stroke="#3a3a4a"
+        stroke="#2E2E36"
         stroke-width="1"
       />
 
@@ -70,8 +70,8 @@ const nodeColorMap = {
         :width="160 * scale"
         :height="60 * scale"
         :rx="2"
-        :fill="designStore.selectedNodeIds.has(node.id) ? '#00D4FF' : (nodeColorMap[getNodeType(node.type)?.category] || '#4a4a4a')"
-        :opacity="designStore.selectedNodeIds.has(node.id) ? 0.9 : 0.6"
+        :fill="designStore.selectedNodeIds.has(node.id) ? '#00D4FF' : (nodeColorMap[getNodeType(node.type)?.category] || '#26262D')"
+        :opacity="designStore.selectedNodeIds.has(node.id) ? 0.9 : 0.75"
       />
     </svg>
   </div>
