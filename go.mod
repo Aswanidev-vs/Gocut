@@ -2,7 +2,7 @@ module Gocut
 
 go 1.26.0
 
-require github.com/wailsapp/wails/v2 v2.12.0
+require github.com/wailsapp/wails/v2 v2.13.0
 
 require (
 	github.com/ncruces/go-sqlite3-wasm/v2 v2.5.35301 // indirect
