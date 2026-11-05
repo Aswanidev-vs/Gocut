@@ -25,6 +25,7 @@ const MIN_INSPECTOR_WIDTH = 240
 const MAX_LIBRARY_WIDTH = 420
 const MAX_INSPECTOR_WIDTH = 460
 
+const rootRef = ref(null)
 const libraryWidth = ref(240)
 const inspectorWidth = ref(300)
 const showCurves = ref(false)
@@ -108,7 +109,8 @@ function startDrag(e, panel) {
 function onDrag(e) {
   if (!activeDrag) return
   if (activeDrag === 'library') {
-    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(e.clientX - 260, MAX_LIBRARY_WIDTH))
+    const left = rootRef.value?.getBoundingClientRect().left ?? 0
+    libraryWidth.value = Math.max(MIN_LIBRARY_WIDTH, Math.min(e.clientX - left, MAX_LIBRARY_WIDTH))
   } else if (activeDrag === 'inspector') {
     inspectorWidth.value = Math.max(MIN_INSPECTOR_WIDTH, Math.min(window.innerWidth - e.clientX, MAX_INSPECTOR_WIDTH))
   } else if (activeDrag === 'viewer') {
@@ -165,7 +167,7 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-cr-void overflow-hidden select-none">
+  <div ref="rootRef" class="flex flex-col h-full bg-cr-void overflow-hidden select-none">
     <!-- Control rail: identity, mode, tools, transport -->
     <div class="h-9 flex-shrink-0 bg-cr-raise border-b border-cr-line flex items-center px-2 gap-3">
       <div class="flex items-baseline gap-2 flex-shrink-0">

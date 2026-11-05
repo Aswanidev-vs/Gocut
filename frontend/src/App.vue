@@ -317,7 +317,7 @@ function stopDrag() {
             { id: 'audio', label: 'Audio', icon: 'Headphones' },
           ]"
           :key="ws.id"
-          class="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all"
+          class="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent/60"
           :class="uiStore.activeWorkspace === ws.id
             ? 'bg-accent/15 text-accent border border-accent/30'
             : 'text-text-secondary hover:text-text-primary hover:bg-border/60 border border-transparent'"
