@@ -13,7 +13,7 @@ function getDesignHistoryStoreSafely() {
   }
 }
 
-function pushDesignSnapshot() {
+export function pushDesignSnapshot() {
   try {
     const hs = getDesignHistoryStoreSafely()
     if (hs) hs.pushSnapshot()

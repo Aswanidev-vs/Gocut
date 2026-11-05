@@ -2,7 +2,7 @@
 // Parameter panel for the selected node. In Simple mode the workspace supplies
 // the header, so `embedded` drops this component's own chrome.
 import { ref, computed, watch } from 'vue'
-import { useDesignStore, getNodeType, EASING_TYPES } from '../../stores/designStore'
+import { useDesignStore, getNodeType, EASING_TYPES, pushDesignSnapshot } from '../../stores/designStore'
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -32,6 +32,7 @@ function updateParam(paramId, value) {
 
 function renameNode(event) {
   if (!node.value) return
+  pushDesignSnapshot()
   node.value.label = event.target.value || node.value.label
 }
 
@@ -58,7 +59,10 @@ function removeKeyframe(paramId, kfId) {
 function updateKeyframeEasing(paramId, kfId, easing) {
   if (!node.value) return
   const kf = (animatedParams.value[paramId] || []).find(k => k.id === kfId)
-  if (kf) kf.easing = easing
+  if (kf) {
+    pushDesignSnapshot()
+    kf.easing = easing
+  }
 }
 
 function toggleKeyframeExpand(paramId) {

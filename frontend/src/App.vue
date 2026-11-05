@@ -226,13 +226,13 @@ function stopDrag() {
 
         <div class="flex items-center gap-2">
           <button
-            class="flex items-center gap-2 px-4 py-2 rounded bg-accent text-bg text-sm font-medium hover:bg-accent-hover transition-colors shadow-lg shadow-accent/20"
+            class="flex items-center gap-2 px-5 py-2.5 rounded-md bg-accent text-bg text-sm font-semibold hover:bg-accent-hover transition-colors shadow-lg shadow-accent/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent/60"
             @click="openNewProjectDialog"
           >
             <FilePlus :size="16" /> New Project
           </button>
           <button
-            class="flex items-center gap-2 px-4 py-2 rounded border border-border text-sm text-text-primary hover:bg-border transition-colors"
+            class="flex items-center gap-2 px-5 py-2.5 rounded-md border border-border text-sm text-text-primary hover:bg-border/80 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent/40"
             @click="openProject()"
           >
             <FolderOpen :size="16" /> Open Project
@@ -256,7 +256,7 @@ function stopDrag() {
             <div
               v-for="rp in projectStore.recentProjects.slice(0, 6)"
               :key="rp.id || rp.path"
-              class="group relative flex items-center gap-3 px-3 py-3 rounded bg-panel border border-border hover:border-accent/50 hover:bg-panel/80 transition-colors text-left cursor-pointer"
+              class="group relative flex items-center gap-3 px-4 py-3.5 rounded-lg bg-panel border border-border hover:border-accent/60 hover:bg-panel/90 transition-all duration-150 text-left cursor-pointer shadow-sm hover:shadow-md hover:shadow-accent/5"
               @click="openProject(rp.path)"
             >
               <div class="w-10 h-10 rounded bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center flex-shrink-0">
@@ -317,7 +317,7 @@ function stopDrag() {
             { id: 'audio', label: 'Audio', icon: 'Headphones' },
           ]"
           :key="ws.id"
-          class="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all"
+          class="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent/60"
           :class="uiStore.activeWorkspace === ws.id
             ? 'bg-accent/15 text-accent border border-accent/30'
             : 'text-text-secondary hover:text-text-primary hover:bg-border/60 border border-transparent'"

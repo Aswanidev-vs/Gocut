@@ -200,21 +200,21 @@ function canvasClick(e) {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#090910] border-t border-border/80 select-none">
+  <div class="flex flex-col h-full bg-cr-void border-t border-cr-line/80 select-none">
     <!-- Fusion Spline Toolbar -->
-    <div class="h-7 bg-[#12121A] border-b border-border/70 flex items-center px-2 gap-2 text-[10px] text-text-secondary">
-      <div class="flex items-center gap-1 font-semibold text-text-primary">
+    <div class="h-7 bg-cr-panel border-b border-cr-line/70 flex items-center px-2 gap-2 text-[10px] text-ink-dim">
+      <div class="flex items-center gap-1 font-semibold text-ink">
         <Zap :size="12" class="text-accent" />
         <span class="uppercase tracking-wider text-[9px]">Spline Editor</span>
       </div>
 
-      <span v-if="node" class="text-text-primary font-medium">· {{ node.label }}</span>
+      <span v-if="node" class="text-ink font-medium">· {{ node.label }}</span>
 
       <!-- Parameter Selector -->
       <select
         v-if="paramList.length"
         v-model="activeParam"
-        class="bg-[#1C1C28] border border-border/80 rounded px-1.5 py-0.5 text-[10px] text-text-primary outline-none font-mono"
+        class="bg-cr-raise border border-cr-line/80 rounded px-1.5 py-0.5 text-[10px] text-ink outline-none font-mono"
       >
         <option v-for="[pid] in paramList" :key="pid" :value="pid">{{ pid }}</option>
       </select>
@@ -224,21 +224,21 @@ function canvasClick(e) {
       <!-- Fusion Spline Quick Actions: Smooth (S), Linear (L), Ease -->
       <div v-if="paramList.length" class="flex items-center gap-1">
         <button
-          class="px-2 py-0.5 rounded bg-[#1C1C28] hover:bg-accent/20 border border-border/60 text-[9px] font-mono text-text-primary transition-colors"
+          class="px-2 py-0.5 rounded bg-cr-raise hover:bg-accent/20 border border-cr-line/60 text-[9px] font-mono text-ink transition-colors"
           title="Smooth Curves (S)"
           @click="setEasingForSelected('smooth')"
         >
           Smooth [S]
         </button>
         <button
-          class="px-2 py-0.5 rounded bg-[#1C1C28] hover:bg-accent/20 border border-border/60 text-[9px] font-mono text-text-primary transition-colors"
+          class="px-2 py-0.5 rounded bg-cr-raise hover:bg-accent/20 border border-cr-line/60 text-[9px] font-mono text-ink transition-colors"
           title="Linear Tangents (L)"
           @click="setEasingForSelected('linear')"
         >
           Linear [L]
         </button>
         <button
-          class="px-2 py-0.5 rounded bg-[#1C1C28] hover:bg-accent/20 border border-border/60 text-[9px] font-mono text-text-primary transition-colors"
+          class="px-2 py-0.5 rounded bg-cr-raise hover:bg-accent/20 border border-cr-line/60 text-[9px] font-mono text-ink transition-colors"
           title="Ease In/Out"
           @click="setEasingForSelected('easeInOut')"
         >
@@ -253,7 +253,7 @@ function canvasClick(e) {
         class="w-full h-full cursor-crosshair"
         @click="canvasClick"
       />
-      <div v-if="!node || paramList.length === 0" class="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary/50">
+      <div v-if="!node || paramList.length === 0" class="absolute inset-0 flex items-center justify-center text-[10px] text-ink-dim/50">
         Select a node with keyframed parameters to edit animation splines
       </div>
     </div>

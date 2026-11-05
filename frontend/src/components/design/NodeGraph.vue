@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useDesignStore, getNodeType, NODE_TYPES } from '../../stores/designStore'
+import { useDesignStore, getNodeType, NODE_TYPES, pushDesignSnapshot } from '../../stores/designStore'
+import { NODE_WIDTH, NODE_HEIGHT } from '../../lib/designConstants'
 import { X, Eye, EyeOff, Lock, Unlock, Trash2, Copy, Clipboard, Scissors, Box, Search } from 'lucide-vue-next'
 import ContextMenu from './ContextMenu.vue'
 import NodeSearchPalette from './NodeSearchPalette.vue'
@@ -39,7 +40,7 @@ function screenToWorld(sx, sy) {
 }
 
 function getInputSocketPos(node, idx, total) {
-  const nw = 160, nh = 60
+  const nw = NODE_WIDTH, nh = NODE_HEIGHT
   let y = node.y + nh / 2
   if (total > 1) {
     y = node.y + 18 + (idx * (nh - 24) / (total - 1))
@@ -48,7 +49,7 @@ function getInputSocketPos(node, idx, total) {
 }
 
 function getOutputSocketPos(node, idx, total) {
-  const nw = 160, nh = 60
+  const nw = NODE_WIDTH, nh = NODE_HEIGHT
   let y = node.y + nh / 2
   if (total > 1) {
     y = node.y + 18 + (idx * (nh - 24) / (total - 1))
@@ -176,7 +177,7 @@ function draw() {
     const type = getNodeType(node.type)
     if (!type) continue
     const pos = worldToScreen(node.x, node.y)
-    const nw = 160, nh = 60
+    const nw = NODE_WIDTH, nh = NODE_HEIGHT
     const isSelected = designStore.selectedNodeId === node.id || designStore.selectedNodeIds.has(node.id)
 
     // Shadow
@@ -404,6 +405,9 @@ function draw() {
 }
 
 let animId = null
+let resizeFn = null
+let resizeObserver = null
+
 function animate() {
   dashOffset.value = (dashOffset.value + 0.3) % 10
   draw()
@@ -413,25 +417,28 @@ function animate() {
 onMounted(() => {
   const c = canvasRef.value
   if (!c) return
-  const resize = () => {
+  resizeFn = () => {
     c.width = c.parentElement?.clientWidth || 400
     c.height = c.parentElement?.clientHeight || 300
     draw()
   }
-  resize()
-  window.addEventListener('resize', resize)
+  resizeFn()
+  window.addEventListener('resize', resizeFn)
   window.addEventListener('design:openSearch', onOpenSearch)
-  const obs = c.parentElement ? new ResizeObserver(resize) : null
-  if (obs) obs.observe(c.parentElement)
+  resizeObserver = c.parentElement ? new ResizeObserver(resizeFn) : null
+  if (resizeObserver) resizeObserver.observe(c.parentElement)
 
   animate()
+})
 
-  return () => {
-    window.removeEventListener('resize', resize)
-    window.removeEventListener('design:openSearch', onOpenSearch)
-    obs?.disconnect()
-    if (animId) cancelAnimationFrame(animId)
-  }
+onUnmounted(() => {
+  window.removeEventListener('resize', resizeFn)
+  window.removeEventListener('design:openSearch', onOpenSearch)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (animId) cancelAnimationFrame(animId)
+  animId = null
+  resizeFn = null
 })
 
 function onOpenSearch() {
@@ -485,10 +492,10 @@ function onMouseDown(e) {
     const n = designStore.nodes[i]
     if (n.visible === false || n.locked) continue
     const pos = worldToScreen(n.x, n.y)
-    if (mx >= pos.x && mx <= pos.x + 160 && my >= pos.y && my <= pos.y + 60) {
+    if (mx >= pos.x && mx <= pos.x + NODE_WIDTH && my >= pos.y && my <= pos.y + NODE_HEIGHT) {
       // Check if clicked Viewer 1 or Viewer 2 indicator dot
-      const v1Dist = Math.hypot(mx - (pos.x + 160 - 28), my - (pos.y + 10))
-      const v2Dist = Math.hypot(mx - (pos.x + 160 - 12), my - (pos.y + 10))
+      const v1Dist = Math.hypot(mx - (pos.x + NODE_WIDTH - 28), my - (pos.y + 10))
+      const v2Dist = Math.hypot(mx - (pos.x + NODE_WIDTH - 12), my - (pos.y + 10))
       if (v1Dist <= 8) {
         designStore.setViewer1(n.id)
         return
@@ -700,7 +707,7 @@ function onMouseUp() {
       if (node.visible === false) continue
       const pos = worldToScreen(node.x, node.y)
       // Check if node rect overlaps marquee rect
-      if (pos.x + 160 >= x1 && pos.x <= x2 && pos.y + 60 >= y1 && pos.y <= y2) {
+      if (pos.x + NODE_WIDTH >= x1 && pos.x <= x2 && pos.y + NODE_HEIGHT >= y1 && pos.y <= y2) {
         selected.add(node.id)
       }
     }
@@ -736,7 +743,7 @@ function onContextMenu(e) {
     const n = designStore.nodes[i]
     if (n.visible === false) continue
     const pos = worldToScreen(n.x, n.y)
-    if (mx >= pos.x && mx <= pos.x + 160 && my >= pos.y && my <= pos.y + 60) {
+    if (mx >= pos.x && mx <= pos.x + NODE_WIDTH && my >= pos.y && my <= pos.y + NODE_HEIGHT) {
       designStore.selectedNodeId = n.id
       contextMenu.value = { type: 'node', x: e.clientX, y: e.clientY, data: n }
       return
@@ -855,14 +862,21 @@ function handleContextAction(action) {
       break
     case 'disconnectAll':
       if (data) {
+        pushDesignSnapshot()
         designStore.connections = designStore.connections.filter(c => c.fromNode !== data.id && c.toNode !== data.id)
       }
       break
     case 'toggleVisibility':
-      if (data) data.visible = data.visible === false ? true : false
+      if (data) {
+        pushDesignSnapshot()
+        data.visible = data.visible === false ? true : false
+      }
       break
     case 'toggleLock':
-      if (data) data.locked = !data.locked
+      if (data) {
+        pushDesignSnapshot()
+        data.locked = !data.locked
+      }
       break
     case 'copy':
       if (data) {
