@@ -1,0 +1,65 @@
+/* Gocut design tokens — three layers: primitive, semantic, component. */
+:root {
+  /* Primitive: neutral graphite (chroma under 1.5%) */
+  --gray-100: #F2F2F0;
+  --gray-200: #D9D9D6;
+  --gray-300: #BFBFBA;
+  --gray-400: #A6A6A1;
+  --gray-500: #8A8A86;
+  --gray-600: #6F6F6B;
+  --gray-700: #545451;
+  --gray-800: #3A3A38;
+  --gray-900: #20201F;
+
+  /* Primitive hues (clip/track identity) */
+  --hue-video: #4F6D8F;
+  --hue-image: #8C7A5E;
+  --hue-audio: #5E8C73;
+  --hue-pip: #4E8C8C;
+  --hue-text: #8E6BA0;
+  --hue-sticker: #A8667A;
+  --hue-fx: #8A8F4E;
+
+  /* Primitive accent */
+  --accent-primitive: #EE5A3A;
+  --signal-primitive: #F0B429;
+  --danger-primitive: #E5484D;
+  --success-primitive: #4CAF7A;
+
+  /* Semantic surfaces */
+  --surface-well: #0C0C0D;
+  --surface-app: #161617;
+  --surface-panel: #1D1D1F;
+  --surface-raised: #26262A;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* Semantic text */
+  --text-primary: #E6E6E3;
+  --text-secondary: #B0B0AB;
+  --text-muted: #8A8A86;
+
+  /* Semantic accent */
+  --accent: #EE5A3A;
+  --signal: #F0B429;
+  --danger: #E5484D;
+  --success: #4CAF7A;
+
+  /* Component overrides (examples) */
+  --clip-video-bg: var(--hue-video);
+  --playhead: var(--accent);
+}
+
+[data-density="comfortable"] {
+  --control-h-dense: 28px;
+  --control-h-comfortable: 32px;
+  --row-h: 32px;
+  --panel-pad: 12px;
+}
+
+:root {
+  --control-h-dense: 24px;
+  --control-h-comfortable: 28px;
+  --row-h: 24px;
+  --panel-pad: 8px;
+}
