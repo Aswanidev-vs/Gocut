@@ -21,7 +21,7 @@
   --hue-fx: #8A8F4E;
 
   /* Primitive accent */
-  --accent-primitive: #EE5A3A;
+  --accent-primitive: #00D4FF;
   --signal-primitive: #F0B429;
   --danger-primitive: #E5484D;
   --success-primitive: #4CAF7A;
@@ -40,7 +40,7 @@
   --text-muted: #8A8A86;
 
   /* Semantic accent */
-  --accent: #EE5A3A;
+  --accent: #00D4FF;
   --signal: #F0B429;
   --danger: #E5484D;
   --success: #4CAF7A;
