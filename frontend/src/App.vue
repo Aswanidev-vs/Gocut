@@ -218,7 +218,7 @@ function stopDrag() {
         
       <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <div class="relative mb-6">
-          <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-20 h-20 rounded-2xl shadow-2xl shadow-accent/20 object-contain bg-accent/10" />
+          <img src="./assets/images/logo-universal.png" alt="Gocut Logo" class="w-20 h-20 rounded-xl object-contain bg-surface-raised border border-line" />
         </div>
         <h1 class="text-3xl font-bold text-text-primary mb-1 tracking-tight">Gocut</h1>
         <p class="text-sm text-text-secondary mb-1">Open-source, offline video editor.</p>
@@ -259,7 +259,7 @@ function stopDrag() {
               class="group relative flex items-center gap-3 px-4 py-3.5 rounded-lg bg-panel border border-border hover:border-accent/60 hover:bg-panel/90 transition-all duration-150 text-left cursor-pointer shadow-sm hover:shadow-md hover:shadow-accent/5"
               @click="openProject(rp.path)"
             >
-              <div class="w-10 h-10 rounded bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center flex-shrink-0">
+              <div class="w-10 h-10 rounded bg-surface-raised border border-line flex items-center justify-center flex-shrink-0">
                 <Film :size="16" class="text-accent" />
               </div>
               <div class="flex-1 min-w-0 pr-4">
