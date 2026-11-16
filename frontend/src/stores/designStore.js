@@ -220,6 +220,31 @@ export const NODE_TYPES = {
   expression: { cat: 'Utility', label: 'Expression', col: '#A78BFA', in: ['a', 'b', 'c', 'd'], out: ['out'], params: [
     { id: 'expression', label: 'Expression', type: 'text', def: 'a + b' },
   ]},
+
+  // ============ AE/FUSION-LITE: PARTICLES & 3D CAMERA ============
+  particleEmitter: { cat: 'Particles', label: 'Particle Emitter', col: '#22D3EE', in: ['in'], out: ['out'], params: [
+    { id: 'rate', label: 'Emission Rate', type: 'number', def: 100, min: 1, max: 5000, step: 1 },
+    { id: 'lifetime', label: 'Lifetime', type: 'number', def: 2, min: 0.1, max: 20, step: 0.1, suffix: 's' },
+    { id: 'speed', label: 'Speed', type: 'number', def: 200, min: 0, max: 2000, step: 1, suffix: 'px/s' },
+    { id: 'speedVar', label: 'Speed Variance', type: 'number', def: 50, min: 0, max: 500, step: 1 },
+    { id: 'angle', label: 'Angle', type: 'number', def: 90, min: 0, max: 360, step: 1, suffix: '°' },
+    { id: 'spread', label: 'Spread', type: 'number', def: 30, min: 0, max: 360, step: 1, suffix: '°' },
+    { id: 'gravity', label: 'Gravity', type: 'number', def: 9.8, min: -100, max: 100, step: 0.1 },
+    { id: 'size', label: 'Particle Size', type: 'number', def: 8, min: 1, max: 100, step: 1, suffix: 'px' },
+    { id: 'color', label: 'Color', type: 'color' },
+    { id: 'fade', label: 'Fade Out', type: 'toggle', def: true },
+  ], defaults: { color: '#FFFFFF' }},
+
+  camera3D: { cat: '3D', label: 'Camera 3D', col: '#F97316', in: ['in'], out: ['out'], params: [
+    { id: 'fov', label: 'Field of View', type: 'number', def: 60, min: 10, max: 170, step: 1, suffix: '°' },
+    { id: 'positionX', label: 'Position X', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'positionY', label: 'Position Y', type: 'number', def: 0, step: 1, suffix: 'px' },
+    { id: 'positionZ', label: 'Position Z', type: 'number', def: 500, step: 1, suffix: 'px' },
+    { id: 'rotationX', label: 'Rotation X', type: 'number', def: 0, min: -180, max: 180, step: 1, suffix: '°' },
+    { id: 'rotationY', label: 'Rotation Y', type: 'number', def: 0, min: -180, max: 180, step: 1, suffix: '°' },
+    { id: 'rotationZ', label: 'Rotation Z', type: 'number', def: 0, min: -180, max: 180, step: 1, suffix: '°' },
+    { id: 'depthOfField', label: 'Depth of Field', type: 'number', def: 0, min: 0, max: 100, step: 1 },
+  ]},
 }
 
 export function getNodeType(type) {
