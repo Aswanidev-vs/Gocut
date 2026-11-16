@@ -16,6 +16,7 @@ import TimelinePanel from './components/timeline/TimelinePanel.vue'
 import PreviewPlayer from './components/preview/PreviewPlayer.vue'
 import NewProjectDialog from './components/common/NewProjectDialog.vue'
 import ExportDialog from './components/export/ExportDialog.vue'
+import CommandPalette from './components/common/CommandPalette.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
 import DesignWorkspace from './components/design/DesignWorkspace.vue'
 
@@ -28,6 +29,7 @@ const designHistoryStore = useDesignHistoryStore()
 useHotkeys()
 
 const isLoaded = ref(false)
+const isCommandPaletteOpen = ref(false)
 
 onMounted(() => {
   projectStore.fetchRecentProjects().catch(() => {})
@@ -104,6 +106,11 @@ function onKeyDown(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
     e.preventDefault()
     uiStore.isExportDialogOpen = true
+  }
+  // Ctrl+K — command palette
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault()
+    isCommandPaletteOpen.value = true
   }
 }
 
@@ -332,5 +339,6 @@ function stopDrag() {
     <NewProjectDialog />
     <ExportDialog :is-open="uiStore.isExportDialogOpen" @close="uiStore.isExportDialogOpen = false" />
     <ToastContainer />
+    <CommandPalette :open="isCommandPaletteOpen" @close="isCommandPaletteOpen = false" />
   </div>
 </template>
