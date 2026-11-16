@@ -138,6 +138,15 @@ function startFromRecipe(id) {
   uiStore.addToast(`${recipe.name} added`, 'success', 1600)
 }
 
+function newComposition() {
+  designStore.clearComposition()
+  playheadTime.value = 0
+  isPlaying.value = false
+  clearInterval(playInterval)
+  setMode('simple')
+  uiStore.addToast('New composition', 'info', 1200)
+}
+
 function startBlank() {
   designStore.clearSelection()
   const bg = designStore.addNode('background', { x: 80, y: 110, label: 'Backdrop' })
@@ -190,6 +199,14 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           {{ m.label }}
         </button>
       </div>
+
+      <button
+        class="px-2 py-1 text-[10px] uppercase tracking-[0.14em] border border-cr-line text-ink-dim hover:text-ink hover:border-accent/40 transition-colors"
+        title="Start a new composition"
+        @click="newComposition"
+      >
+        New
+      </button>
 
       <div class="flex-1" />
 

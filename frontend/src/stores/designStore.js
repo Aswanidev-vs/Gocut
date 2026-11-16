@@ -502,6 +502,16 @@ export const useDesignStore = defineStore('design', () => {
     selectedConnectionId.value = null
   }
 
+  function clearComposition() {
+    nodes.value = []
+    connections.value = []
+    selectedNodeId.value = null
+    selectedNodeIds.value = new Set()
+    selectedConnectionId.value = null
+    historyStack.value = []
+    redoStack.value = []
+  }
+
   // ============ GROUPS ============
   function groupNodes(nodeIds) {
     if (nodeIds.length < 2) return
@@ -613,7 +623,7 @@ export const useDesignStore = defineStore('design', () => {
     zoomIn, zoomOut, zoomFit, saveAsPreset, loadPreset, insertTemplate,
     updateNodeParam, updateNodePosition,
     viewer1NodeId, viewer2NodeId, setViewerNode, setViewer1, setViewer2,
-    toggleNodeSelection, selectAllNodes, clearSelection, moveSelectedNodes, deleteSelectedNodes,
+    toggleNodeSelection, selectAllNodes, clearSelection, clearComposition, moveSelectedNodes, deleteSelectedNodes,
     groupNodes, ungroupNode, renameGroup,
     saveBookmark, loadBookmark,
     serialize, deserialize,
