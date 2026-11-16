@@ -8,7 +8,7 @@ source: feature
 # Editor Redesign and Compositing Lite
 
 ## Report
-[Not finalized yet]
+[In progress] Phase 1-4 delivered: minimalist shell + token unification, timeline polish, command palette (Ctrl+K), ParticleEmitter + Camera3D node types. Remaining: T3 timeline/preview deep polish, T8 color & audio panels, T10 final smoke.
 
 ## [S1] Problem
 
@@ -43,15 +43,15 @@ Build passes, no console errors, manual smoke of each workspace.
 - No multi-user/cloud.
 
 ## Tasks
-- [ ] T1: Unify design tokens and remove cr-* duplication (covers: S2.1)
-- [ ] T2: Minimalist pass on App shell, TopBar, panels (covers: S2.1, S2.2)
+- [x] T1: Unify design tokens and remove cr-* duplication (covers: S2.1)
+- [x] T2: Minimalist pass on App shell, TopBar, panels (covers: S2.1, S2.2)
 - [ ] T3: Timeline & preview polish (covers: S2.3)
-- [ ] T4: Node graph core hardening + new node types (covers: S2.4)
-- [ ] T5: Keyframe animation + easing editor (covers: S2.5)
-- [ ] T6: Expressions engine (covers: S2.5)
-- [ ] T7: Particles + 3D camera nodes (covers: S2.4)
+- [x] T4: Node graph core hardening + new node types (covers: S2.4)
+- [x] T5: Keyframe animation + easing editor (covers: S2.5)
+- [x] T6: Expressions engine (covers: S2.5)
+- [x] T7: Particles + 3D camera nodes (covers: S2.4)
 - [ ] T8: Color & audio panels polish (covers: S2.6)
-- [ ] T9: Command palette & hotkeys (covers: S2.2)
+- [x] T9: Command palette & hotkeys (covers: S2.2)
 - [ ] T10: Verify build + smoke (covers: S2.7)
 
 ## Journey log
