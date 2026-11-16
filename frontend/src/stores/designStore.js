@@ -591,5 +591,6 @@ export const useDesignStore = defineStore('design', () => {
     toggleNodeSelection, selectAllNodes, clearSelection, moveSelectedNodes, deleteSelectedNodes,
     groupNodes, ungroupNode, renameGroup,
     saveBookmark, loadBookmark,
+    serialize, deserialize,
   }
 })

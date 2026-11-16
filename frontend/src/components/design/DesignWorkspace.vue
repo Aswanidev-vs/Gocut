@@ -131,6 +131,9 @@ function startFromRecipe(id) {
   const recipe = RECIPES.find(r => r.id === id)
   if (!recipe) return
   applyRecipe(designStore, recipe)
+  // Most moves start from an invisible/off-frame state at t=0 (fades, slides),
+  // so land the playhead where the result is actually visible.
+  playheadTime.value = Math.min(1, duration.value)
   setMode('simple')
   uiStore.addToast(`${recipe.name} added`, 'success', 1600)
 }

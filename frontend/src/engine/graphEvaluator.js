@@ -1,5 +1,7 @@
 // Graph evaluation engine — topological sort + frame-by-frame evaluation
 
+import { useDesignStore, getNodeType } from '../stores/designStore.js'
+
 /**
  * Topological sort of the node graph starting from output nodes.
  * Returns nodes in evaluation order (sources first, output last).
@@ -72,6 +74,7 @@ export function gatherInputs(node, connections, nodeOutputs, nodeType) {
 export async function evaluateGraph(nodes, connections, time, resolution, evaluators) {
   const sorted = topologicalSort(nodes, connections)
   const nodeOutputs = new Map()
+  const designStore = useDesignStore()
 
   for (const nodeId of sorted) {
     const node = nodes.find(n => n.id === nodeId)
@@ -81,15 +84,15 @@ export async function evaluateGraph(nodes, connections, time, resolution, evalua
     if (!evaluator) continue
 
     // Get node type definition for port info
-    const { getNodeType } = await import('../stores/designStore.js')
     const nodeType = getNodeType(node.type)
 
     // Gather input textures
     const inputs = gatherInputs(node, connections, nodeOutputs, nodeType)
 
-    // Evaluate this node
+    // Evaluate this node. Evaluators read animated parameters through the
+    // design store, so both the current time and the store must be threaded in.
     try {
-      const output = await evaluator(node, { width: resolution.width, height: resolution.height, time }, inputs)
+      const output = await evaluator(node, { width: resolution.width, height: resolution.height, time }, inputs, time, designStore)
       nodeOutputs.set(nodeId, output)
     } catch (e) {
       console.error(`Error evaluating node ${node.label || node.type}:`, e)

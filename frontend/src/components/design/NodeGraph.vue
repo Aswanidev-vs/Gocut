@@ -885,10 +885,7 @@ function handleContextAction(action) {
       }
       break
     case 'selectAll':
-      // Select all nodes (future: multi-select)
-      if (designStore.nodes.length > 0) {
-        designStore.selectedNodeId = designStore.nodes[0].id
-      }
+      designStore.selectAllNodes()
       break
     case 'zoomFit':
       designStore.zoomFit()
