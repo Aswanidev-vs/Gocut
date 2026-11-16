@@ -277,7 +277,7 @@ defineExpose({ libraryWidth, inspectorWidth, curvesHeight, showCurves })
           <!-- Viewers -->
           <div
             v-if="mode === 'simple' || viewMode !== 'graph'"
-            class="flex-shrink-0 flex overflow-hidden bg-black border-b border-cr-line"
+            class="flex-shrink-0 flex overflow-hidden bg-surface-well border-b border-cr-line"
             :style="{ height: (mode === 'simple' ? viewerHeight + 120 : viewerHeight) + 'px' }"
           >
             <template v-if="mode === 'flow' && viewMode === 'dual'">
