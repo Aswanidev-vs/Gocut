@@ -485,7 +485,7 @@ onMounted(() => {
           </div>
         </div>
         <button
-          class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-red-400 hover:border-red-400 transition-colors shrink-0"
+          class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-danger hover:border-danger transition-colors shrink-0"
           @click="clearLut"
         >
           Clear
