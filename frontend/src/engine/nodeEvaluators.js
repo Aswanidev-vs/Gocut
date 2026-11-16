@@ -411,4 +411,36 @@ export const nodeEvaluators = {
       expression: node.params.expression || 'a + b',
     }
   },
+
+  particleEmitter(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'particleEmitter',
+      input: inputs['in'],
+      rate: getParam(node, 'rate', time, designStore) || 100,
+      lifetime: getParam(node, 'lifetime', time, designStore) || 2,
+      speed: getParam(node, 'speed', time, designStore) || 200,
+      speedVar: getParam(node, 'speedVar', time, designStore) || 50,
+      angle: getParam(node, 'angle', time, designStore) || 90,
+      spread: getParam(node, 'spread', time, designStore) || 30,
+      gravity: getParam(node, 'gravity', time, designStore) || 9.8,
+      size: getParam(node, 'size', time, designStore) || 8,
+      color: node.params.color || '#FFFFFF',
+      fade: !!node.params.fade,
+    }
+  },
+
+  camera3D(node, ctx, inputs, time, designStore) {
+    return {
+      type: 'camera3D',
+      input: inputs['in'],
+      fov: getParam(node, 'fov', time, designStore) || 60,
+      positionX: getParam(node, 'positionX', time, designStore) || 0,
+      positionY: getParam(node, 'positionY', time, designStore) || 0,
+      positionZ: getParam(node, 'positionZ', time, designStore) || 500,
+      rotationX: getParam(node, 'rotationX', time, designStore) || 0,
+      rotationY: getParam(node, 'rotationY', time, designStore) || 0,
+      rotationZ: getParam(node, 'rotationZ', time, designStore) || 0,
+      depthOfField: getParam(node, 'depthOfField', time, designStore) || 0,
+    }
+  },
 }

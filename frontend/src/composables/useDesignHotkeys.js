@@ -59,9 +59,7 @@ export function useDesignHotkeys() {
       // Select / Duplicate / Delete
       case 'ctrl+a':
         e.preventDefault()
-        if (designStore.nodes.length > 0) {
-          designStore.selectedNodeId = designStore.nodes[0].id
-        }
+        designStore.selectAllNodes()
         break
       case 'ctrl+d':
         e.preventDefault()
@@ -70,7 +68,7 @@ export function useDesignHotkeys() {
       case 'delete':
       case 'backspace':
         e.preventDefault()
-        designStore.removeSelectedNode()
+        designStore.deleteSelectedNodes()
         break
 
       // DaVinci Resolve Fusion Viewers: 1 = Viewer 1 (Left), 2 = Viewer 2 (Right)

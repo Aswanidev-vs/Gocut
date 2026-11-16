@@ -27,7 +27,14 @@ const animatedParams = computed(() => (node.value && node.value.keyframes) || {}
 function updateParam(paramId, value) {
   if (!node.value) return
   localParams.value[paramId] = value
-  designStore.updateNodeParam(node.value.id, paramId, value)
+  // Animated params are driven by keyframes — the evaluator ignores the base
+  // value once a curve exists — so editing one writes a keyframe at the
+  // playhead, exactly like dragging an animated control in Fusion.
+  if (isAnimated(paramId)) {
+    designStore.addKeyframe(node.value.id, paramId, props.playheadTime, value, 'smooth')
+  } else {
+    designStore.updateNodeParam(node.value.id, paramId, value)
+  }
 }
 
 function renameNode(event) {

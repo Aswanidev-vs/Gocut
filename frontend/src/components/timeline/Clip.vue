@@ -270,7 +270,7 @@ const volumeEnvPoints = computed(() => {
 
     <!-- Edge handles -->
     <div
-      class="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize hover:bg-white/30"
+      class="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize hover:bg-text-primary/30"
       @mousedown.stop="(e) => onMouseDown(e, 'left')"
     />
     <div

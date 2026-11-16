@@ -1080,7 +1080,7 @@ watch(cropActive, (on) => {
     <div class="flex-1 flex items-center justify-center p-4 min-h-0">
       <div
         ref="previewFrameRef"
-        class="preview-frame relative bg-black rounded-md overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-border max-h-full"
+        class="preview-frame relative bg-black rounded-md overflow-hidden ring-1 ring-border max-h-full"
         :style="{ ...aspectStyle, maxWidth: '100%', maxHeight: '100%', width: '100%' }"
         @pointerdown="onPreviewPointerDown"
       >

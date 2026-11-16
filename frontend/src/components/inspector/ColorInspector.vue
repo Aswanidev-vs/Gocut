@@ -417,7 +417,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full gap-4">
+  <div class="flex flex-col h-auto gap-4">
     <!-- Curves section -->
     <div class="flex flex-col">
       <div class="flex items-center justify-between mb-2">
@@ -485,7 +485,7 @@ onMounted(() => {
           </div>
         </div>
         <button
-          class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-red-400 hover:border-red-400 transition-colors shrink-0"
+          class="text-[10px] px-2 py-0.5 rounded border border-border text-text-secondary hover:text-danger hover:border-danger transition-colors shrink-0"
           @click="clearLut"
         >
           Clear
@@ -568,7 +568,7 @@ onMounted(() => {
       
       <div
         v-show="showHistogram"
-        class="flex items-center justify-center bg-bg/80 border border-border rounded p-2 relative h-32"
+        class="flex items-center justify-center bg-bg/80 border border-border rounded p-2 relative h-32 overflow-hidden"
       >
         <canvas
           ref="histogramCanvasRef"

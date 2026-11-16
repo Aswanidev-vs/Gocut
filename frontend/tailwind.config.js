@@ -4,36 +4,46 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0F0F0F',
-        panel: '#1A1A1A',
-        border: '#2A2A2A',
-        accent: '#00D4FF',
-        'accent-hover': '#00B8E0',
-        'text-primary': '#E8E8E8',
-        'text-secondary': '#888888',
+        // Legacy aliases mapped to new tokens (compatibility)
+        bg: 'var(--surface-app)',
+        panel: 'var(--surface-panel)',
+        border: 'var(--line)',
+        accent: 'var(--accent)',
+        'accent-hover': 'var(--accent)',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
 
-        // Control-room palette used by the Design (compositing) workspace.
-        // Near-black void, hairline rules, and a single amber "signal" accent
-        // reserved for numbers and animated state; cyan stays the selection
-        // colour so the two never compete.
-        'cr-void': '#08080A',
-        'cr-panel': '#0E0E11',
-        'cr-raise': '#15151A',
-        'cr-line': '#232329',
-        'cr-line-soft': '#1A1A1F',
-        signal: '#FFB020',
-        'signal-dim': '#5C4210',
-        ink: '#EDEDF0',
-        'ink-dim': '#8A8A94',
-        'ink-faint': '#54545C',
+        // New semantic tokens
+        'surface-well': 'var(--surface-well)',
+        'surface-app': 'var(--surface-app)',
+        'surface-panel': 'var(--surface-panel)',
+        'surface-raised': 'var(--surface-raised)',
+        'line': 'var(--line)',
+        'line-strong': 'var(--line-strong)',
+        'text-muted': 'var(--text-muted)',
+        'signal': 'var(--signal)',
+        'danger': 'var(--danger)',
+        'success': 'var(--success)',
+
+        // Control-room compatibility (retired palette absorbed)
+        'cr-void': 'var(--surface-well)',
+        'cr-panel': 'var(--surface-panel)',
+        'cr-raise': 'var(--surface-raised)',
+        'cr-line': 'var(--line)',
+        'cr-line-soft': 'var(--line)',
+        'ink': 'var(--text-primary)',
+        'ink-dim': 'var(--text-secondary)',
+        'ink-faint': 'var(--text-muted)',
+        'signal-dim': 'var(--signal)',
       },
       fontFamily: {
-        'dm-sans': ['DM Sans', 'sans-serif'],
-        'jetbrains-mono': ['JetBrains Mono', 'monospace'],
+        'dm-sans': ['IBM Plex Sans', 'sans-serif'],
+        'jetbrains-mono': ['IBM Plex Mono', 'monospace'],
       },
       borderRadius: {
-        DEFAULT: '6px',
+        DEFAULT: '4px',
         sm: '3px',
+        md: '8px',
       },
     },
   },
