@@ -58,7 +58,7 @@ function drawCurve() {
   ctx.clearRect(0, 0, W, H)
 
   // Background
-  ctx.fillStyle = '#0F0F17'
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface-well').trim() || '#0C0C0D'
   ctx.fillRect(0, 0, W, H)
 
   // Grid
@@ -166,7 +166,7 @@ onMounted(drawCurve)
         </div>
 
         <!-- Curve Canvas -->
-        <div class="border border-border/80 rounded-lg overflow-hidden bg-[#0F0F17] flex items-center justify-center p-2">
+        <div class="border border-border/80 rounded-lg overflow-hidden bg-surface-well flex items-center justify-center p-2">
           <canvas ref="canvasRef" width="530" height="180" class="w-full h-auto select-none" />
         </div>
 
